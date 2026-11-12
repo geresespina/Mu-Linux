@@ -239,7 +239,7 @@ lbl_skip_init:
 // Ported verbatim from IDA reference 0045C8C0_ChangeCharacterExt's helper.
 void __cdecl DeleteBug(intptr_t Owner) {
     DWORD* Butterflies = (DWORD*)DAT_083a1218;
-    for (int slot = 0; slot < 10; ++slot) {
+    for (int slot = 0; slot < BUG_POOL_COUNT; ++slot) {
         if (*(BYTE*)Butterflies) {
             if ((intptr_t)AsObject(Butterflies)->Owner == Owner) {
                 *(BYTE*)Butterflies = 0;
@@ -248,6 +248,26 @@ void __cdecl DeleteBug(intptr_t Owner) {
         Butterflies += OBJECT_STRIDE / 4;
     }
 }
+
+// Pet Squad (0.97.20): como DeleteBug pero filtrando por SubType.
+// El bug del helper/montura vive con SubType 0; los del squad, con 1...
+static void DeleteBugBySubType(intptr_t Owner, bool squadOnly) {
+    DWORD* Butterflies = (DWORD*)DAT_083a1218;
+    for (int slot = 0; slot < BUG_POOL_COUNT; ++slot) {
+        if (*(BYTE*)Butterflies) {
+            if ((intptr_t)AsObject(Butterflies)->Owner == Owner) {
+                const bool isSquad = AsObject(Butterflies)->SubType != 0;
+                if (isSquad == squadOnly) {
+                    *(BYTE*)Butterflies = 0;
+                }
+            }
+        }
+        Butterflies += OBJECT_STRIDE / 4;
+    }
+}
+
+void __cdecl DeleteHelperBug(intptr_t Owner) { DeleteBugBySubType(Owner, false); }
+void __cdecl DeleteSquadBugs(intptr_t Owner) { DeleteBugBySubType(Owner, true); }
 
 // IDA: CreateBug (0x004FFFD0)
 // Allocates a free slot in butterfly/effect array at DAT_083A1218 (stride 0x1BC, 10 entries up
@@ -266,7 +286,7 @@ void __cdecl CreateBug(int param_1, void *param_2_v, void *param_3_v, int param_
         char *pcVar5 = DAT_083a1218;
         while (*pcVar5 != '\0') {
             pcVar5 += OBJECT_STRIDE;
-            if (pcVar5 >= DAT_083a1218 + 10 * OBJECT_STRIDE) return;
+            if (pcVar5 >= DAT_083a1218 + BUG_POOL_COUNT * OBJECT_STRIDE) return;
         }
         RenderFxSnapshots_New(pcVar5);
         *(DWORD *)&AsObject(pcVar5)->SubType   = param_4;
