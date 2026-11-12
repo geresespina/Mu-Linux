@@ -211,6 +211,7 @@ enum eSkillNumber
     SKILL_SUMMON5            = 34,
     SKILL_SUMMON6            = 35,
     SKILL_SUMMON7            = 36,
+    SKILL_SUMMON8            = 37,  // FENRIR (2026-11-12): Summon Fenrir
     SKILL_TWISTING_SLASH     = 41,
     SKILL_RAGEFUL_BLOW       = 42,
     SKILL_DEATH_STAB         = 43,
