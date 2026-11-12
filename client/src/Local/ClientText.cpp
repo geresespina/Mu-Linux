@@ -66,7 +66,9 @@ const char* const English[] = {
     "Draw distance: %s",
     "Time left: %s", "Cast by: %s", "Damage +%d", "Defense +%d",
     "Damage taken -%d%%", "Max HP +%d%%",
-    "%s: %d of %d alive"
+    "%s: %d of %d alive",
+    "Commands", "Trade", "Party", "Guild",
+    "Chat History", "No messages yet"
 };
 constexpr size_t Count = (size_t)ClientTextId::Count;
 static_assert(sizeof(English) / sizeof(English[0]) == Count, "Faltan textos en ingl\xC3\xA9s");
