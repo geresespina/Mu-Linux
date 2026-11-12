@@ -840,7 +840,33 @@ void __cdecl FUN_004d23b0(char* origin_x, int origin_y, short* inv_base,
                 // 0.97.20: qué hace el click derecho se decide por el
                 // comportamiento: un consumible agregado se usa como el vanilla
                 // que imita.  Los requisitos siguen siendo los de su fila.
-                const int useType = ItemBehaviorType(type);
+                int useType = ItemBehaviorType(type);
+                // FIX 2026-11-12 (v2.4): el Behavior de un item agregado es un
+                // INDICE de item en packing 512 ((sec*512)+sub) — p.ej. el Orb
+                // of the Legion (12,32) trae Behavior (12,11) = 6155 — pero las
+                // ramas de uso de abajo comparan contra codigos LEGACY type32
+                // ((sec*32)+sub): 6155 no matchea ninguna y el click derecho
+                // moria en silencio (nunca salia el paquete 0x26; el orb jamas
+                // se usaba). Si el valor crudo no matchea ninguna rama y es un
+                // indice de item (>= 512 nunca es un codigo legacy), se
+                // reintenta con el codigo legacy del item destino:
+                // (12,11) -> 395 (Orb of Summoning, familia 391..398).
+                // GetItemBehavior NO se toca: la herencia de modelos
+                // (GetItemModel) y el combate usan su semantica de indice.
+                {
+                    auto matchesUseBranch = [](int code) {
+                        return code == 458 || code == 467 || code == 434 ||
+                               (code >= 448 && code <= 454) ||
+                               (code >= 456 && code <= 457) || code == 468 ||
+                               (code >= 480 && code < 512) ||
+                               (code >= 391 && code <= 398) ||
+                               (code >= 400 && code <= 403) || code == 431;
+                    };
+                    if (!matchesUseBranch(useType) && useType >= 512) {
+                        const int legacy = (useType / 512) * 32 + (useType % 512);
+                        if (matchesUseBranch(legacy)) useType = legacy;
+                    }
+                }
 
                 // ── Item 458 (Teleport scroll) — handled by Teleport check ─
                 if (useType == 458) {
