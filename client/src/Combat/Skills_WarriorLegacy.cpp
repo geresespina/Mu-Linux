@@ -267,7 +267,7 @@ void __cdecl Combat_UseWarriorSkill(intptr_t c /* IDA: c */, intptr_t o /* IDA: 
     } else if (skillType == 56) {
             float angle[3] = { *(float*)(o + 28), *(float*)(o + 32), *(float*)(o + 36) - 40.0f };
             int skillIndex = 0;
-            if (attributes) for (; skillIndex < 20 && attributes[skillIndex + 87] != 56; ++skillIndex) {}
+            if (attributes) for (; skillIndex < 60 && attributes[skillIndex + 87] != 56; ++skillIndex) {}
             for (int part = 0; part < 5; ++part) {
                 CreateEffect(203, (float*)(o + 16), angle, (float*)(o + 232),
                               (float*)(intptr_t)2, (float*)o,

@@ -1313,7 +1313,14 @@ static void Attack_Label1158_97k(char* entity, int iType, bool hasTarget)
 // ── IDA L9261-10099: LABEL_1585 (cola exclusiva del Dark Wizard) ─────────────
 static void Attack_Label1585_97k(char* entity, int iType, bool hasTarget)
 {
-    if ((*(char *)&AsCharacter(entity)->Class & 7) != 0 || !hasTarget)
+    // MEAMU (2026-11-12): Teleport (6) y Teleport Ally (15) son de TODAS las
+    // clases - el server (CMove::CGTeleportRecv / CGSkillTeleportAllyRecv)
+    // nunca tuvo gate de clase, solo posesion del skill + mana. El resto de
+    // esta cola sigue exclusivo del Dark Wizard, igual que el original.
+    if (!hasTarget)
+        return;                                               // IDA L9262
+    if (iType != 6 && iType != 15
+        && (*(char *)&AsCharacter(entity)->Class & 7) != 0)
         return;                                               // IDA L9262
 
     if (iType == 6) {                                         // IDA L9266 — Teleport
@@ -1429,13 +1436,17 @@ static void Attack_Label1585_97k(char* entity, int iType, bool hasTarget)
 static void Attack_WizardBranch97k(char* entity)
 {
     const BYTE heroClass = (BYTE)(*(char *)&AsCharacter(entity)->Class & 7);
-    if (heroClass != 0 && heroClass != 3)
-        return;                                               // IDA L5921
 
     BYTE* const attr = (BYTE*)(uintptr_t)DAT_07cf1ff4;
     if (!attr || !Hero)
         return;
     const int iType = attr[*(BYTE*)&((CHARACTER*)(uintptr_t)(Hero))->CurrentSkill + 87];        // IDA L5950
+    // MEAMU (2026-11-12): la rama DW/MG admite ademas Teleport (6) y Teleport
+    // Ally (15) para DK y Elf - caen por el default a LABEL_1158 y de ahi a la
+    // cola de teletransporte, cuyo gate tambien se abrio para esos dos skills.
+    // Todos los demas skills siguen DW/MG como en el original (IDA L5921).
+    if (heroClass != 0 && heroClass != 3 && iType != 6 && iType != 15)
+        return;                                               // IDA L5921
     int piMana = 0, piSkillMana = 0;                          // IDA: v1035 / v1033
     GetSkillInformation(iType, 1, 0, &piMana, 0, &piSkillMana);   // IDA L5951
     if (piMana > (int)*(unsigned short*)(attr + 30)) {        // IDA L5952
