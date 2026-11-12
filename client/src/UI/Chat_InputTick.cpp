@@ -498,7 +498,8 @@ void __cdecl Chat_InputTick(void)
 
             // ── 5. Hotkey assignment grid ────────────────────────────────────
             // chardata+0x56 != 0: item grid is visible.
-            // Items: 20 slots at chardata+0x57+slot (one byte each).
+            // Items: 60 slots at chardata+0x57+slot (one byte each),
+            // en filas de 20 (espejo del render en HUD_Pass5).
             // Hotkey area: X=[0x12f..0x150], Y=[0x1bb..0x1e0] — click → open grid.
             // Item cells: stride 0x20, hit Y=[0x171..0x19c].
             // Keys 1-9: write to chardata+0xd7+slot (value 1..9); clear old.
@@ -523,19 +524,30 @@ void __cdecl Chat_InputTick(void)
                 // Item cell grid (visible when DAT_07db870c != 0)
                 if (DAT_07db870c != '\0')
                 {
-                    DWORD numSlots = (DWORD)*(BYTE *)((char *)DAT_07cf1ff4 + 0x56);
-                    int   cellOff  = 0;
-                    for (DWORD uVar14 = 0; (int)uVar14 < 0x14; ++uVar14)
+                    // Total visible contado desde el array, igual que el
+                    // render (HUD_Pass5): filas de 20 centradas, apiladas
+                    // hacia arriba desde y=0x172 (370).
+                    int numSlots = 0;
+                    for (int i = 0; i < 60; ++i) {
+                        if (*(char *)((char *)DAT_07cf1ff4 + 0x57 + i) != '\0') ++numSlots;
+                    }
+                    int   visIdx   = 0;
+                    for (DWORD uVar14 = 0; (int)uVar14 < 60; ++uVar14)
                     {
                         if (*(char *)((char *)DAT_07cf1ff4 + 0x57 + uVar14) != '\0')
                         {
-                            int cellX0 = cellOff - (int)(numSlots * 0x20) / 2;
+                            int row = visIdx / 20;
+                            int col = visIdx - row * 20;
+                            int rowCount = numSlots - row * 20;
+                            if (rowCount > 20) rowCount = 20;
+                            int cellX0 = col * 0x20 - rowCount * 0x10;
                             int cellX1 = cellX0 + 0x20;
+                            int cellY  = 0x172 - row * 0x24;
                             if (((cellX0 + 0x140 <= mouseX) && (mouseX < cellX1 + 0x140)) &&
-                                (0x171 < mouseY) && (mouseY < 0x19c))
+                                ((cellY - 1) < mouseY) && (mouseY < cellY + 0x2a))
                             {
                                 DAT_07ea840c = cellX0 + 0x150;
-                                DAT_07ea8408 = 0x172;
+                                DAT_07ea8408 = cellY;
                                 DAT_07d78094 = 1;
                                 DAT_0055a3e4 = uVar14;
                                 if (IsClickPushed()) {
@@ -557,7 +569,7 @@ void __cdecl Chat_InputTick(void)
                                         if (((unsigned short)Platform::GetInput().KeyState(0x30 + key) >> 8) == 0)
                                             continue;
                                         int charRow = (int)DAT_005616ac;
-                                        for (int j = 0; j < 0x14; ++j) {
+                                        for (int j = 0; j < 60; ++j) {
                                             char *slot_ptr = (char *)DAT_07cf1ff4 + charRow * 0x40 + 0xd7 + j;
                                             if (*slot_ptr == (char)key) {
                                                 *slot_ptr = (char)0xff;
@@ -569,7 +581,7 @@ void __cdecl Chat_InputTick(void)
                                 }
                                 break;
                             }
-                            cellOff += 0x20;
+                            ++visIdx;
                         }
                     }
                 }

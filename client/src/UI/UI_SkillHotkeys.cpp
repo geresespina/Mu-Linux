@@ -38,7 +38,11 @@ int __stdcall FindHotKey(int Skill) {
 
     int slot = 0;                          // IDA: v4
     while ((unsigned char)charAttr[0x57 + slot] != (unsigned int)Skill) {
-        if (++slot >= 0x14)
+        // DESVIACION: el array Skill mide 60 slots utiles en este build
+        // (el server manda hasta MAX_SKILL_LIST=60); el original cortaba
+        // en 20 y devolvia 0 (slot 0) para skills mas alla, corrompiendo
+        // el SKKey de los efectos (CreateArrows lee CA[ret + 87]).
+        if (++slot >= 60)
             return 0;                      // IDA: goto LABEL_22 con v17 = 0
     }
 

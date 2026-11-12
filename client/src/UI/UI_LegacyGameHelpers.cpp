@@ -103,8 +103,9 @@ void __cdecl Item_ReturnPickedItem(void)
 // SelectSkillByHotkey @ 0x004B0E80 — SelectSkillByHotkey(int number)
 //
 // Elige la skill activa a partir del numero de hotkey que el jugador acaba de
-// apretar.  Recorre las 20 ranuras de skill y, para la que tenga asignado ese
-// numero, escribe su indice en `Hero + 913` (la skill en uso).
+// apretar.  Recorre las ranuras de skill (60 en este build — el array CA y la
+// tabla de hotkeys miden 64; el original paraba en 20) y, para la que tenga
+// asignado ese numero, escribe su indice en `Hero + 913` (la skill en uso).
 //
 //   for (i = 0; i < 20; i++) {
 //       if (CharacterAttribute[i + 87] &&
@@ -131,7 +132,7 @@ char __cdecl SelectSkillByHotkey(int a1)
     if (!CA || !playerEnt) return 0;
 
     const int hero = (int)DAT_005616ac;   // SelectedHero
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < 60; i++) {
         if (CA[i + 87] != 0 &&
             (unsigned char)CA[(hero << 6) + i + 215] == (unsigned char)a1) {
             playerEnt[EntityOffset(913)] = (char)i;
