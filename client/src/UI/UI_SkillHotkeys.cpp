@@ -127,3 +127,161 @@ void __cdecl RenderSkillIcon(int iIndex, float x, float y, float width, float he
     }
     DAT_00559c6c = (char)hotkey;
 }
+// ─────────────────────────────────────────────────────────────────────────────
+// Persistencia local de las hotkeys de skill — agregado del port
+// (hotfix 2026-11-12, cliente v2.2-hotfix).
+//
+// La tabla HotKey de CharacterAttribute (fila del personaje en
+// CA + 0xD7 + SelectedHero*0x40, 64 bytes; ver RenderSkillIcon) vivía sólo
+// en RAM: el bloque CharacterMachine se alloca en cero al arrancar
+// (Platform/ClientEntry.cpp) y ningún path volcaba la tabla a disco, así
+// que las asignaciones Ctrl+1..0 que escribe Chat_InputTick se perdían al
+// cerrar el cliente (nada las persistía entre sesiones).
+//
+// Solución: un archivo por personaje en la carpeta "Hotkeys" junto al
+// ejecutable — mismo idiom de caché local que ContentCatalog con "Cache"
+// (EnsureDirectory + Open/fwrite vía Platform::GetFileSystem):
+//   Hotkeys/<nombre>.dat = cabecera MUHK + la fila de 64 bytes.
+// SaveSkillHotkeys lo llama Chat_InputTick tras asignar; detecta si la fila
+// cambió y sólo escribe en ese caso (el caller corre por frame con Ctrl
+// apretado). LoadSkillHotkeys lo llama Recv_JoinMapServer al entrar al
+// mundo: restaura la fila del personaje y, si no hay archivo válido, la
+// deja en 0xFF (sin asignar) para que un personaje no herede las teclas
+// del que ocupó antes el mismo slot de cuenta.
+// ─────────────────────────────────────────────────────────────────────────────
+#include "Platform/IFileSystem.h"
+#include "Entity/EntityName.h"
+#include <cctype>
+#include <cstdio>
+#include <cstring>
+
+namespace {
+
+constexpr int kHotkeyRowOffset = 0xD7;   // fila: CA + 0xD7 + SelectedHero*0x40
+constexpr int kHotkeyRowSize   = 0x40;   // 64 ranuras de skill
+
+struct HotkeyFileHead {
+    char          Magic[4];              // "MUHK"
+    std::uint16_t Version;               // 1
+    std::uint16_t RowSize;               // 64
+};
+
+char* CurrentHotkeyRow()
+{
+    if (!DAT_07cf1ff4) return nullptr;
+    int hero = (int)DAT_005616ac;        // SelectedHero
+    if (hero < 0 || hero > 4) hero = 0;  // mismo clamp que el handler F3/11
+    return (char*)DAT_07cf1ff4 + hero * kHotkeyRowSize + kHotkeyRowOffset;
+}
+
+// Nombre del personaje actual: nombre de la entidad héroe > selección de
+// char-select > campo Name[10] de CharacterAttribute.
+bool CurrentCharacterName(char* out, std::size_t cap)
+{
+    const char* name = nullptr;
+    if (DAT_07abf5d8) name = EntityName::Get((const void*)(uintptr_t)DAT_07abf5d8);
+    if (!name || !name[0]) name = EntityName::Selected();
+    if (name && name[0]) {
+        std::size_t n = strlen(name);
+        if (n >= cap) n = cap - 1;
+        memcpy(out, name, n);
+        out[n] = '\0';
+        return true;
+    }
+    if (DAT_07cf1ff4) {
+        const char* ca = (const char*)DAT_07cf1ff4;   // Name[10], sin NUL garantizado
+        std::size_t n = 0;
+        while (n < 10 && ca[n] != '\0') ++n;
+        while (n > 0 && ca[n - 1] == ' ') --n;
+        if (n == 0) return false;
+        if (n >= cap) n = cap - 1;
+        memcpy(out, ca, n);
+        out[n] = '\0';
+        return true;
+    }
+    return false;
+}
+
+// "Hotkeys/<nombre saneado>.dat" — el nombre de MU es alfanumérico, pero se
+// sanea igual (cualquier otro byte → '_') para que sea un nombre de archivo
+// válido en cualquier filesystem.
+bool HotkeyStorePath(const char* name, char* out, std::size_t cap)
+{
+    const char prefix[] = "Hotkeys/";
+    std::size_t n = 0;
+    for (const char* p = prefix; *p && n + 1 < cap; ++p) out[n++] = *p;
+    const std::size_t nameStart = n;
+    for (const char* p = name; *p && n + 5 < cap; ++p) {
+        const unsigned char c = (unsigned char)*p;
+        out[n++] = (isalnum(c) || c == '-' || c == '_') ? (char)c : '_';
+    }
+    if (n == nameStart) return false;    // nombre vacío
+    memcpy(out + n, ".dat", 5);          // incluye el NUL
+    return true;
+}
+
+// Última fila volcada/restaurada (detección de cambio de SaveSkillHotkeys).
+char          s_LastHotkeyName[64] = {};
+unsigned char s_LastHotkeyRow[kHotkeyRowSize] = {};
+bool          s_HotkeyCacheValid = false;
+
+} // namespace
+
+void __cdecl SaveSkillHotkeys(void)
+{
+    char* row = CurrentHotkeyRow();
+    if (!row) return;
+    char name[64];
+    if (!CurrentCharacterName(name, sizeof(name))) return;
+    if (s_HotkeyCacheValid && strcmp(name, s_LastHotkeyName) == 0 &&
+        memcmp(row, s_LastHotkeyRow, kHotkeyRowSize) == 0)
+        return;                          // sin cambios: no reescribir
+    char path[96];
+    if (!HotkeyStorePath(name, path, sizeof(path))) return;
+    Platform::GetFileSystem().EnsureDirectory("Hotkeys");
+    FILE* f = Platform::GetFileSystem().Open(path, "wb");
+    if (!f) return;
+    HotkeyFileHead head;
+    memcpy(head.Magic, "MUHK", 4);
+    head.Version = 1;
+    head.RowSize = (std::uint16_t)kHotkeyRowSize;
+    const bool ok = fwrite(&head, sizeof(head), 1, f) == 1 &&
+                    fwrite(row, 1, kHotkeyRowSize, f) == (std::size_t)kHotkeyRowSize;
+    fclose(f);
+    if (!ok) { remove(path); return; }
+    strcpy(s_LastHotkeyName, name);      // name viene acotado a 63 + NUL
+    memcpy(s_LastHotkeyRow, row, kHotkeyRowSize);
+    s_HotkeyCacheValid = true;
+}
+
+void __cdecl LoadSkillHotkeys(void)
+{
+    char* row = CurrentHotkeyRow();
+    if (!row) return;
+    char name[64];
+    if (!CurrentCharacterName(name, sizeof(name))) return;
+    // Punto de partida determinista: sin asignaciones. Si hay un archivo
+    // válido del personaje, pisa la fila; si no, no hereda nada de nadie.
+    memset(row, 0xFF, kHotkeyRowSize);
+    char path[96];
+    if (HotkeyStorePath(name, path, sizeof(path))) {
+        FILE* f = Platform::GetFileSystem().Open(path, "rb");
+        if (f) {
+            HotkeyFileHead head;
+            unsigned char buf[kHotkeyRowSize];
+            if (fread(&head, sizeof(head), 1, f) == 1 &&
+                memcmp(head.Magic, "MUHK", 4) == 0 && head.Version == 1 &&
+                head.RowSize == kHotkeyRowSize &&
+                fread(buf, 1, kHotkeyRowSize, f) == (std::size_t)kHotkeyRowSize) {
+                // Saneado: sólo dígitos 0..9 o 0xFF (sin asignar).
+                for (int i = 0; i < kHotkeyRowSize; ++i)
+                    row[i] = (char)((buf[i] <= 9 || buf[i] == 0xFF) ? buf[i] : 0xFF);
+            }
+            fclose(f);
+        }
+    }
+    // La fila restaurada ES el estado guardado: un Save inmediato no escribe.
+    strcpy(s_LastHotkeyName, name);
+    memcpy(s_LastHotkeyRow, row, kHotkeyRowSize);
+    s_HotkeyCacheValid = true;
+}

@@ -546,6 +546,9 @@ void Recv_JoinMapServer(const BYTE* Msg, int bEncrypted)
     // nombre completo viene de EntityName::Selected().
     if (EntityName::Selected()[0]) EntityName::Set(heroPtr, EntityName::Selected());
     else                           EntityName::Set(heroPtr, (const char*)charAttr, 10);
+    // Hotfix v2.2-hotfix: restaurar las hotkeys de skill guardadas de este
+    // personaje (archivo local por personaje; ver UI_SkillHotkeys.cpp).
+    LoadSkillHotkeys();
     NetLog("NET:    F3/03 hero spawn: heroSlot=%d heroClass=%d",
            (int)heroIndex, (int)AsCharacter(heroPtr)->Class);
 
