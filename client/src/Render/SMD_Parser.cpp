@@ -21,6 +21,8 @@
 #include "UI/HealthBar.h"
 #include "UI/MoveList.h"
 #include "UI/EventTimer.h"
+#include "UI/CommandMenu.h"
+#include "UI/ChatLogWindow.h"
 #include "UI/GoldenArcher.h"
 #include "Item/ChaosMixRates.h"
 #include "Item/ItemDefines.h"
@@ -280,6 +282,8 @@ void __cdecl ClearCharacters(int param_1) {
     // DESVIACION: cerrar las extensiones al reconstruir el mapa, sin borrar catálogos.
     gMoveList.Close();
     gEventTimer.Close();
+    gCommandMenu.Close();
+    gChatLogWindow.Close();
     gChaosMixRates.Reset();
     GoldenArcher_ResetCharacter();
     char* butterflesEnd = DAT_083a1218 + 10 * OBJECT_STRIDE;
