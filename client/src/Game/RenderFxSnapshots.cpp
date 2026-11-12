@@ -35,7 +35,7 @@ Pool *Pools() {
         {DAT_07abf5f0,0x70,kParticlePoolSize,4,4,8,0x3c},
         {DAT_07c5ab3c,0x70,200,4,4,-1,-1},
         {g_WeatherSlotPool,OBJECT_STRIDE,40,2,2,4,0xfc},
-        {DAT_083a1218,OBJECT_STRIDE,10,2,2,4,0xfc},
+        {DAT_083a1218,OBJECT_STRIDE,BUG_POOL_COUNT,2,2,4,0xfc},
         {DAT_083a2e90,OBJECT_STRIDE,10,2,2,4,0xfc},
         {g_RenderPool_07c608a8,0x2f0,100,4,4,-1,12},
         {g_PlayerRenderPool,OBJECT_STRIDE,100,2,2,4,0xfc},
