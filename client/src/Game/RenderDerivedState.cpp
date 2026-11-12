@@ -68,7 +68,7 @@ void RenderDerivedState_Begin() {
     }
     for (int slot=0; slot<kEffectPoolSize; ++slot) SaveObject(DAT_07b11670+slot*OBJECT_STRIDE,sizeof(OBJECT));
     for (int slot=0; slot<40; ++slot) SaveObject(g_WeatherSlotPool+slot*OBJECT_STRIDE,sizeof(OBJECT));
-    for (int slot=0; slot<10; ++slot) SaveObject(DAT_083a1218+slot*OBJECT_STRIDE,sizeof(OBJECT));
+    for (int slot=0; slot<BUG_POOL_COUNT; ++slot) SaveObject(DAT_083a1218+slot*OBJECT_STRIDE,sizeof(OBJECT));
     // Los objetos del mapa se guardan al tocarlos (RenderDerivedState_SaveObject):
     // el dibujo sólo modifica los visibles y la interpolación los que se movieron.
     RenderFxSnapshots_SaveRenderState();
