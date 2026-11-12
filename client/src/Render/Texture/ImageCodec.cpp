@@ -30,6 +30,35 @@ bool Decode(FILE* file, int prefix, Format format, int maxSize, Image& out)
 {
     if (!file || prefix < 0 || maxSize <= 0 || fseek(file, 0, SEEK_END)) return false;
     const long end = ftell(file);
+    // FIX 2026-11-12 (v2.4, rev. 2): los .ozj distribuidos traen SOI (FF D8)
+    // TANTO en 0 como en 24, pero el JPEG completo y valido es el de 24: el
+    // stream de 0 es solo la cabecera JFIF con miniatura y stb no lo
+    // decodifica (verificado con ffprobe: Loading01.ozj y Player/*.OZJ solo
+    // decodifican desde 24; Skill.ozj decodifica igual desde 0 y desde 24).
+    // La rev. 1 forzaba prefix=0 al ver SOI en 0 y dejo sin textura el
+    // titulo, los personajes y el mundo. Regla: manda el SOI en 24; el 0 es
+    // solo para JPEGs crudos sin SOI en 24; 32, ultimo recurso.
+    // (Nota historica de la rev. 1:) parte de los .ozj distribuidos son JPEG crudos,
+    // sin la cabecera Webzen de 24/32 bytes que el llamador asume al pasar
+    // `prefix` (p.ej. Data/Interface/Skill.ozj y Level_01.ozj arrancan con
+    // FF D8 en el offset 0; byte-verificado). Saltar el prefix decapitaba el
+    // JPEG: los iconos de skill salian oscuros y el cromo de la barra
+    // inferior corrupto. Si el archivo YA arranca con el SOI del JPEG se
+    // decodifica desde el byte 0; el prefix solo se respeta en archivos
+    // con cabecera real.
+    if (format == Format::Jpeg && end >= 34) {
+        auto soiAt = [&](long off) {
+            if (off < 0 || end < off + 2 || fseek(file, off, SEEK_SET)) return false;
+            unsigned char b[2] = { 0, 0 };
+            return fread(b, 1, 2, file) == 2 && b[0] == 0xFF && b[1] == 0xD8;
+        };
+        if (soiAt(24))
+            prefix = 24;
+        else if (!soiAt(prefix) && soiAt(0))
+            prefix = 0;
+        else if (!soiAt(prefix) && soiAt(32))
+            prefix = 32;
+    }
     if (end <= prefix || end - prefix > INT_MAX - 2 || fseek(file, prefix, SEEK_SET)) return false;
     size_t length = static_cast<size_t>(end - prefix);
     std::unique_ptr<unsigned char, decltype(&free)> bytes(
