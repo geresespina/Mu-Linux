@@ -701,11 +701,24 @@ static void CustomPet_Move(char* e, const BYTE* owner, const Proto::CATALOG_PET&
     float target[3];
     const float* ownerPos = (const float*)(owner + 0x10);
 
+    // Pet Squad (0.97.20): el SubType del bug dice su lugar en la formación.
+    //   0     = pet del helper de siempre (comportamiento idéntico al legacy)
+    //   0x40  = pet del helper con el collect suprimido (el colector del
+    //           squad es otro pet; este se queda en formación)
+    //   1..   = bug del squad: (SubType & 0x3F) - 1 = su posición (0 = el
+    //           primer lugar) y el bit 0x80 marca al colector designado,
+    //           el único que vuela hasta el zen.
+    const DWORD subType = *(const DWORD*)(e + 4);
+    int formation = 0;
+    bool canCollect = true;
+    if (subType == 0x40) { canCollect = false; }
+    else if (subType != 0) { formation = (int)(subType & 0x3F) - 1; canCollect = (subType & 0x80) != 0; }
+
     // Collecter del 5.2: si hay zen cerca del dueño, va hasta el más cercano y
     // da vueltas cortas sobre él hasta que el server lo levanta (y el zen
     // desaparece del suelo).  El server decide; esto es sólo lo que se ve.
     const float* zen = nullptr;
-    if ((pet.Flags & Proto::CATALOG_PET_FLAG_COLLECT) && DAT_07e12840) {
+    if (canCollect && (pet.Flags & Proto::CATALOG_PET_FLAG_COLLECT) && DAT_07e12840) {
         const float range = (float)pet.CollectRange * 100.0f + 50.0f;
         float best = range * range;
         for (int i = 0; i < 1000; ++i) {
@@ -724,13 +737,26 @@ static void CustomPet_Move(char* e, const BYTE* owner, const Proto::CATALOG_PET&
         target[1] = zen[1] + cosf(t) * 20.0f;
         target[2] = zen[2] + pet.Height;
     } else if (pet.Movement == Proto::CATALOG_PET_MOVE_ORBIT) {
-        const float t = (float)(Platform::GetTimer().Ticks() % (DWORD)pet.Period) / pet.Period * 6.2831853f;
+        // Squad: cada lugar arranca desfasado 1/7 de vuelta, así los pets se
+        // reparten el círculo en vez de amontonarse en el mismo punto.
+        const float t = (float)(Platform::GetTimer().Ticks() % (DWORD)pet.Period) / pet.Period * 6.2831853f
+                      + formation * (6.2831853f / 7.0f);
         target[0] = ownerPos[0] + sinf(t) * pet.Radius;
         target[1] = ownerPos[1] + cosf(t) * pet.Radius;
     } else {
         const float a = *(const float*)(owner + 0x24) * 0.017453292f;
-        target[0] = ownerPos[0] + sinf(a) * pet.Radius;
-        target[1] = ownerPos[1] - cosf(a) * pet.Radius;
+        if (formation > 0) {
+            // Squad en modo follow: abanico detrás del dueño — alterna el
+            // lado por lugar y se aleja un poco más en cada lugar.
+            const float side = (formation % 2) ? 1.0f : -1.0f;
+            const float spread = ((formation + 1) / 2) * 0.38f * side;
+            const float dist = pet.Radius + formation * 18.0f;
+            target[0] = ownerPos[0] + sinf(a + spread) * dist;
+            target[1] = ownerPos[1] - cosf(a + spread) * dist;
+        } else {
+            target[0] = ownerPos[0] + sinf(a) * pet.Radius;
+            target[1] = ownerPos[1] - cosf(a) * pet.Radius;
+        }
     }
     if (!zen) target[2] = ownerPos[2] + pet.Height;
 
@@ -761,7 +787,7 @@ void __stdcall MoveBugs(void) {
 
     char*  base = (char*)DAT_083a1218;
     DWORD* v0   = (DWORD*)(base + 0xFC);      // = &unk_83A1314 (owner field de entry 0)
-    for (int slot = 0; slot < 10; ++slot) {
+    for (int slot = 0; slot < BUG_POOL_COUNT; ++slot) {
         char* e = (char*)v0 - offsetof(OBJECT, Owner);           // v1 — entry base
         if (*(BYTE*)e == 0)                    // !Live
             goto next_bug;
