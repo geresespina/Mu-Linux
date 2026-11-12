@@ -69,9 +69,9 @@ void Scene_MapTick(void)
     puVar5 = (undefined4*)DAT_07cf1ffc;
   }
 LAB_004f6824:
-  // Clamp de DAT_0055a3e4 al rango de slots de skill (0..19) antes de llamar al
+  // Clamp de DAT_0055a3e4 al rango de slots de skill (0..59) antes de llamar al
   // tooltip: un valor basura haría lecturas fuera de rango.
-  if ((int)DAT_0055a3e4 >= 0 && (int)DAT_0055a3e4 < 20) {
+  if ((int)DAT_0055a3e4 >= 0 && (int)DAT_0055a3e4 < 60) {
     // Skill tooltip render. Args resolved from IDA: (float Y, int X, int hoveredSkillIdx).
     // Ghidra mis-decoded the 3rd arg as a stack write; it is the real 3rd param.
     RenderSkillTooltip(*(float*)&DAT_07ea840c, (int)DAT_07ea8408, (int)DAT_0055a3e4);
