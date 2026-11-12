@@ -5,6 +5,8 @@
 #include "Config/UserSettings.h"
 #include "Game/MapManager.h"
 
+extern "C" const char* Guild_GetMarkName(int row);
+
 #define local_60 (scratch.light[0])
 #define local_5c (scratch.light[1])
 #define local_58 (scratch.light[2])
@@ -105,6 +107,35 @@ void CharacterEffects_TickEarly(intptr_t entity, CharacterEffectScratch &scratch
                      &local_60, 0, 0.3f, 0);
     }
 }
+
+namespace {
+// Aura de clan (DESVIACION, solo cliente): indice de clan segun el nombre
+// de guild visible en la entidad.  Pares de color y periodo identicos a
+// los del glow de item en CContentCatalog::GetItemGlow
+// (Item/ContentCatalog.cpp) para que equipo y aura pulsen en fase.
+int ClanAuraIndex(const char* guildName)
+{
+    if (guildName == nullptr) return -1;
+    if (strcmp(guildName, "Senju") == 0) return 0;
+    if (strcmp(guildName, "Uchiha") == 0) return 1;
+    return -1;
+}
+
+void ClanAuraColor(int clan, float light[3], float intensity)
+{
+    static const float kClanBase[2][3] = {
+        { 120.0f / 255.0f, 220.0f / 255.0f,  60.0f / 255.0f },  // Senju: verde
+        { 220.0f / 255.0f,  20.0f / 255.0f,  40.0f / 255.0f },  // Uchiha: rojo
+    };
+    static const float kClanPair[2][3] = {
+        { 1.0f,            190.0f / 255.0f,  40.0f / 255.0f },  // Senju -> dorado
+        { 110.0f / 255.0f,  30.0f / 255.0f, 160.0f / 255.0f },  // Uchiha -> violeta
+    };
+    const float t = 0.5f - 0.5f * cosf(WorldTime * (2.0f * 3.14159265f / 2400.0f));
+    for (int i = 0; i < 3; ++i)
+        light[i] = (kClanBase[clan][i] + (kClanPair[clan][i] - kClanBase[clan][i]) * t) * intensity;
+}
+}  // namespace
 
 // IDA: switch final por modelo de RenderCharacter (0x00456770).
 void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch) {
@@ -254,6 +285,40 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
         if (SceneFlag == 2) {
             return puVar13;
         }
+
+        // ── 0. Aura de clan: pulso bicolor alrededor del personaje ────
+        // DESVIACION (solo cliente): un miembro de Senju/Uchiha irradia
+        // el glow de su clan lleve equipo o no — el glow es del clan, no
+        // del item, asi que NO depende del set completo (paso 4).  Vale
+        // para el heroe y para cualquier jugador en pantalla: el nombre
+        // de guild llega en la marca (GuildMarkIndex) de cada entidad.
+        // Dos sprites 1150 (el glow suave del juego) por frame: uno en
+        // los pies (luz del suelo) y uno en el hueso raiz (halo del
+        // cuerpo), intensidad modesta para que se lea como aura.
+        if (bVar7 == 0xFF && AsCharacter(puVar13)->Dead == 0 &&
+            !gUserSettings.GetAntilag(ANTILAG_GLOW)) {
+            const short guildIdx = AsCharacter(puVar13)->GuildMarkIndex;
+            const int clan = (guildIdx != -1)
+                ? ClanAuraIndex(Guild_GetMarkName(guildIdx)) : -1;
+            if (clan >= 0) {
+                float auraLight[3];
+                float auraPos[3] = { AsObject(puVar13)->Position[0],
+                                     AsObject(puVar13)->Position[1],
+                                     AsObject(puVar13)->Position[2] };
+                ClanAuraColor(clan, auraLight, 0.5f);
+                Equipment_AddSprite(0x47e, auraPos, 2.6f, auraLight,
+                                    (intptr_t)puVar13, 0.0f, 0);
+                float auraOff[3] = { 0.0f, 0.0f, 0.0f };
+                float auraBody[3];
+                BMD_TransformPosition(pvVar23,
+                    (float *)((intptr_t)AsObject(puVar13)->BoneMatrices + 0 * 0x30),
+                    auraOff, auraBody, '\x01');
+                ClanAuraColor(clan, auraLight, 0.35f);
+                Equipment_AddSprite(0x47e, auraBody, 1.8f, auraLight,
+                                    (intptr_t)puVar13, 0.0f, 0);
+            }
+        }
+
 
         // ── 1. Glove sparkle: class byte (cls&7)==0 + (cls_skin&0xF8)==8 ───
         // (DK 2nd-tier with specific skin range): sprite + sin halo at bone 19
