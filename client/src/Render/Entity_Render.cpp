@@ -286,7 +286,7 @@ uint RenderBugs(void)
     if (!(SceneFlag == 5 || SceneFlag == 4 || SceneFlag == 2)) return 0;
 
     char* base = (char*)&DAT_083a1218[0];
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < BUG_POOL_COUNT; ++i) {
         char* slot = base + i * OBJECT_STRIDE;
         if (slot[0] == 0) continue;            // not active
 
