@@ -37,5 +37,11 @@ constexpr unsigned short GameServerPort      = 55901;
 constexpr char           CustomerName[]      = "MuLinux";
 constexpr char           ServerSerial[]      = "TbYehR2hFUPBKgZj";
 constexpr char           ClientVersion[]     = "0.97.40";
+// MEAMU release label — THE single version stamp; bump this one string per
+// release. Rendered on the server-select (title) screen
+// (Scene_Login_ServerSelect) so the running build is identifiable at a
+// glance (G's requirement, 2026-11-12). This is NOT the protocol
+// ClientVersion above — never bump that one for a release.
+constexpr char           BuildVersionLabel[] = "v20261112-1627"; // MEAMU release (format vYYYYMMDD-HHMM, America/Toronto, set at build freeze)
 
 } // namespace ServerConfig
