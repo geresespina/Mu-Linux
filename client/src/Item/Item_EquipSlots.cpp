@@ -303,10 +303,8 @@ void __cdecl FUN_004d1fc0(void) {
     FUN_004cdc70(15.0f,  46.0f,  40.0f, 40.0f, 8);
     FUN_004cdc70(115.0f, 46.0f,  60.0f, 40.0f, 7);
 
-    BYTE classByte = *(BYTE*)((BYTE*)CharacterAttribute + 11);
-    if ((classByte & 7) != 3) {  // not SM (Soul Master)
-        FUN_004cdc70(75.0f,  46.0f,  40.0f, 40.0f, 2);
-    }
+    // MEAMU patch: helmet slot for every class - MG included (upstream skips class 3).
+    FUN_004cdc70(75.0f,  46.0f,  40.0f, 40.0f, 2);
     FUN_004cdc70(75.0f,  89.0f,  40.0f, 60.0f, 3);
     FUN_004cdc70(75.0f,  152.0f, 40.0f, 40.0f, 4);
     FUN_004cdc70(15.0f,  89.0f,  40.0f, 60.0f, 0);
