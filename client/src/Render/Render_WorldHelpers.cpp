@@ -1203,7 +1203,7 @@ void Fauna_TickSprites() {
         }
     }
     if (SceneFlag != 2 && SceneFlag != 4 && SceneFlag != 5) return;
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < BUG_POOL_COUNT; ++i) {
         intptr_t entity = (intptr_t)((char *)DAT_083a1218 + i * OBJECT_STRIDE);
         OBJECT &o = *AsObject(entity);
         if (!o.Live) continue;
