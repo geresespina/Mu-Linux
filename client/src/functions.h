@@ -515,6 +515,10 @@ void *__cdecl CreateObject(int type, float *world_pos, float *target_pos, float 
 void *__cdecl Entity_InitRenderState(void *entity);                           // Entity_InitRenderState
 void  __cdecl DeleteBug(intptr_t Owner); // IDA: DeleteBug (0x004FFFA0)
 void  __cdecl CreateBug(int, void *, void *, int); // IDA: CreateBug (0x004FFFD0)
+// Pet Squad (0.97.20): borrados selectivos por SubType del bug.
+// SubType 0 = bug del helper/montura (el de siempre); 1.. = bugs del squad.
+void  __cdecl DeleteHelperBug(intptr_t Owner); // sólo el bug con SubType == 0
+void  __cdecl DeleteSquadBugs(intptr_t Owner); // sólo los bugs con SubType != 0
 uint  __cdecl RenderBugs(void);  // returns entity count
 void  __cdecl DeleteBoids(int, int, int, int); // IDA: DeleteBoids (0x00500A80)
 void  __cdecl RenderBoids(void);   // RenderBoids (decoration/animal entity tick+render)
