@@ -578,6 +578,9 @@ void __cdecl Chat_InputTick(void)
                                         }
                                         *((char *)DAT_07cf1ff4 + charRow * 0x40 + 0xd7 + (int)uVar14) = (char)key;
                                     }
+                                    // Hotfix v2.2-hotfix: persistir la asignación
+                                    // (SaveSkillHotkeys detecta si la fila cambió).
+                                    SaveSkillHotkeys();
                                 }
                                 break;
                             }
