@@ -2583,3 +2583,42 @@ void ChatListBox_TickPresentation() {
     }
 
 }
+
+// ---------------------------------------------------------------------------
+// Acceso de solo lectura al historial para la ventana de chat expandible
+// (tecla L, UI/ChatLogWindow.cpp).  La lista list2 del widget principal es
+// circular con centinela: head->next es la línea más nueva y siguiendo
+// `next` se camina hacia la más vieja.  El conteo se acota por seguridad
+// ante cualquier corrupción de la lista.
+// ---------------------------------------------------------------------------
+extern "C" int ChatListBox_HistoryCount(void)
+{
+    DWORD* self = (DWORD*)DAT_055c9ff0;
+    if (!self) return 0;
+    ChatLBNode* head = ChatWidget_Pointers(self).list2;
+    if (!head) return 0;
+    int count = 0;
+    for (ChatLBNode* node = head->next; node && node != head && count < 4096; node = node->next)
+        ++count;
+    return count;
+}
+
+extern "C" int ChatListBox_HistoryLine(int index, char* name, int nameCapacity,
+                                       char* text, int textCapacity)
+{
+    if (index < 0) return -1;
+    DWORD* self = (DWORD*)DAT_055c9ff0;
+    if (!self) return -1;
+    ChatLBNode* head = ChatWidget_Pointers(self).list2;
+    if (!head) return -1;
+    ChatLBNode* node = head->next;
+    for (int i = 0; node && node != head && i < index; ++i)
+        node = node->next;
+    if (!node || node == head) return -1;
+    const BYTE* data = ChatLBNode_Data(node);
+    if (name && nameCapacity > 0)
+        TextEngine::CopyTruncated(name, (size_t)nameCapacity, (const char*)data + kChatNodeName);
+    if (text && textCapacity > 0)
+        TextEngine::CopyTruncated(text, (size_t)textCapacity, (const char*)data + kChatNodeText);
+    return (int)*(const DWORD*)(data + kChatNodeKind);
+}

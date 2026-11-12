@@ -13,6 +13,8 @@
 #include "Platform/ISocket.h"
 #include "Net/Reconnect.h"
 #include "UI/OptionsMenu.h"
+#include "UI/CommandMenu.h"
+#include "UI/ChatLogWindow.h"
 #include "globals.h"
 #include "functions.h"
 
@@ -128,7 +130,13 @@ void __cdecl UI_InGameMenu(void)
     // DAT_083a7c24 ≡ ErrorMessage, estado 0x6e (110) = menu abierto.
     // EquipmentItem (0x07EAA165) = movimiento de equipo pendiente con el server.
     int escHit = PressKey(27);  // PressKey(27)
-    if (escHit && !DAT_07eaa165) {            // EquipmentItem
+    // DESVIACION: con el menú D o el historial de chat abiertos, la Esc los
+    // cierra a ellos y no abre el menú del juego.
+    if (escHit && (gCommandMenu.IsOpen() || gChatLogWindow.IsOpen())) {
+        gCommandMenu.Close();
+        gChatLogWindow.Close();
+        PlayBuffer(0x19, 0, 0);
+    } else if (escHit && !DAT_07eaa165) {            // EquipmentItem
         if (DAT_083a7c24) {                   // ErrorMessage
             if (DAT_083a7c24 == 110 || DAT_083a7c24 == 150) {
                 DAT_083a7c24 = DAT_083a7c28;  // ErrorMessage = NextErrorMessage

@@ -6,6 +6,8 @@
 #include "UI/MiniMap.h"
 #include "UI/EventTimer.h"
 #include "UI/MoveList.h"
+#include "UI/CommandMenu.h"
+#include "UI/ChatLogWindow.h"
 #include "UI/UIState.h"
 #include "Core/Font.h"
 #include "Core/Window.h"
@@ -281,6 +283,8 @@ void CEventTimer::Toggle()
     PartyOpened = 0;
     gMoveList.Close();
     gMiniMap.Close();
+    gCommandMenu.Close();
+    gChatLogWindow.Close();
     m_Open = true;
     // Mismo par de sonidos que al abrir el inventario (Chat_InputTick 0x004B14F0).
     PlayBuffer(25, 0, 0);

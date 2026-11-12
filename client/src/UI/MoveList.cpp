@@ -5,6 +5,8 @@
 #include "UI/MiniMap.h"
 #include "UI/MoveList.h"
 #include "UI/EventTimer.h"
+#include "UI/CommandMenu.h"
+#include "UI/ChatLogWindow.h"
 #include "Core/Font.h"
 #include "Core/Window.h"
 #include "UI/UIState.h"
@@ -135,7 +137,7 @@ void CMoveList::Toggle()
 {
     if (Blocked()) { m_Open = false; return; }
     // DLL: los paneles M y H comparten espacio y se cierran mutuamente.
-    if (!m_Open) { gEventTimer.Close(); gMiniMap.Close(); }
+    if (!m_Open) { gEventTimer.Close(); gMiniMap.Close(); gCommandMenu.Close(); gChatLogWindow.Close(); }
     m_Open = !m_Open;
     PlayBuffer(25, 0, 0);
 }

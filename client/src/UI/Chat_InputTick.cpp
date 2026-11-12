@@ -34,6 +34,7 @@
 #include "Platform/IInput.h"
 #include "Item/ContentCatalog.h"
 #include "UI/EventTimer.h"
+#include "UI/ChatLogWindow.h"
 #pragma warning(disable: 4102)
 #include "globals.h"
 #include "functions.h"
@@ -391,6 +392,7 @@ void __cdecl Chat_InputTick(void)
                 DAT_07e11970 = 1;
                 // DESVIACION: con el panel H abierto, la página va a su lista.
                 if (gEventTimer.IsOpen()) gEventTimer.ScrollPages(-1);
+                else if (gChatLogWindow.IsOpen()) gChatLogWindow.ScrollPages(1);
                 else {
                     // Same structural split as newer clean sources:
                     // guild list open -> guild widget, else main chat widget.
@@ -415,6 +417,7 @@ void __cdecl Chat_InputTick(void)
                 DAT_07e11974 = 1;
                 // DESVIACION: con el panel H abierto, la página va a su lista.
                 if (gEventTimer.IsOpen()) gEventTimer.ScrollPages(1);
+                else if (gChatLogWindow.IsOpen()) gChatLogWindow.ScrollPages(-1);
                 else {
                     DWORD* obj = (DWORD*)(GuildOpened ? DAT_055c9ff4
                                                       : DAT_055c9ff0);

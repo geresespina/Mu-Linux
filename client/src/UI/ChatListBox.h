@@ -13,4 +13,13 @@ void** ChatWidget_GetVTable(void* widget);
 // Widget hover flag — set by ChatListBox per-frame input handling, consumed
 // by cursor render.  (Storage in ChatListBox.cpp.)
 extern int MouseOnWindow;
+
+// Read-only access to the stored chat history (list2 of the main widget,
+// newest first) for the expandable chat window (tecla L).  The layout stays
+// private to ChatListBox.cpp; callers only get copies.
+// ChatListBox_HistoryLine returns the line kind (0..5) or -1 if the index
+// is out of range; index 0 is the newest line.
+int ChatListBox_HistoryCount(void);
+int ChatListBox_HistoryLine(int index, char* name, int nameCapacity,
+                            char* text, int textCapacity);
 }

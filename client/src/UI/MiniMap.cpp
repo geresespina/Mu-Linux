@@ -6,6 +6,8 @@
 #include "UI/MiniMap.h"
 #include "UI/EventTimer.h"
 #include "UI/MoveList.h"
+#include "UI/CommandMenu.h"
+#include "UI/ChatLogWindow.h"
 #include "UI/UIState.h"
 #include "Config/UserSettings.h"
 #include "Core/Font.h"
@@ -151,6 +153,8 @@ void CMiniMap::Toggle()
     // DLL MiniMap.cpp Toggle: comparte la pantalla con los paneles H y M.
     gEventTimer.Close();
     gMoveList.Close();
+    gCommandMenu.Close();
+    gChatLogWindow.Close();
     m_Open = !m_Open;
     PlayBuffer(25, 0, 0);
 }
