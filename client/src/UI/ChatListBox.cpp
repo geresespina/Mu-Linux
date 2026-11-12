@@ -2264,6 +2264,20 @@ char __fastcall TextureScriptParsing_parsingTScript(void* ecx, void* /*edx*/, DW
 // DESVIACION (Fase 4, cortes UAX #14): el binario corta en cualquier punto de
 // la palabra. Ahora, si hay un punto de corte en la segunda mitad de lo que
 // entra, la linea termina ahi (despues de un espacio, entre ideogramas...).
+// FIX 2026-11-12 (crash al recibir textos largos, p.ej. respuestas de /who):
+// las copias de FUN_0040c2a0 NO pueden usar strncpy. Cuando el compilador la
+// inlinea dentro de ChatLB_AddText, modela `line` (= dst + off) como un objeto
+// de UNA sola linea: el object-size que pasa a __strncpy_chk es (lineSize - off),
+// que en la SEGUNDA linea vale 0 -> cualquier copia con n > 0 aborta por fortify
+// (backtrace: ChatLB_AddText -> UIChatLogWindow_AddText -> OnSocketEvent). Las
+// copias reales son seguras (cada linea tiene lineSize bytes); el modelo de
+// object-size es el que esta mal. Copia manual con semantica strncpy (copia +
+// padding a cero), inmune a ese modelo tanto inlineada como fuera de linea.
+static void WrapLineCopy(char* dst, const char* src, size_t count) {
+    size_t i = 0;
+    for (; i < count && src[i]; ++i) dst[i] = src[i];
+    for (; i < count; ++i) dst[i] = 0;
+}
 int __cdecl FUN_0040c2a0(LPCSTR text, char* dst, int width, int maxLines,
                          size_t lineSize, UINT firstIndent, int reverse) {
     const char* cur = text;                        // IDA: v7
@@ -2283,7 +2297,7 @@ int __cdecl FUN_0040c2a0(LPCSTR text, char* dst, int width, int maxLines,
         if (!sz.cx) return lines;
         int avail = width - (lines == 0 ? (int)firstIndent : 0);
         if (textW <= avail) {
-            strncpy(line, cur, lineSize);
+            WrapLineCopy(line, cur, lineSize); // FIX 2026-11-12: no strncpy (ver WrapLineCopy)
             return lines + 1;
         }
         // Desviacion defensiva: con un ancho medio por caracter < 1 px el
@@ -2311,7 +2325,7 @@ int __cdecl FUN_0040c2a0(LPCSTR text, char* dst, int width, int maxLines,
             ;
         const int fit = (int)TextEngine::FitLineBreak(std::string_view(cur), (std::size_t)j);
         if (fit > 0 && fit * 2 >= j) j = fit;
-        strncpy(line, cur, j);
+        WrapLineCopy(line, cur, (size_t)j); // FIX 2026-11-12: no strncpy (ver WrapLineCopy)
         fwdOff += lineSize;
         cur += j;
         off = revOff - lineSize;
