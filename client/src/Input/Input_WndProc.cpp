@@ -15,6 +15,7 @@
 // handler de Enter en WndProc cuando InputEnable=1 y el buffer no está vacío.
 extern "C" void Chat_SendChatLine(const char* text);
 #include "UI/ChatHistory.h"
+#include "UI/ChatLogWindow.h"
 void ChatListBox_AddWheel(int notches);
 extern "C" BYTE InputTextHide[10];
 
@@ -130,8 +131,13 @@ void Input_OnEvent(const Platform::InputEvent& event)
     case Platform::InputEventType::Wheel:    // 0x20A
         // DESVIACION: el original la descartaba; ver ChatListBox_AddWheel.
         // Con la cámara 3D activa la rueda es su zoom (DLL Controller.cpp).
-        if (!gCamera3D.Wheel(event.wheel))
-            ChatListBox_AddWheel(event.wheel / 120);
+        if (!gCamera3D.Wheel(event.wheel)) {
+            // DESVIACION: con el historial de chat abierto (L), la rueda es suya.
+            if (gChatLogWindow.IsOpen())
+                gChatLogWindow.ScrollWheel(event.wheel / 120);
+            else
+                ChatListBox_AddWheel(event.wheel / 120);
+        }
         break;
 
     // DESVIACION (DLL Controller.cpp): el botón del medio gira la cámara 3D.
