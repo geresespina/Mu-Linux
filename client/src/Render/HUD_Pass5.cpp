@@ -358,32 +358,48 @@ void __cdecl Render_HudPass_4BD650_(void)
         }
 
         if (byte_7DB870C) {
+            // Grilla de skills: hasta 60 slots (MAX_SKILL_LIST del server).
+            // Filas de 20 centradas, apiladas hacia arriba desde y=370 —
+            // la fila 0 queda exactamente donde siempre estuvo la tira
+            // unica (20 iconos x 32px = los 640px del area UI). El
+            // hit-test espejo vive en Chat_InputTick con la misma
+            // matematica; el total visible se cuenta desde el array
+            // (no desde CA[86]) para que render e input nunca discrepen.
+            int slotCount = 0;
+            for (int i = 0; i < 60; ++i) {
+                if (CA[87 + i]) ++slotCount;
+            }
             int v92 = 0;
             int slotIdx = 0;
             do {
                 if (CA[slotIdx + 87]) {
-                    int slotCount = (unsigned char)CA[86];
-                    double xCenter = 320.0 - (double)slotCount * 16.0 + (double)v92 * 32.0;
+                    int row = v92 / 20;
+                    int col = v92 - row * 20;
+                    int rowCount = slotCount - row * 20;
+                    if (rowCount > 20) rowCount = 20;
+                    double xCenter = 320.0 - (double)rowCount * 16.0 + (double)col * 32.0;
+                    float iconY = 370.0f - (float)row * 36.0f;
                     if (slotIdx == mainSlot) {
                         Gfx::Color3f(1.0f, 0.9f, 0.8f);
                     } else {
                         Gfx::Color3f(0.6f, 0.7f, 0.8f);
                     }
-                    sub_4BB940((float)slotIdx, (float)(int)xCenter, 370.0f, 32, 36);
-                    if ((double)MouseX >= xCenter && (double)MouseX < xCenter + 32.0 &&
-                        (double)MouseY >= 370.0 && (double)MouseY < 406.0) {
+                    sub_4BB940((float)slotIdx, (float)(int)xCenter, iconY, 32, 36);
+                    if (!hoveredSkill &&
+                        (double)MouseX >= xCenter && (double)MouseX < xCenter + 32.0 &&
+                        (double)MouseY >= (double)iconY && (double)MouseY < (double)iconY + 36.0) {
                         DAT_0055a3e4 = (DWORD)slotIdx;
                         DAT_07ea840c = (DWORD)((int)xCenter + 16);
-                        DAT_07ea8408 = 370;
+                        DAT_07ea8408 = (DWORD)(int)iconY;
                         DAT_07d78094 = 1;
                         hoveredSkill = true;
                     }
                     ++v92;
                 }
                 ++slotIdx;
-            } while (slotIdx < 20);
+            } while (slotIdx < 60);
         }
-        if (!hoveredSkill && (int)DAT_0055a3e4 >= 0 && (int)DAT_0055a3e4 < 20) {
+        if (!hoveredSkill && (int)DAT_0055a3e4 >= 0 && (int)DAT_0055a3e4 < 60) {
             DAT_0055a3e4 = 0xFFFFFFFF;
         }
     }
