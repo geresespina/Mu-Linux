@@ -9,6 +9,8 @@
 #include "UI/MiniMap.h"
 #include "UI/EventTimer.h"
 #include "UI/MoveList.h"
+#include "UI/CommandMenu.h"
+#include "UI/ChatLogWindow.h"
 #include "globals.h"
 #include "functions.h"
 #include "Net/Net.h"
@@ -458,6 +460,8 @@ static void HUD_HotkeyTick(void)
     int kP = PressKey(0x50); // 'P'  Party
     int kH = PressKey('H');
     int kM = PressKey('M');
+    int kD = PressKey(0x44); // 'D'  Command menu
+    int kL = PressKey(0x4C); // 'L'  Chat history window
     int kTab = PressKey(VK_TAB);
     int kSpace = PressKey(VK_SPACE);
     int kF10 = PressKey(VK_F10);
@@ -493,6 +497,10 @@ static void HUD_HotkeyTick(void)
     if (kH) gEventTimer.Toggle();
     // DESVIACION (DLL Controller.cpp): menú M con destinos recibidos del server.
     if (kM) gMoveList.Toggle();
+    // DESVIACION: menú D de comandos sobre el objetivo (trade/party/guild).
+    if (kD) gCommandMenu.Toggle();
+    // DESVIACION: ventana L con el historial del chat.
+    if (kL) gChatLogWindow.Toggle();
     // DESVIACION (DLL Controller.cpp): Tab abre el mapa.
     if (kTab) gMiniMap.Toggle();
     // DESVIACION (MU 5.2): Espacio levanta el primer ítem cercano.
