@@ -89,8 +89,9 @@ void CUserSettings::Load(const char* iniPath)
     m_WindowMode  = ReadFlag("Window", "WindowMode", iniPath);
     m_Borderless  = ReadFlag("Window", "Borderless", iniPath);
     m_Resolution  = ReadInt ("Window", "Resolution", iniPath);
-    // DESVIACION: 0 desactiva el límite; entradas inválidas conservan 60 fps.
-    m_FpsLimit = ReadRange("Window", "FpsLimit", iniPath, 0, INT_MAX, 60);
+    // DESVIACION: 0 desactiva el límite; es también el default si la clave
+    // falta o es inválida (MEAMU: FPS desbloqueado de fábrica).
+    m_FpsLimit = ReadRange("Window", "FpsLimit", iniPath, 0, INT_MAX, 0);
     m_RenderDecoupled = ReadRange("Window", "RenderDecoupled", iniPath, 0, 1, 1) != 0;
     m_VSync = ReadRange("Window", "VSync", iniPath, 0, 1, 0) != 0;
     m_GraphicsValidation = ReadRange("Window", "GraphicsValidation", iniPath, 0, 1, 0) != 0;
@@ -117,6 +118,9 @@ void CUserSettings::Load(const char* iniPath)
         DbgLogPublic(line);
         m_Resolution = -1;
     }
+    // MEAMU: sin Resolution válida en el ini, el default es 1920x1080
+    // (indice buscado en la tabla, no fijado a mano).
+    if (m_Resolution < 0) m_Resolution = FindResolution(1920, 1080);
 
     m_EnableSound = ReadFlag("Sound", "EnableSound", iniPath);
     m_EnableMusic = ReadFlag("Sound", "EnableMusic", iniPath);
