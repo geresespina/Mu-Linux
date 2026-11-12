@@ -1210,24 +1210,24 @@ void NetRecv_F3(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
                 if (Size < 8) break;
                 BYTE slot = Msg[5];
                 BYTE skill = Msg[6];
-                if (slot >= 20) break;
+                if (slot >= 60) break;
                 CA[87 + slot] = (count == 0xFE) ? skill : 0;
 
                 int total = 0;
-                for (int i = 0; i < 20; ++i) {
+                for (int i = 0; i < 60; ++i) {
                     if (CA[87 + i] != 0) ++total;
                 }
                 CA[86] = (BYTE)total;
                 if (DAT_07abf5d8) {
                     BYTE* hero = (BYTE*)(uintptr_t)DAT_07abf5d8;
-                    if (hero[EntityOffset(913)] >= 20) hero[EntityOffset(913)] = 0;
+                    if (hero[EntityOffset(913)] >= 60) hero[EntityOffset(913)] = 0;
                 }
                 NetLog("NET:    F3/11 Skill%s slot=%d skill=%d total=%d",
                        (count == 0xFE) ? "Add" : "Del", slot, skill, total);
                 break;
             }
 
-            if (count > 20) break;
+            if (count > 60) break;
 
             // Primero limpia los 60 slots para evitar basura vieja que
             // crashearía el tooltip al pasar el mouse (RenderSkillIcon
@@ -1242,7 +1242,7 @@ void NetRecv_F3(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
                 BYTE slot   = Msg[off];
                 BYTE skill  = Msg[off + 1];
                 // BYTE level  = Msg[off + 2];  // packed level — TODO: store separately
-                if (slot < 20) {
+                if (slot < 60) {
                     CA[87 + slot] = skill;
                     if (skill != 0) written++;
                 }
@@ -1250,7 +1250,7 @@ void NetRecv_F3(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
             CA[86] = count;
             if (DAT_07abf5d8) {
                 BYTE* hero = (BYTE*)(uintptr_t)DAT_07abf5d8;
-                if (hero[EntityOffset(913)] >= 20) hero[EntityOffset(913)] = 0;
+                if (hero[EntityOffset(913)] >= 60) hero[EntityOffset(913)] = 0;
             }
             if ((DWORD)DAT_005616ac > 4) DAT_005616ac = 0;   // 5 slots: 0..4 (era >= 4, pisaba el quinto)
             // La lista recien ahora esta completa: re-traducir las
@@ -1308,11 +1308,6 @@ void NetRecv_F3(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         case 0xEE: gContentCatalog.ReceivePets((const BYTE*)Msg, Size); break;
         case 0xEF: gContentCatalog.ReceiveTooltips((const BYTE*)Msg, Size); break;
         case 0xF0: gContentCatalog.ReceiveTexts((const BYTE*)Msg, Size); break;
-        // DESVIACION (Fase 5): gates del server en lugar de Gate.bmd.
-        case 0xF3: gContentCatalog.ReceiveGates((const BYTE*)Msg, Size); break;
-        case 0xF4: gContentCatalog.ReceiveSkills((const BYTE*)Msg, Size); break;
-        case 0xF7: gContentCatalog.ReceiveMapMusic((const BYTE*)Msg, Size); break;
-        case 0xF6: gContentCatalog.ReceiveSync((const BYTE*)Msg, Size); break;
         // DESVIACION (Fase 4): detalle de los efectos propios (barra de buffs).
         case 0xF1: gBuffBar.Receive((const BYTE*)Msg, Size); break;
         case 0xED: {
