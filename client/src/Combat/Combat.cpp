@@ -1477,6 +1477,20 @@ static void Attack_WizardBranch97k(char* entity)
     case 18: case 19: case 20: case 21:                       // IDA L10100-10108
     case 22: case 23: case 55: case 56:
         return;
+    case 30: case 31: case 32: case 33:                       // MEAMU (2026-11-12) — Summon
+    case 34: case 35: case 36:
+        // MEAMU (2026-11-12): las invocaciones (30-36) solo tenian ruta de
+        // casteo en la rama Elf (IDA L2617-2680); en la rama DW/MG caian al
+        // default y morian en LABEL_1585, que exige objetivo. El server
+        // nunca tuvo gate de clase (SkillSummon + SummonMonster1..7), asi
+        // que la ruta espejo de la Elf va aca: despues de los chequeos de
+        // mana de esta rama y con el propio heroe como objetivo. En Icarus
+        // (mundo 10) no se castea, igual que en la rama Elf.
+        if ((int)gMapManager.GetCurrentMap() == 10)
+            return;
+        Attack_SendSkill19_97k(iType, (WORD)HeroKey);
+        SetPlayerMagic(AsCharacter(entity));                 // IDA LABEL_1430
+        return;
     default:                                                  // IDA L10109
         Attack_Label1158_97k(entity, iType, hasTarget);
         return;
