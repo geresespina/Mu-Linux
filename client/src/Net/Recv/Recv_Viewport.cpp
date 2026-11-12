@@ -69,8 +69,57 @@ static void ApplyCustomEquipment(BYTE* c, const BYTE* items)
     const WORD helper = *(const WORD*)(items + 8 * 2);
     if (helper != 0xFFFF && gContentCatalog.GetPet(helper)) {
         *(WORD*)(c + EntityOffset(696)) = (WORD)ItemModel(helper);
-        DeleteBug((intptr_t)c);
+        DeleteHelperBug((intptr_t)c);   // Pet Squad: no tocar los bugs del squad
         CreateBug(ItemModel(helper), (void*)(c + 16), (void*)c, 0);
+    }
+}
+
+// 0.97.20: C1:F3:F5 — Pet Squad de un jugador del viewport: los pets que
+// lleva en la fila superior del inventario (el pet del slot 8 viaja por el
+// CharSet/F3:EB de siempre y NO viene acá).  Layout (24 bytes):
+//    +0..3  {C1, size, 0xF3, 0xF5}
+//    +4,+5  BYTE index[2]   (key de la entidad)
+//    +6..   WORD item[7]    (índices de ítem; 0xFFFF = vacío)
+//    +20    BYTE count      (pets de la zona)
+//    +21    BYTE collector  (índice en item[] del que levanta el zen; 0xFF = no es de la zona)
+//    +22    BYTE flags      (bit0: el slot 8 también tiene un pet del catálogo)
+// El handler reconstruye los bugs del squad del personaje: borra los
+// anteriores (SubType != 0) y crea los nuevos con SubType = posición en la
+// formación + 1 (ver CustomPet_Move), marcando al colector con el bit
+// 0x80.  Si el colector es un pet de la zona, el bug del pet del helper
+// (SubType 0) se marca 0x40 para que no vuele él también hasta el zen.
+void Recv_PetSquad(const BYTE* Msg, int Size)
+{
+    if (Size < 24 || !DAT_07abf5d0) return;
+    const int key = ((Msg[4] & 0x7F) << 8) | Msg[5];
+    const int idx = FindCharacterIndex(key);
+    if (idx < 0 || idx >= 400) return;
+    BYTE* c = (BYTE*)(uintptr_t)DAT_07abf5d0 + (size_t)idx * CHARACTER_STRIDE;
+
+    const int count = Msg[20] > 7 ? 7 : Msg[20];
+    const int collector = Msg[21];
+    const bool helperPet = (Msg[22] & 1) != 0;
+
+    DeleteSquadBugs((intptr_t)c);
+    // Restaurar/suprimir el collect del bug del helper según quién colecta.
+    {
+        DWORD* bugs = (DWORD*)DAT_083a1218;
+        for (int slot = 0; slot < BUG_POOL_COUNT; ++slot) {
+            if (*(BYTE*)bugs && (intptr_t)AsObject(bugs)->Owner == (intptr_t)c) {
+                DWORD& sub = *(DWORD*)&AsObject(bugs)->SubType;
+                if (sub == 0x40 && collector == 0xFF) sub = 0;                    // vuelve a colectar
+                else if (sub == 0 && collector != 0xFF && gContentCatalog.GetPetByModel(AsObject(bugs)->Type)) sub = 0x40;
+            }
+            bugs += OBJECT_STRIDE / 4;
+        }
+    }
+
+    const int formationBase = helperPet ? 1 : 0;
+    for (int i = 0; i < count; ++i) {
+        const WORD item = *(const WORD*)(Msg + 6 + i * 2);
+        if (item == 0xFFFF || !gContentCatalog.GetPet(item)) continue;
+        const int subType = (formationBase + i + 1) | (i == collector ? 0x80 : 0);
+        CreateBug(ItemModel(item), (void*)(c + 16), (void*)c, subType);
     }
 }
 
@@ -168,14 +217,14 @@ void Recv_ChangePlayer(const BYTE* Msg, int Size)
         case 8: {  // helper / mascota
             if (empty) {
                 *(WORD *)&AsCharacter(c)->Helper.Type = (WORD)-1;
-                DeleteBug((intptr_t)c);        // DeleteBug
+                DeleteHelperBug((intptr_t)c);  // Pet Squad: no tocar los del squad
             } else {
                 *(WORD *)&AsCharacter(c)->Helper.Type = (WORD)ItemEntityModel(type);
                 AsCharacter(c)->Helper.Level = 0;
                 float* pos = (float*)(c + 16);
                 // 0.97.20: un agregado crea el bug del pet que imita.
                 const int pet = ItemBehaviorType(type);
-                DeleteBug((intptr_t)c);
+                DeleteHelperBug((intptr_t)c);   // Pet Squad: no tocar los del squad
                 if (pet == 416)      CreateBug(816, (void*)pos, (void*)c, 0);
                 else if (pet == 418) CreateBug(195, (void*)pos, (void*)c, 0);
                 else if (pet == 419) CreateBug(267, (void*)pos, (void*)c, 0);
