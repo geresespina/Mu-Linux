@@ -18,6 +18,8 @@
 #include "UI/HealthBar.h"
 #include "UI/MoveList.h"
 #include "UI/EventTimer.h"
+#include "UI/CommandMenu.h"
+#include "UI/ChatLogWindow.h"
 #include "UI/GoldenArcher.h"
 #include "Item/ChaosMixRates.h"
 #include "Item/Item_ServerValue.h"
@@ -38,6 +40,8 @@ void CNetwork::ResetCharacterData()
     gMoveList.Clear();
     ItemServerValue_ResetSession();
     gEventTimer.Close(); // El calendario pertenece a la misma conexión.
+    gCommandMenu.Close(); // DESVIACION: menú D e historial, misma conexión.
+    gChatLogWindow.Close();
     gBuffBar.Clear();
 }
 
