@@ -1323,6 +1323,11 @@ void NetRecv_F3(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
             Recv_CustomEquipment((const BYTE*)Msg, Size);
             break;
         }
+        case 0xF5: {  // 0.97.20: Pet Squad del personaje (F3:F5)
+            void Recv_PetSquad(const BYTE* Msg, int Size);
+            Recv_PetSquad((const BYTE*)Msg, Size);
+            break;
+        }
         case 0x30: {
             // ── ReceiveOption (IDA 0x436FB0) — PORT FIEL ─────────────────
             // Layout autoritativo del server MuEmu (Protocol.h,
