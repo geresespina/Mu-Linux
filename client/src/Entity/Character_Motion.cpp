@@ -512,7 +512,7 @@ void Hero_ApplyCatalogEquipment(CHARACTER* character)
     if (pet != -1 && gContentCatalog.GetPet(pet)) {
         *(short*)&((CHARACTER*)(uintptr_t)(c))->Helper.Type = (short)ItemModel(ItemBehaviorType(pet));
         // El owner del pool aún ocupa 32 bits; su layout queda para B2.
-        DeleteBug((intptr_t)c);
+        DeleteHelperBug((intptr_t)c);   // Pet Squad: no tocar los bugs del squad
         CreateBug(*(short*)&((CHARACTER*)(uintptr_t)(c))->Helper.Type, (void*)(c + 16), (void*)(uintptr_t)c, 0);
     }
 }
@@ -589,7 +589,7 @@ void __cdecl SetCharacterClass(CHARACTER* character) {
         const short newHelper = AsCharacter(c)->Helper.Type;
         if (newHelper != prevHelper) {
             // El owner del pool aún ocupa 32 bits; su layout queda para B2.
-            DeleteBug((intptr_t)c);          // DeleteBug
+            DeleteHelperBug((intptr_t)c);    // Pet Squad: no tocar los bugs del squad
             int bugType = 0;
             if      (newHelper == 816) bugType = 816;   // Guardian Angel
             else if (newHelper == 818) bugType = 195;   // Uniria
