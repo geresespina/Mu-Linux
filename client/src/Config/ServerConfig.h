@@ -24,13 +24,13 @@ namespace ServerConfig {
 // ConnectServer: lista de servers y ocupación (F4/02), redirect al GameServer
 // (F4/03). Con puerto 0 no se usa: el cliente conecta directo al GameServer y el
 // select-server muestra una entrada fija.
-constexpr char           ConnectServerIP[]   = "mu.server-pups.space";
+constexpr char           ConnectServerIP[]   = "mu.exmco.com";
 constexpr unsigned short ConnectServerPort   = 44405;
 
 // GameServer: destino directo cuando no hay ConnectServer, y fallback si el
 // ConnectServer no responde. Con ConnectServer, el GameServer al que se salta lo
 // manda el server en el redirect F4/03 (sale de su ServerList.dat).
-constexpr char           GameServerIP[]      = "mu.server-pups.space";
+constexpr char           GameServerIP[]      = "mu.exmco.com";
 constexpr unsigned short GameServerPort      = 55901;
 
 // Identidad del server (ver arriba). ClientVersion acepta "0.97.11" o "09711".
