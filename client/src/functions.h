@@ -1169,6 +1169,8 @@ void  Game_DestroyWindow(void);                                          // Full
 void  __cdecl SendRequestEquipmentItem(int iSrcType, int iSrcIndex, ITEM *pItem, int iDstType, int iDstIndex); // 0x0043C250
 int   __stdcall FindHotKey(int Skill);                              // 0x004B1170
 void  __cdecl RenderSkillIcon(int iIndex, float x, float y, float width, float height); // 0x004BB940
+void  __cdecl SaveSkillHotkeys(void);   // persistencia local de hotkeys (hotfix v2.2-hotfix; ver UI_SkillHotkeys.cpp)
+void  __cdecl LoadSkillHotkeys(void);   // persistencia local de hotkeys (hotfix v2.2-hotfix; ver UI_SkillHotkeys.cpp)
 void  __cdecl SendChat(char *Text);                                      // 0x004C1B90
 int   __cdecl ConvertGold64(int Zen, char *Buffer);                 // 0x004C3E10
 struct ITEM;
