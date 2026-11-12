@@ -256,6 +256,7 @@ void PacketHandler_0x19(BYTE* pkt)
     case 0x22:  // 34 Summon Dark Knight
     case 0x23:  // 35 Summon Bali
     case 0x24:  // 36 Summon Soldier
+    case 0x25:  // 37 Summon Fenrir (MEAMU custom, 2026-11-12)
     {
         // 0042BCA0 first plays 81 unless the channel state is 77, then
         // enters LABEL_98 for the remote caster animation.
