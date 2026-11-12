@@ -119,6 +119,7 @@
 #include "Render/Gfx.h"
 #include "Platform/Text.h"
 #include "Scene.h"
+#include "Config/ServerConfig.h"
 
 
 // Scene_Login_ServerSelect @ 0x0051F020
@@ -534,5 +535,13 @@ LAB_0051f8b4:
             iVar8  = 0;
         }
     }
+
+    // ── MEAMU version stamp (2026-11-12): visible build label, bottom-left
+    // corner of the title/server-select screen, drawn last (on top).
+    // The string lives in ONE place: ServerConfig::BuildVersionLabel.
+    DAT_00559c78 = 0xffffffff;
+    SetBackgroundTextColor = 0;
+    Gfx::Color3f(1.0f, 1.0f, 1.0f);
+    UI_RenderText(10, 462, (char*)ServerConfig::BuildVersionLabel, (LPSIZE)0x0, '\0', 0);
     return iVar8;
 }
