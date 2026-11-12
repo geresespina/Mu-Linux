@@ -1561,7 +1561,12 @@ extern float   _DAT_00552a28;
 extern DWORD   _DAT_07e016f0;  // last FPS tick timestamp (timeGetTime value)
 
 // Pool en 0x083a1218 (array Butterfles; lo recorren SMD_Parser.cpp y Entity_Render.cpp, entre otros):
-extern char    DAT_083a1218[10 * OBJECT_STRIDE];   // Butterfles OBJECT array (10 entries × 0x1BC stride)
+// Pet Squad (0.97.20): el pool original de 10 alcanzaba para UN pet por
+// personaje con suerte; con squads de hasta 7 pets por jugador (más
+// monturas y FX de alas) se amplía a 512.  Todos los recorridos del pool
+// usan esta constante.
+#define BUG_POOL_COUNT 512
+extern char    DAT_083a1218[BUG_POOL_COUNT * OBJECT_STRIDE];   // Butterfles OBJECT array (BUG_POOL_COUNT entries × 0x1BC stride)
 
 // Float aliases for view/projection matrix globals (0x083a4xxx):
 // DWORD counterparts (DAT_083a414c etc.) are already declared above.
