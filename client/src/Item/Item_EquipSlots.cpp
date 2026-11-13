@@ -100,7 +100,10 @@ bool Equip_CanPlace(const ITEM* item, int a5)
     if (item->RequireDexterity > *(WORD*)(CA + 22)) ok = false;
     if (item->RequireEnergy    > *(WORD*)(CA + 26)) ok = false;
     const BYTE part = item->Part;
-    if ((part >= 7 && part <= 11) && item->RequireLevel > *(WORD*)(CA + 14)) ok = false;
+    // MEAMU rev.4.1 (2026-11-12): wings (part 7) leave the level-checked
+    // range — G ruled wings equip at any level, so the equip attempt must
+    // reach the server instead of dying locally. Parts 8-11 keep the gate.
+    if ((part >= 8 && part <= 11) && item->RequireLevel > *(WORD*)(CA + 14)) ok = false;
 
     bool invalid = false;
     if (part == 7) {
