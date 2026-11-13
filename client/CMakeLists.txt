@@ -311,6 +311,8 @@ set(MU_SOURCES
     src/Game/CheckGate.cpp
     src/Input/Input.cpp
     src/Input/Mouse_Hover.cpp
+    src/Input/Gamepad.cpp
+    src/Input/NavMove.cpp
     src/Item/Item_Equip.cpp
     src/Item/Item_EquipSlots.cpp
     src/Item/Item_Move.cpp
@@ -534,6 +536,8 @@ set(MU_HEADERS
     src/Game/Game_SceneUpdate.h
     src/Game/Movement.h
     src/Input/Input.h
+    src/Input/Gamepad.h
+    src/Input/NavMove.h
     src/Item/Item_Equip.h
     src/Monster/Monster.h
     src/Net/Net.h

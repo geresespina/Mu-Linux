@@ -9,6 +9,11 @@ std::array<bool, 256> held{};
 std::array<bool, 256> pressed{};
 bool composing = false;
 float wheelRemainder = 0;
+// MEAMU rev.5: count of REAL input presses (key downs + mouse button downs)
+// seen by the event watch. Synthesized input is delivered via DeliverSDLInput
+// directly and never passes through the watch, so this serial advances only
+// on genuine device input — the follow module uses it to yield control.
+unsigned gRealInputSerial = 0;
 int VirtualKey(SDL_Scancode key) {
     if (key >= SDL_SCANCODE_A && key <= SDL_SCANCODE_Z) return 'A' + key - SDL_SCANCODE_A;
     if (key >= SDL_SCANCODE_1 && key <= SDL_SCANCODE_9) return '1' + key - SDL_SCANCODE_1;
@@ -80,6 +85,7 @@ bool SDLCALL Watch(void*, SDL_Event* event) {
     switch (event->type) {
     case SDL_EVENT_KEY_DOWN: case SDL_EVENT_KEY_UP: {
         const int key = VirtualKey(event->key.scancode);
+        if (event->key.down) ++gRealInputSerial;   // MEAMU rev.5: real input
         SetKey(key, event->key.down);
         SetKey(16, held[0xa0] || held[0xa1]);
         SetKey(17, held[0xa2] || held[0xa3]);
@@ -104,6 +110,7 @@ bool SDLCALL Watch(void*, SDL_Event* event) {
         input.type = InputEventType::MouseMove; input.x = int(event->motion.x); input.y = int(event->motion.y); break;
     case SDL_EVENT_MOUSE_BUTTON_DOWN: case SDL_EVENT_MOUSE_BUTTON_UP: {
         const bool down = event->button.down;
+        if (down) ++gRealInputSerial;              // MEAMU rev.5: real input
         input.x = int(event->button.x); input.y = int(event->button.y);
         switch (event->button.button) {
         case SDL_BUTTON_LEFT:
@@ -160,6 +167,13 @@ public:
     }
 };
 }
+// MEAMU rev.5: virtual key injection for synthesized devices (gamepad /
+// nav modules). Writes the same held/pressed tables real SDL key events
+// write, so every PressKey/KeyState consumer sees synthesized keys exactly
+// as keyboard keys. `key` is a Win32 VK code (same space as SetKey).
+void InjectVirtualKey(int key, bool down) { SetKey(key, down); }
+// MEAMU rev.5: see gRealInputSerial above.
+unsigned RealInputSerial() { return gRealInputSerial; }
 IInput& GetInput() { static SDLInput input; return input; }
 void InstallSDLInput() { held.fill(false); pressed.fill(false); composing = false; wheelRemainder = 0; SDL_AddEventWatch(Watch, nullptr); }
 void RemoveSDLInput() { SDL_RemoveEventWatch(Watch, nullptr); }

@@ -153,6 +153,10 @@ public:
     int GetEnableMusic() const { return m_EnableMusic; }
     int GetSoundLevel()  const { return m_SoundLevel; }
     int GetMusicLevel()  const { return m_MusicLevel; }
+    // MEAMU rev.5: gamepad (Config.ini [Gamepad]).
+    bool GetGamepadEnable() const { return m_GamepadEnable; }
+    int GetGamepadDeadzone() const { return m_GamepadDeadzone; }       // percent 5..60
+    int GetGamepadCursorSpeed() const { return m_GamepadCursorSpeed; } // px/s 100..3000
     bool GetDeleteHealthBar() const { return m_Antilag[ANTILAG_HEALTH_BAR]; }
     bool GetAntilag(eAntilag option) const { return m_Antilag[option]; }
     void SetAntilag(eAntilag option, bool enabled);
@@ -219,6 +223,9 @@ private:
     int  m_EnableMusic = -1;
     int  m_SoundLevel  = -1;
     int  m_MusicLevel  = -1;
+    bool m_GamepadEnable = true;
+    int  m_GamepadDeadzone = 25;
+    int  m_GamepadCursorSpeed = 900;
     bool m_Antilag[MAX_ANTILAG] = {};
     bool m_PvPWithoutControl = false;
     int  m_Language = USER_LANG_DEFAULT;

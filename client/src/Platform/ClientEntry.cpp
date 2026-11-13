@@ -46,6 +46,8 @@
 #include "Game/FrameLimiter.h"
 #endif
 #include "Net/HWID.h"
+#include "Input/Gamepad.h"
+#include "Input/NavMove.h"
 #include "Scene/Scene.h"
 #include "Sound/SoundManager.h"
 #include "Config/UserSettings.h"
@@ -712,6 +714,11 @@ int main(int, char**)
     for (;;)
     {
         Platform::GetWindow().ServiceEvents();
+        // MEAMU rev.5 (2026-11-13): controller + arrow-key/follow drivers.
+        // After the event pump, before the scene tick, so synthesized input
+        // lands in the same frame's input processing in every scene.
+        Gamepad_Tick();
+        NavMove_Tick();
         if (Platform::GetWindow().CloseRequested()) break;
 #ifdef _WIN32
         if (!Platform::GetWindow().UsesPlatformPump() && PeekMessageW(&msg, NULL, 0, 0, PM_NOREMOVE))

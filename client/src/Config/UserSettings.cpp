@@ -122,6 +122,12 @@ void CUserSettings::Load(const char* iniPath)
     // (indice buscado en la tabla, no fijado a mano).
     if (m_Resolution < 0) m_Resolution = FindResolution(1920, 1080);
 
+    // MEAMU rev.5: gamepad (Config.ini [Gamepad]) - Enable 1/0, Deadzone as a
+    // percentage of full deflection, CursorSpeed in px/s for the right stick.
+    m_GamepadEnable      = ReadRange("Gamepad", "Enable", iniPath, 0, 1, 1) != 0;
+    m_GamepadDeadzone    = ReadRange("Gamepad", "Deadzone", iniPath, 5, 60, 25);
+    m_GamepadCursorSpeed = ReadRange("Gamepad", "CursorSpeed", iniPath, 100, 3000, 900);
+
     m_EnableSound = ReadFlag("Sound", "EnableSound", iniPath);
     m_EnableMusic = ReadFlag("Sound", "EnableMusic", iniPath);
     m_SoundLevel  = ReadRange("Sound", "SoundLevel", iniPath, 0, 9, -1);
