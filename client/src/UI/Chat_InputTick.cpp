@@ -38,6 +38,7 @@
 #pragma warning(disable: 4102)
 #include "globals.h"
 #include "functions.h"
+#include "Input/NavMove.h"  // MEAMU rev.5: /follow (client-side)
 #include "Net/Net.h"
 
 
@@ -219,6 +220,8 @@ extern "C" void Chat_SendChatLine(const char* text)
 
     if (Chat_TrySendTradeRequest(text)) return;
     if (Chat_TrySendGuildRequest(text)) return;
+    // MEAMU rev.5: /follow is a client-side command (auto-follow a player).
+    if (Follow_TryCommand(text)) return;
 
     // General chat is exactly SendChat @ 0x004C1B90.  Keep the whisper
     // builder below as a separate branch: IDA places it inline in this UI
