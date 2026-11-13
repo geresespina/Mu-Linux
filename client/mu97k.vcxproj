@@ -237,6 +237,8 @@
     <ClInclude Include="src\Game\Game_SceneUpdate.h" />
     <ClInclude Include="src\Game\Movement.h" />
     <ClInclude Include="src\Input\Input.h" />
+    <ClInclude Include="src\Input\Gamepad.h" />
+    <ClInclude Include="src\Input\NavMove.h" />
     <ClInclude Include="src\Item\Item_Equip.h" />
     <ClInclude Include="src\Monster\Monster.h" />
     <ClInclude Include="src\Net\Net.h" />
@@ -573,6 +575,8 @@
     <ClCompile Include="src\Game\CheckGate.cpp" />
     <ClCompile Include="src\Input\Input.cpp" />
     <ClCompile Include="src\Input\Mouse_Hover.cpp" />
+    <ClCompile Include="src\Input\Gamepad.cpp" />
+    <ClCompile Include="src\Input\NavMove.cpp" />
     <ClCompile Include="src\Item\Item_Equip.cpp" />
     <ClCompile Include="src\Item\Item_EquipSlots.cpp" />
     <ClCompile Include="src\Item\Item_Move.cpp" />
