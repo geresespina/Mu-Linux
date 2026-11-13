@@ -12,6 +12,7 @@
 //   - IAT thunk landing pads
 
 #include "stdafx.h"
+#include "Input/Gamepad.h"  // MEAMU rev.5: pad indicator
 #include "UI/BuffBar.h"
 #include "Model/SmdImport.h"
 #include "Physics/ClothTypes.h"
@@ -62,6 +63,7 @@ void __cdecl RenderInformation(void) {
     // DESVIACION (Fase 4): la zona de avisos del sistema se dibuja siempre; en
     // modo clásico el original la apagaba y los mostraba mezclados en el chat.
     UI_RenderChatLogOverlay(); // SystemText / chat list
+    Gamepad_RenderIndicator(); // MEAMU rev.5: "PAD" while a gamepad is live
     UI_UpdateFpsCounter(); // RenderDebugWindow / FPS reset
     RenderHelpWindow(); // RenderHelpWindow / item info
     // DESVIACION (Fase 4): barra de buffs. Va antes del mapa y del menú M
