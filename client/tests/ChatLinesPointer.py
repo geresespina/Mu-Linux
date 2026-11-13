@@ -50,9 +50,13 @@ int main(){auto* low=static_cast<BYTE*>(Reserve(0x26000000u));Require(low);const
  std::printf("Chat lines: 62400 casos, bytes/orden/canarios %016llx\n",static_cast<unsigned long long>(expected));}
 '''
 def harness(revision=None):
- code=function(read_source('src/UI/ChatListBox.cpp',revision),'FUN_0040c2a0')
+ source=read_source('src/UI/ChatListBox.cpp',revision)
+ # Desde el fix de wrap de v2.4, FUN_0040c2a0 copia con el helper real
+ # WrapLineCopy (sin strncpy): se extrae también para probar el código real.
+ wrap=function(source,'WrapLineCopy')
+ code=function(source,'FUN_0040c2a0')
  arg='destination' if 'char* dst' in code else 'static_cast<int>(reinterpret_cast<uintptr_t>(destination))'
- return PREAMBLE.split('char DAT_00559bb4',1)[0]+SERVICES+code+MAIN.replace('ARG',arg)
+ return PREAMBLE.split('char DAT_00559bb4',1)[0]+SERVICES+wrap+'\n'+code+MAIN.replace('ARG',arg)
 def main():
  parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--architecture',choices=('Win32','x64'),default='x64');parser.add_argument('--generator');parser.add_argument('--reference-ref');args=parser.parse_args()
  if args.reference_ref and (os.name!='nt' or args.architecture!='Win32'):parser.error('Referencia sólo en Windows x86')
