@@ -16,6 +16,7 @@ def function(source,name):
 code=r'''
 #include <cstdint>
 constexpr int OBJECT_STRIDE=0x1BC,CHARACTER_STRIDE=0x394,BMD_STRIDE=188,BMD_FIELD_SHIFT=0;
+constexpr int BUG_POOL_COUNT=10;   // pool del harness: sizeof(butterflies)/OBJECT_STRIDE (el juego usa 512 sobre su propio array DAT_083a1218)
 #include <cstddef>
 constexpr std::size_t EntityOffset(std::size_t x86){return x86;}   // layout x86 del harness
 #include <cstdio>
@@ -35,7 +36,7 @@ JOINT* AsJoint(JOINT* p){return p;}
 char entities[0x59740],butterflies[0x1158];
 std::uintptr_t DAT_07abf5d0=reinterpret_cast<std::uintptr_t>(entities);
 char* DAT_083a1218=butterflies;
-struct Service{void Clear(){}void Close(){}void Reset(){}}gHealthBar,gMoveList,gEventTimer,gChaosMixRates;
+struct Service{void Clear(){}void Close(){}void Reset(){}}gHealthBar,gMoveList,gEventTimer,gChaosMixRates,gCommandMenu,gChatLogWindow;
 void GoldenArcher_ResetCharacter(){}void Party_RefreshViewportLinks(){}
 void DeleteCloth(int,int,int){}
 void DeleteCloth(CHARACTER*,OBJECT*,PART_t*){}
