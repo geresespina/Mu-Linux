@@ -222,6 +222,38 @@ void Recv_LogOut(const BYTE* Msg)
 }
 
 // ---------------------------------------------------------------------------
+// DESVIACION (pedido de G, 2026-11-12, rev.3): vuelta LOCAL e inmediata al
+// login (server-select) cuando la conexion muere estando en el juego, en
+// char-select o en loading. Es el mismo teardown que Recv_LogOut sub 2
+// (JoinSrv), pero sin esperar el ack F1/02 del server: el socket ya cerro
+// (FD_CLOSE en CNetwork::OnSocketEvent) y no va a llegar ninguna respuesta.
+// El cierre del socket y la vuelta al modo ConnectServer los hace el caller.
+// ---------------------------------------------------------------------------
+void Net_LocalReturnToServerSelect()
+{
+    if (SceneFlag == 5) {
+        StopMusic();
+        AllStopSound();
+        Item_ReturnPickedItem();
+        ReleaseMainData();
+    }
+    ReleaseCharacterSceneData(); // IDA: ReleaseCharacterSceneData (0x005102C0)
+    SceneFlag = 2;                // SceneFlag = Login
+    DAT_083a7c14 = 0;             // sub-state = ServerSelect
+    DAT_083a7c18 = 0;
+    DAT_05826cb0 = 0;             // CurrentProtocolState
+    DAT_083a7c48 = 0;             // ConnectionCheckEnable
+    DAT_083a7c49 = 0;             // InitLogIn
+    CharSelectSceneInitialized = 0;
+    DAT_083a7c4c = 0;             // InitMainScene
+    DAT_083a7c10 = 0;             // IDA: EnableMainRender (0x083A7C10)
+    DAT_083a7c24 = 0;             // ErrorMessage: sin dialogo bloqueante
+    DAT_083a7c28 = 0;             // NextErrorMessage
+    InitGame();
+    NetLog("NET:    vuelta local al server-select (sin reconexion)");
+}
+
+// ---------------------------------------------------------------------------
 // F4/04 — CustomServerList (ConnectServer CCCustomServerListSend)
 // Pobla la tabla local de nombres DAT_07d52c34 (stride 300, indexada por
 // ServerCode/20) que ReceiveServerList (F4/02) lee para el nombre de cada
