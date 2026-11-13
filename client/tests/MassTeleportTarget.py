@@ -93,7 +93,7 @@ void Case(int attr,int grid,int pending,int mode,int gate){
  events.clear();packet.clear();randomAt=0;
  char beforeHero[916],expectedTarget[916];std::memcpy(beforeHero,hero,916);std::memcpy(expectedTarget,target,916);
  std::vector<BYTE> beforeTerrain(terrain,terrain+65536);
- const bool eligible=gate==0;const bool destination=eligible&&mode==0;const bool firstAllowed=attr==0||attr==32;const bool sends=destination&&!pending;
+ const bool eligible=gate==0||gate==1;const bool destination=eligible&&mode==0;const bool firstAllowed=attr==0||attr==32;const bool sends=destination&&!pending;
  const int wantedX=grid+(firstAllowed?1:-1),wantedY=grid;
  if(destination)Put(expectedTarget,36,42.0f);
  Attack_Label1585_97k(hero,15,hasTarget);
