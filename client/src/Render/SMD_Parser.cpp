@@ -118,6 +118,20 @@ void __cdecl CWsctlc_Startup(uintptr_t param_1) {
 void __cdecl CWsctlc_Create(void* ctx, int param_1) {
     SOCKET s = Platform::GetSocket().CreateTcp(0);
     *(SOCKET*)((char*)ctx + 8) = s;
+    // MEAMU rev.4 (2026-11-12): una sesion nueva arranca con las colas
+    // del contexto vacias, igual que el primer arranque (BSS en cero).
+    // Sin esto, al recrear el socket (la vuelta al login de rev.3 tras
+    // una desconexion) la sesion heredaba el largo de la cola de envio
+    // de la sesion muerta; la init de la sesion nueva pisaba esos bytes
+    // (los primeros quedaban en cero) y el primer flush le mandaba la
+    // basura al ConnectServer, que cerraba la sesion al instante con
+    // "Protocol header error (Header: 0)". Lo mismo para el armado de
+    // recepcion: un paquete parcial de la sesion muerta no puede ser el
+    // comienzo de la nueva. El Clear del binario (0x0043DAF0) limpiaba
+    // los contadores hermanos (+0x4014/+0x4018); estos dos (+0x200C =
+    // largo de envio, +0x4010 = largo de recepcion) nunca se reseteaban.
+    *(DWORD*)((char*)ctx + 0x200C) = 0;
+    *(DWORD*)((char*)ctx + 0x4010) = 0;
     g_bGameServerConnected = 0;
     if (s == Platform::InvalidSocket) {
         char buf[128];
