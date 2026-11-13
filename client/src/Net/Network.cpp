@@ -11,6 +11,7 @@
 #include "Game/HeroVitals.h"
 #include "Net/Ping.h"
 #include "Net/Network.h"
+#include "Net/Recv/NetRecv.h"
 #include "Net/Net.h"
 #include "Net/MuEmu.h"
 #include "Net/PacketFrame.h"
@@ -102,37 +103,49 @@ void CNetwork::OnSocketEvent(WORD evt, WORD err)
     }
     if (evt & 0x20) { // FD_CLOSE
         DbgLogPublic("NET: socket cerrado por el servidor");
-        // DESVIACION (DLL Reconnect.cpp): en el juego, un cierre que no pidió
-        // el jugador arranca la reconexión en vez de sólo avisar.
-        const bool reconnecting = !m_ConnectServerMode && gReconnect.OnConnectionLost();
-        ResetSessionData();
+        // DESVIACION (pedido de G, 2026-11-12, rev.3): SIN reconexion
+        // automatica. Antes un cierre no solicitado arrancaba gReconnect
+        // (barra "Reconnecting..." + reintentos por hasta 5 min); ahora el
+        // cliente vuelve DIRECTO al login (server-select) en el mismo
+        // frame: aviso en el chat (GlobalText[3]) y ningun dialogo
+        // bloqueante.
         // IDA WndProc @ 0x004149D0 case FD_CLOSE (original behaviour):
         //   UIChatLogWindow_AddText(strID, GlobalText[3], 1);
         //   CWsctlc::Close(&SocketClient);
-        // ── No MessageBoxA, no PostQuitMessage. Solo log y cierre local.
-        // El cierre del socket por logout limpio (F1/02/* iniciado por el
-        // cliente) NO debe matar el proceso — el countdown de "Salir" o el
-        // local-transition de "Seleccionar Servidor" se encargan de la
-        // siguiente fase. Para FD_CLOSE no solicitado (server kick / red
-        // caída) la UI de login mostrará el chat-log y el usuario verá
-        // "Conexión cerrada" sin que el cliente se mate solo.
+        // — No MessageBoxA, no PostQuitMessage. Solo log y cierre local.
+        ResetSessionData();
         extern void UIChatLogWindow_AddText(const char* strID, const char* msg, int color);
-        if (!reconnecting)
-            UIChatLogWindow_AddText((const char*)&DAT_083a7c5c, GlobalText[3], 1);
+        UIChatLogWindow_AddText((const char*)&DAT_083a7c5c, GlobalText[3], 1);
         if (Platform::GetSocket().IsOpen(SocketClientSocket)) {
             Platform::GetSocket().Close((SOCKET)SocketClientSocket);
             SocketClientSocket = static_cast<DWORD>(Platform::InvalidSocket);
         }
-        // Antes del login el servidor puede vencer la sesión por inactividad.
-        // La lista visible no significa que el socket siga vivo: liberar la
-        // espera y permitir una nueva selección sin reiniciar el cliente.
-        if (SceneFlag == 2 && !reconnecting) {
+        if (SceneFlag == 2) {
+            // Antes del login el servidor puede vencer la sesion por
+            // inactividad. La lista visible no significa que el socket siga
+            // vivo: liberar la espera y permitir una nueva seleccion sin
+            // reiniciar el cliente.
             g_bGameServerConnected = 0;
             CurrentProtocolState = 0;
             DAT_083a7c14 = 0;
             DAT_083a7c44 = 0;
             DAT_083a7c24 = 0;
             DAT_083a7c28 = 0;
+            ServerSelectHi = -1;
+            ServerSelectLo = -1;
+            if (m_HasConnectServer) {
+                m_ConnectServerMode = true;
+                m_ServerListRequested = false;
+                MuEmu::SetActive(false);
+            }
+        } else if ((SceneFlag == 5 || SceneFlag == 4 || SceneFlag == 3) && DAT_083a7c1c == 0) {
+            // En el juego / char-select / loading con la conexion muerta:
+            // teardown local (el de F1/02 sub 2, sin esperar ack) y al
+            // login ya. DAT_083a7c1c != 0 = countdown de "Salir" en curso:
+            // ese cierre lo pidio el jugador y el countdown apaga el
+            // cliente — no hay que pelearle la escena.
+            Net_LocalReturnToServerSelect();
+            g_bGameServerConnected = 0;
             ServerSelectHi = -1;
             ServerSelectLo = -1;
             if (m_HasConnectServer) {
@@ -244,7 +257,13 @@ void CNetwork::SendToConnectServer(const BYTE* data, int len)
             len >= 6 ? (unsigned)(data[4] | (data[5] << 8)) : 0);
         DbgLogPublic(trace);
     }
-    if (!Platform::GetSocket().IsOpen(SocketClientSocket)) {
+    // DESVIACION (rev.3): el reconectar-al-pedir debe dispararse cuando no
+    // hay conexion VIVA, no solo cuando el handle parece cerrado. Tras un
+    // FD_CLOSE el campo del handle (32 bits) queda en -1 y IsOpen() lo lee
+    // como handle valido en el layer SDL de 64 bits (SocketHandle es
+    // uintptr_t): sin esto, tras una desconexion los pedidos F4/02/F4/03
+    // se encolaban para siempre y elegir server no volvia a conectar.
+    if (!Platform::GetSocket().IsConnected(SocketClientSocket)) {
         // El ConnectServer limita la sesión a cinco minutos. Reconectar sólo
         // al pedir una lista o elegir canal; no mantener conexiones de fondo.
         if (SceneFlag != 2 || !m_HasConnectServer || !m_ConnectServerMode) return;

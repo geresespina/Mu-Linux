@@ -98,6 +98,7 @@ void ReceiveGGAuth97k(BYTE* packet, int size, bool encrypted);
 void Recv_JoinServer(const BYTE* Msg);
 void Recv_LoginResult(const BYTE* Msg);
 void Recv_LogOut(const BYTE* Msg);
+void Net_LocalReturnToServerSelect();
 void Recv_CustomServerList(const BYTE* Msg);
 void Recv_ServerList(const BYTE* Msg);
 void Recv_Redirect(const BYTE* Msg);

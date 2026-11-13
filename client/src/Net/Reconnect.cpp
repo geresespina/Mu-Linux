@@ -53,6 +53,14 @@ void CReconnect::SetProgress(Progress progress, DWORD retryWait)
 
 bool CReconnect::OnConnectionLost()
 {
+    // DESVIACION (pedido de G, 2026-11-12, rev.3): reconexion automatica
+    // ELIMINADA. Al caerse la conexion el cliente vuelve de inmediato al
+    // login (server-select) — ver el FD_CLOSE de CNetwork::OnSocketEvent y
+    // Net_LocalReturnToServerSelect. Esta funcion queda inerte para que
+    // ningun caller reactive la espera "Reconnecting..."; el cuerpo
+    // original queda abajo como referencia del DLL.
+    return false;
+#if 0
     if (m_Status == STATUS_RECONNECT) {
         // Se cayó un intento: volver a conectar.
         SetProgress(PROGRESS_CONNECT, ConnectRetry);
@@ -78,6 +86,7 @@ bool CReconnect::OnConnectionLost()
     PartyNumber = 0;
     DbgLogPublic("Reconnect: conexión perdida, reconectando");
     return true;
+#endif
 }
 
 void CReconnect::GiveUp()

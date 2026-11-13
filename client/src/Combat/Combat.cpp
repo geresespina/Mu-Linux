@@ -1016,8 +1016,10 @@ static Attack_Flow97k Attack_ElfBranch97k(char* entity, int iType)
 
     CheckTarget(AsCharacter(entity));               // IDA L1778 (retorno ignorado)
 
-    if (iType >= 30 && iType <= 36) {
+    if ((iType >= 30 && iType <= 37) || iType == 44) {
         // IDA L2617-2680: invocaciones del arbol Elf.
+        // MEAMU rev.4 (2026-11-12): extendido a 37 (Fenrir) y 44 (Legion);
+        // misma omision que en la rama Wizard, sin este brazo no hay envio.
         if ((int)gMapManager.GetCurrentMap() == 10)                        // IDA L2617: World == 10
             return AF_RETURN;
         Attack_SendSkill19_97k(iType, (WORD)HeroKey);
@@ -1111,7 +1113,10 @@ static void Attack_WarriorBranch97k(char* entity)
     if (leftWeapon == 0xFFFF
         || (leftWeapon >= 560 && leftWeapon < 592)
         || (rightWeapon >= 560 && rightWeapon < 592)) {
-        if (iType != 48)
+        // MEAMU rev.4 (2026-11-12): las invocaciones (30-37, 44) tampoco
+        // dependen del arma en mano — las ramas Elf/Wizard las castean sin
+        // gate de arma — asi que pasan este filtro junto al 48.
+        if (iType != 48 && !(iType >= 30 && iType <= 37) && iType != 44)
             return;
     }
     // IDA L2930-2937: v222 / HIBYTE(v1025) = "alcanza el AG del skill".
@@ -1150,6 +1155,21 @@ static void Attack_WarriorBranch97k(char* entity)
         Combat_SendDuration1E_97k(entity, iType, 0, 0, 0);
         SetAction(AsObject(entity), 62);             // IDA LABEL_930 (sin SetAttackSpeed)
         *(char *)&AsCharacter(entity)->Movement = 0;
+        return;
+    }
+    case 30: case 31: case 32: case 33:                       // MEAMU rev.4 (2026-11-12) — Summon
+    case 34: case 35: case 36: case 37: case 44: {
+        // MEAMU rev.4 (2026-11-12): la rama DK/MG no tenia NINGUN brazo de
+        // invocacion — en el original las invocaciones son skills Elf/DW y
+        // el DK nunca las aprendia. En MEAMU todos los skills son de todas
+        // las clases (el server no tiene gate de clase), asi que la ruta va
+        // aca, espejo de las ramas Elf/Wizard: auto-objetivo, sin Icarus.
+        if (lowMana) { Attack_UseManaScroll97k(); return; }
+        if (!hasAg) return;
+        if ((int)gMapManager.GetCurrentMap() == 10)
+            return;
+        Attack_SendSkill19_97k(iType, (WORD)HeroKey);
+        SetPlayerMagic(AsCharacter(entity));
         return;
     }
     case 48: {                                                // IDA L4177 — Greater Life
@@ -1478,7 +1498,7 @@ static void Attack_WizardBranch97k(char* entity)
     case 22: case 23: case 55: case 56:
         return;
     case 30: case 31: case 32: case 33:                       // MEAMU (2026-11-12) — Summon
-    case 34: case 35: case 36:
+    case 34: case 35: case 36: case 37: case 44:
         // MEAMU (2026-11-12): las invocaciones (30-36) solo tenian ruta de
         // casteo en la rama Elf (IDA L2617-2680); en la rama DW/MG caian al
         // default y morian en LABEL_1585, que exige objetivo. El server
@@ -1486,6 +1506,11 @@ static void Attack_WizardBranch97k(char* entity)
         // que la ruta espejo de la Elf va aca: despues de los chequeos de
         // mana de esta rama y con el propio heroe como objetivo. En Icarus
         // (mundo 10) no se castea, igual que en la rama Elf.
+        // MEAMU rev.4 (2026-11-12): la tabla v2.4 agrego los registros de
+        // 37 (Summon Fenrir) y 44 (Summon Legion) pero esta ruta nunca los
+        // incluyo: el cliente jamas enviaba el casteo. El server ya los
+        // consume (SkillSummon[37] / SkillSummonLegion[44]; el toggle de
+        // 44 vive en el server) con el mismo 0x19 auto-objetivo.
         if ((int)gMapManager.GetCurrentMap() == 10)
             return;
         Attack_SendSkill19_97k(iType, (WORD)HeroKey);
