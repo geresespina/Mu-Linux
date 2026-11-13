@@ -417,9 +417,13 @@ int Game_SceneUpdate(void)
         DWORD now = Platform::GetTimer().Ticks();
         DWORD elapsed = now - DAT_083a7ac8;
 
-        if (elapsed < 0x3a99) {
+        // DESVIACION (rev.3, pedido de G): la espera tras elegir server era
+        // de ~15 s (0x3a99) antes de volver a la lista; con 5 s un connect
+        // fallido cae a la lista enseguida y uno sano ni se entera (el
+        // JoinServer llega en <1 s tras el redirect).
+        if (elapsed < 5000) {
             // Progress bar
-            DWORD clamped = (elapsed < 15000) ? elapsed : 15000;
+            DWORD clamped = (elapsed < 5000) ? elapsed : 5000;
 
             // Send keep-alive every 3000 ms
             if (DAT_083a4320 < (int)(clamped / 3000)) {
