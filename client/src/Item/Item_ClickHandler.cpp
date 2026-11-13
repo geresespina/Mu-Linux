@@ -1398,31 +1398,13 @@ void __cdecl Inventory_DropDispatch(unsigned int a1, unsigned int /*a2*/)
                 return;
             }
 
-            // Tirar al PISO un item valioso NO abre un Yes/No (ese cartel es de la TIENDA,
-            // para confirmar una venta). Per IDA sub_4DF410 L950-964 el original sólo
-            // muestra un mensaje rojo que lo prohíbe y NO suelta el item:
-            //     UIChatLogWindow_AddText(byte_7EAA194, GlobalText[269], 2)
-            // Lista de tipos 1:1 con IDA (incluye 435 y el gate de excellent).
-            {
-                BYTE excByte = *((BYTE*)pPickedItem + 0x6b - 0x44);  // byte_7E9136B
-                bool bForbidden =
-                    (pickType >= ITEM_HELPER_ANGEL && pickType <= ITEM_HELPER_DINORANT) ||
-                    pickType == ITEM_JEWEL_BLESS || pickType == ITEM_JEWEL_SOUL || pickType == ITEM_JEWEL_LIFE ||
-                    pickType == ITEM_JEWEL_CREATION ||
-                    (pickType >= ITEM_WING_ELF && pickType <= ITEM_WING_DARKNESS) ||
-                    pickType == 19  || pickType == 170 || pickType == 146 ||
-                    pickType == ITEM_JEWEL_CHAOS || pickType == 430 || pickType == 431 ||
-                    pickType == 435 ||
-                    (pickLevel > 4 && pickType < ITEM_WING_ELF) ||
-                    ((excByte & 0x3F) != 0);
-                if (bForbidden) {
-                    // (byte_7EAA194 en IDA es el buffer de sender; acá va vacío
-                    //  como en el resto de los mensajes de sistema del archivo.)
-                    UIChatLogWindow_AddText("", GlobalText[269], 2);
-                    RestorePickedItemToSource();   // el item vuelve a su slot
-                    return;
-                }
-            }
+            // MEAMU rev.4.1 (2026-11-12): el bloqueo vanilla de IDA sub_4DF410
+            // L950-964 (mensaje rojo GlobalText[269] + el item vuelve a su slot
+            // para helpers/joyas/alas, nivel > 4 y excellent) NO corre en MEAMU:
+            // G ordeno que los items caros se puedan tirar al piso y el server
+            // ya lo permite. Sin ese bloque la ejecucion sigue al envio del
+            // drop que esta justo debajo, sin gate de valor. Los guards
+            // estructurales de este dispatcher (slot/estado) quedan intactos.
 
             // Guard `v144` de IDA (sub_4DF410 L966-969):
             //   v144 = 1; if (InventoryOpened && MouseX >= InventoryStartX) v144 = 0;
