@@ -36,7 +36,10 @@ int main(){auto* low=static_cast<BYTE*>(Reserve(0x26000000u));Require(low);const
 
 
 def harness(revision=None):
-    prefix=PREAMBLE.split('char DAT_00559bb4',1)[0].replace('0x10000','0x20000')+'\n#include <initializer_list>\n'
+    # El DeleteBug productivo itera BUG_POOL_COUNT (globals.h: 512 desde Pet
+    # Squad); el banco modela el pool heredado x86 de diez slots (10*444), así
+    # que la constante se ata a 10 como en ManaShieldSlotReuse.
+    prefix=PREAMBLE.split('char DAT_00559bb4',1)[0].replace('0x10000','0x20000')+'\n#include <initializer_list>\n#define BUG_POOL_COUNT 10\n'
     return prefix+object_view(['Owner'],revision)+MAIN.replace('FUNCTION',function(read_source('src/Scene/Scene_EntityLifecycle.cpp',revision),'DeleteBug'))
 
 
