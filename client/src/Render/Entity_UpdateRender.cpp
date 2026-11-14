@@ -8,6 +8,7 @@
 #include "Entity/CharacterEffects.h"
 
 extern "C" const char* Guild_GetMarkName(int row);
+void ClanEmblems_Render(intptr_t entity);   // MEAMU: clan emblems (Render/ClanEmblems.cpp)
 #pragma warning(disable: 4244 4305 4701 4702 4700)
 // Entity_UpdateRender.cpp  —  RenderCharacter @ 0x00456770  (2195 lines in Ghidra)
 //
@@ -524,6 +525,11 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
                           *(short*)&((CHARACTER*)(uintptr_t)(param_1))->BodyPart[2].Type);
         }
     }
+
+    // MEAMU: clan emblems on arm/front/back for Senju/Uchiha members
+    // (humans and guild-stamped phantoms alike). Bone matrices are final
+    // here; the function gates on player model + clan guild name.
+    ClanEmblems_Render((intptr_t)param_1);
 
     Equipment_Draw(AsCharacter(param_1), 2);
 
