@@ -566,6 +566,15 @@ void __cdecl Chat_InputTick(void)
                                 // cursor (y lo sacan de la que lo tenia).
                                 if (((unsigned short)Platform::GetInput().KeyState(VK_CONTROL) >> 8) != 0)
                                 {
+                                    // skillfix 2026-11-13: snapshot de la fila de hotkeys para
+                                    // detectar el cambio real. El handler corre por frame con
+                                    // Ctrl apretado y la escritura es idempotente: sin snapshot
+                                    // se mandaria un F3/30 por frame.
+                                    const int hkHero = (int)DAT_005616ac;
+                                    unsigned char hkBefore[0x40];
+                                    const bool hkSnap = (DAT_07cf1ff4 != nullptr) && hkHero >= 0 && hkHero <= 4;
+                                    if (hkSnap)
+                                        memcpy(hkBefore, (char *)DAT_07cf1ff4 + hkHero * 0x40 + 0xd7, 0x40);
                                     for (int k = 1; k <= 10; ++k)
                                     {
                                         int key = k % 10;          // 1..9, despues 0
@@ -584,6 +593,17 @@ void __cdecl Chat_InputTick(void)
                                     // Hotfix v2.2-hotfix: persistir la asignación
                                     // (SaveSkillHotkeys detecta si la fila cambió).
                                     SaveSkillHotkeys();
+                                    // skillfix 2026-11-13: write-through al server. Hasta aca la
+                                    // asignacion solo subia con el SaveOptionsToServer97k de las
+                                    // transiciones del menu ESC; cualquier otra salida (X, Alt+F4,
+                                    // crash, disconnect, cierre de booth) dejaba viejo el
+                                    // OptionData del server, y al login siguiente el F3/30 +
+                                    // ApplySkillKeyMap pisaba la fila restaurada del archivo
+                                    // local con ese mapa viejo. Subiendo en el momento del
+                                    // cambio, el mapa del server queda siempre al dia y el
+                                    // restore del login reproduce lo que el jugador asigno.
+                                    if (hkSnap && memcmp(hkBefore, (char *)DAT_07cf1ff4 + hkHero * 0x40 + 0xd7, 0x40) != 0)
+                                        SaveOptionsToServer97k();
                                 }
                                 break;
                             }

@@ -115,6 +115,7 @@ set(MU_SOURCES
     src/Sound/SoundManager.cpp
     src/Game/MapManager.cpp
     src/Platform/Win32/ClientWndProc.cpp
+    src/Net/MapTrack.cpp
     src/Net/Network.cpp
     src/Net/Reconnect.cpp
     src/Net/Ping.cpp
@@ -193,6 +194,8 @@ set(MU_SOURCES
     src/UI/ChatListBox.cpp
     src/UI/CharMenu_Build.cpp
     src/Render/HUD_Pass1.cpp
+    src/Render/HumanLabels.cpp
+    src/Render/ClanEmblems.cpp
     src/Render/HUD_Pass2.cpp
     src/Render/HUD_Pass3.cpp
     src/Render/HUD_Pass4.cpp
@@ -313,6 +316,7 @@ set(MU_SOURCES
     src/Input/Mouse_Hover.cpp
     src/Input/Gamepad.cpp
     src/Input/NavMove.cpp
+    src/Input/KbPlay.cpp
     src/Item/Item_Equip.cpp
     src/Item/Item_EquipSlots.cpp
     src/Item/Item_Move.cpp
@@ -537,7 +541,9 @@ set(MU_HEADERS
     src/Game/Movement.h
     src/Input/Input.h
     src/Input/Gamepad.h
+    src/Input/GamepadDI.h
     src/Input/NavMove.h
+    src/Input/KbPlay.h
     src/Item/Item_Equip.h
     src/Monster/Monster.h
     src/Net/Net.h

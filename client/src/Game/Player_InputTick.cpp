@@ -7,6 +7,7 @@
 #include "Item/ContentCatalog.h"
 #include "Render/Camera3D.h"
 #include "UI/MiniMap.h"
+#include "Input/KbPlay.h"
 #include "UI/EventTimer.h"
 #include "UI/MoveList.h"
 #include "UI/CommandMenu.h"
@@ -428,14 +429,30 @@ static void HUD_PickUpNearestItem(void)
     if ((int)DAT_083a427c >= GetScreenWidth() || (int)DAT_083a4278 >= 429) return;
     const float heroX = *(const float*)(Hero + 16);
     const float heroY = *(const float*)(Hero + 20);
+    // MEAMU kb-play (2026-11-13): elegir el item MAS CERCANO (antes: el
+    // primero del pool dentro de rango) y, si el heroe ya esta yendo por uno
+    // (MOVEMENT_GET), Space pasa al siguiente mas cercano en vez de
+    // re-apuntar al mismo; si no hay otro, se mantiene el actual.
+    const bool fetching = (*(unsigned char*)&((CHARACTER*)(uintptr_t)(Hero))->MovementType == 1);
+    int best = -1;    float bestD2 = 300.0f * 300.0f;
+    int bestAny = -1; float bestAnyD2 = 300.0f * 300.0f;
     for (int i = 0; i < 1000; ++i) {
         const BYTE* item = &DAT_07e12840[0] + (size_t)i * GROUND_ITEM_STRIDE;
         if (!item[72] || !item[72 + EntityOffset(0x160)]) continue;                   // vivo y visible
         const float dx = *(const float*)(item + 88) - heroX;
         const float dy = *(const float*)(item + 92) - heroY;
-        if (dx * dx + dy * dy >= 300.0f * 300.0f) continue;
+        const float d2 = dx * dx + dy * dy;
+        if (d2 >= 300.0f * 300.0f) continue;
+        if (d2 < bestAnyD2) { bestAnyD2 = d2; bestAny = i; }
+        if (fetching && (DWORD)i == ItemKey) continue;   // ya va por este
+        if (d2 < bestD2) { bestD2 = d2; best = i; }
+    }
+    if (best < 0) best = bestAny;
+    if (best < 0) return;
+    {
+        const BYTE* item = &DAT_07e12840[0] + (size_t)best * GROUND_ITEM_STRIDE;
         *(unsigned char*)&((CHARACTER*)(uintptr_t)(Hero))->MovementType = 1;                     // MOVEMENT_GET
-        ItemKey = (DWORD)i;
+        ItemKey = (DWORD)best;
         TargetX = (DWORD)(int)(*(const float*)(item + 88) / 100.0f);
         TargetY = (DWORD)(int)(*(const float*)(item + 92) / 100.0f);
         g_bAutoGetItem = true;
@@ -502,7 +519,10 @@ static void HUD_HotkeyTick(void)
     // DESVIACION: ventana L con el historial del chat.
     if (kL) gChatLogWindow.Toggle();
     // DESVIACION (DLL Controller.cpp): Tab abre el mapa.
-    if (kTab) gMiniMap.Toggle();
+    // MEAMU kb-play (2026-11-13): con monstruos atacables en rango, Tab cicla
+    // el objetivo de combate (KbPlay) y NO abre el mapa; sin objetivos, Tab
+    // conserva su toggle de minimapa de siempre.
+    if (kTab && !KbPlay_TabCycle()) gMiniMap.Toggle();
     // DESVIACION (MU 5.2): Espacio levanta el primer ítem cercano.
     if (kSpace) HUD_PickUpNearestItem();
     // DESVIACION (DLL Controller.cpp): F10 activa la cámara 3D, F11 la restaura.

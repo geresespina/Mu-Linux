@@ -1328,6 +1328,11 @@ void NetRecv_F3(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
             Recv_PetSquad((const BYTE*)Msg, Size);
             break;
         }
+        case 0xF6: {  // MEAMU MapTrack: whole-map Biju/player feed (F3:F6)
+            void MapTrack_RecvF6(const BYTE* Msg, int Size);
+            MapTrack_RecvF6((const BYTE*)Msg, Size);
+            break;
+        }
         case 0x30: {
             // ── ReceiveOption (IDA 0x436FB0) — PORT FIEL ─────────────────
             // Layout autoritativo del server MuEmu (Protocol.h,

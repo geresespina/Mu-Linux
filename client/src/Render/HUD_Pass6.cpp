@@ -962,6 +962,12 @@ extern "C" void __cdecl RenderCharacterInfoWindow(int iPosX, int iPosY)
     // Damage base picker:
     //   bow/crossbow class items in [128,135) or 145 in right hand → use CA[60..62]
     //   (Two-handed sword on left in [136,143) etc → CA[64..66])
+    // MEAMU DUAL-WIELD (2026-11-13): both hands holding weapons (types
+    // [0,192), ammo 135/143 excluded, shields start at 192) -> the line
+    // shows the SUM of both hands, exactly like the server's
+    // GetPreviewPhysiDamage. The stock 55% dual mix below is superseded.
+    const bool dualWield = (typeL >= 0 && typeL < 192 && typeL != 135 && typeL != 143)
+                        && (typeR >= 0 && typeR < 192 && typeR != 135 && typeR != 143);
     int v61, v62;
     if ( (typeL < 136 || typeL >= 143)
       && (typeL < 144 || typeL >= 145)
@@ -978,12 +984,11 @@ extern "C" void __cdecl RenderCharacterInfoWindow(int iPosX, int iPosY)
     // Magic class bonus (class 1=DW, 3=MG): if both slots in [0,192)
     int classL3 = *(BYTE*)&((CHARACTER*)Hero)->Class & 7;
     bool dualBonus = false;
-    if (classL3 == 1 || classL3 == 3) {
-        if (typeR >= 0 && typeR < 192 && typeL >= 0 && typeL < 192) {
-            dualBonus = true;
-            v61 = (55 * *(unsigned short*)(CA + 60) + 55 * *(unsigned short*)(CA + 64)) / 100;
-            v62 = (55 * *(unsigned short*)(CA + 62) + 55 * *(unsigned short*)(CA + 66)) / 100;
-        }
+    if (dualWield) {
+        // MEAMU DUAL-WIELD (2026-11-13): full stack, no 55% cut.
+        dualBonus = true;
+        v61 = *(unsigned short*)(CA + 60) + *(unsigned short*)(CA + 64);
+        v62 = *(unsigned short*)(CA + 62) + *(unsigned short*)(CA + 66);
     } else if (classL3 == 2 && typeL >= 128 && typeL < 160) {
         // Elf with bow: dual hand bow set bonus
         if (typeR >= 128 && typeR < 160) {
@@ -1094,20 +1099,31 @@ extern "C" void __cdecl RenderCharacterInfoWindow(int iPosX, int iPosY)
         int piMin = 0, piMax = 0;
         BYTE skillType = *(BYTE*)((char*)CA + 87 + *(BYTE*)((char*)Hero + EntityOffset(913)));
         GetMagicSkillDamage(static_cast<const BYTE*>(CharacterMachine), skillType, &piMin, &piMax);
-        int staffMul = (pWeaponLeft->Level >> 3) & 0xF;
 
         // PVP +10 bonus
         if ((CA[40] & 2) != 0) { piMin += 10; piMax += 10; }
 
-        WORD wType = pWeaponLeft->Type;
-        if ((wType >= 160 && wType < 192) || wType == 31) {
-            staffMul = (pWeaponLeft->DamageMin >> 1) + 2 * staffMul;
-            BYTE magicDur = ((ITEM_ATTRIBUTE*)(uintptr_t)ItemAttribute_Base())[wType].MagicDurability;
-            double mult = (double)staffMul * 0.0099999998;
-            double pct  = CalcDurabilityPercent(pWeaponLeft->Durability, magicDur,
-                                                pWeaponLeft->Level, pWeaponLeft->Option1);
+        // MEAMU DUAL-WIELD (2026-11-13): the wizardry rise display sums
+        // BOTH hand weapons (sword types [0,32) count server-side too,
+        // but the stock rise line only ever rendered for staff/wand
+        // types, so those are what feed it here) -- mirroring the
+        // server, where rise now stacks instead of taking the max.
+        double riseEff = 0.0;
+        const ITEM* hands[2] = { pWeaponLeft, pWeaponRight };
+        for (int h = 0; h < 2; ++h) {
+            const ITEM* w = hands[h];
+            WORD wt = w->Type;
+            if (!((wt >= 160 && wt < 192) || wt == 31)) continue;
+            if (w->Durability == 0) continue;
+            int mul = (w->DamageMin >> 1) + 2 * ((w->Level >> 3) & 0xF);
+            BYTE magicDur = ((ITEM_ATTRIBUTE*)(uintptr_t)ItemAttribute_Base())[wt].MagicDurability;
+            double pct = CalcDurabilityPercent(w->Durability, magicDur,
+                                                w->Level, w->Option1);
+            riseEff += (double)mul * 0.0099999998 * (1.0 - pct);
+        }
+        if (riseEff > 0.0) {
             sprintf(Buffer, GlobalText[215], piMin, piMax,
-                    (unsigned int)(std::int64_t)((mult - pct * mult) * (double)piMax));
+                    (unsigned int)(std::int64_t)(riseEff * (double)piMax));
         } else {
             sprintf(Buffer, GlobalText[216], piMin, piMax);
         }

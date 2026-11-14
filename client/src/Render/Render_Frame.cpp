@@ -230,6 +230,7 @@ void Render_CharNameTags(void);
 void Render_MacroTimer(void);
 void Render_MapLoadText(void);
 void Render_FloatingText(void);
+void Render_HumanLabels(void);   // MEAMU: always-on human player labels (Render/HumanLabels.cpp)
 void Render_QuickButtons(void);
 void Render_BottomHUD(void);
 void Render_ChatBox(void);
@@ -368,6 +369,7 @@ void Render_GameFrame(void)
     }
     Render_MacroTimer();            // sub_4BF090
     Render_MapLoadText();           // sub_4BF2D0
+    Render_HumanLabels();           // MEAMU: feed name bubbles for human players (before RenderBooleans draws them)
     Render_FloatingText();          // RenderBooleans @ 0x4BD090 (was misnamed)
     Render_QuickButtons();          // sub_4F5820
 

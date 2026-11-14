@@ -35,15 +35,47 @@
 // Sandbox proof: MU_PAD_SELFTEST=1 attaches an SDL *virtual* gamepad and
 // scripts an input timeline, logging every step + reaction via DbgLogPublic.
 // A real pad takes the identical path (SDL abstracts the transport).
+//
+// PADFIX (2026-11-13) — native Windows pad backends (base path + DI):
+// rev.5 read pads ONLY through SDL3's gamepad API. On the target Windows
+// machine that path surfaced NOTHING — first a DirectInput Logitech Dual
+// Action, then a genuine XInput Xbox 360 controller, both healthy in
+// Windows, both invisible in game (no PAD indicator, no input). Every
+// client-side suspect checks out clean (Gamepad_Tick is called every frame,
+// Config defaults Enable=1, SDL loads XInput1_4.dll first, the module IS
+// compiled into the shipped exe) — the break is inside SDL's Windows
+// joystick enumeration for this build/machine, a layer this module cannot
+// see into. Fix: stop depending on it on Windows. Every frame the active
+// backend fills ONE unified state (DIPadState, SDL semantics —
+// Input/GamepadDI.h) and the mapping layer reads only that state:
+//   1. SDL gamepad (unchanged; the only backend off Windows, and still
+//      first choice where it works — its values are copied verbatim).
+//   2. Native XInput (Windows): xinput1_4.dll -> xinput9_1_0.dll ->
+//      xinput1_3.dll, loaded dynamically; all 4 slots polled every frame,
+//      so hot-plug is inherent. Also gives the Xbox pad rumble.
+//   3. Native DirectInput8 (Windows): for non-XInput pads (Dual Action).
+// XInput beats DirectInput because XInput devices also appear in DI
+// enumeration; either native backend yields to an SDL gamepad. While no
+// backend has a pad, PollPadPresence logs (throttled) how many joysticks /
+// gamepads SDL sees, so the next diagnosis starts from data, not guesses.
 
 #include "stdafx.h"
 #include "Input/Gamepad.h"
+#include "Input/GamepadDI.h"     // DIPadState / DIPadTranslate (padfix)
 #include "Input/NavMove.h"       // NavMove_ArrowsHeld (movement yield)
 #include "Platform/IInput.h"     // Platform::InputEvent / InputEventType
+#include "Platform/NativeBridge.h" // Platform::NativeWindow/NativeInstance (DI coop level)
 #include "Core/Window.h"         // gWindow (real pixel size)
 #include "Config/UserSettings.h" // gUserSettings ([Gamepad] section)
 #include "Entity/EntityTypes.h"  // CHARACTER (CurrentSkill)
 #include <SDL3/SDL.h>
+#if defined(_WIN32)
+#define DIRECTINPUT_VERSION 0x0800
+#include <dinput.h>              // IDirectInput8 / DIJOYSTATE2 (padfix backend)
+#pragma comment(lib, "dinput8")
+#pragma comment(lib, "dxguid")
+#endif
+#include <cctype>
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
@@ -59,6 +91,30 @@ namespace Platform {
 void DeliverSDLInput(const InputEvent& event);   // SDLWindow.cpp
 void InjectVirtualKey(int vk, bool down);        // SDLInput.cpp (rev.5 export)
 }
+
+// The unified pad state is indexed with SDL_GamepadButton / SDL_GamepadAxis
+// values by the mapping code below; the DIPad* slots must mirror them.
+static_assert((int)DIPAD_BTN_SOUTH == (int)SDL_GAMEPAD_BUTTON_SOUTH, "DIPad/SDL button drift");
+static_assert((int)DIPAD_BTN_EAST == (int)SDL_GAMEPAD_BUTTON_EAST, "DIPad/SDL button drift");
+static_assert((int)DIPAD_BTN_WEST == (int)SDL_GAMEPAD_BUTTON_WEST, "DIPad/SDL button drift");
+static_assert((int)DIPAD_BTN_NORTH == (int)SDL_GAMEPAD_BUTTON_NORTH, "DIPad/SDL button drift");
+static_assert((int)DIPAD_BTN_BACK == (int)SDL_GAMEPAD_BUTTON_BACK, "DIPad/SDL button drift");
+static_assert((int)DIPAD_BTN_START == (int)SDL_GAMEPAD_BUTTON_START, "DIPad/SDL button drift");
+static_assert((int)DIPAD_BTN_LEFT_STICK == (int)SDL_GAMEPAD_BUTTON_LEFT_STICK, "DIPad/SDL button drift");
+static_assert((int)DIPAD_BTN_RIGHT_STICK == (int)SDL_GAMEPAD_BUTTON_RIGHT_STICK, "DIPad/SDL button drift");
+static_assert((int)DIPAD_BTN_LEFT_SHOULDER == (int)SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, "DIPad/SDL button drift");
+static_assert((int)DIPAD_BTN_RIGHT_SHOULDER == (int)SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, "DIPad/SDL button drift");
+static_assert((int)DIPAD_BTN_DPAD_UP == (int)SDL_GAMEPAD_BUTTON_DPAD_UP, "DIPad/SDL button drift");
+static_assert((int)DIPAD_BTN_DPAD_DOWN == (int)SDL_GAMEPAD_BUTTON_DPAD_DOWN, "DIPad/SDL button drift");
+static_assert((int)DIPAD_BTN_DPAD_LEFT == (int)SDL_GAMEPAD_BUTTON_DPAD_LEFT, "DIPad/SDL button drift");
+static_assert((int)DIPAD_BTN_DPAD_RIGHT == (int)SDL_GAMEPAD_BUTTON_DPAD_RIGHT, "DIPad/SDL button drift");
+static_assert((int)DIPAD_AXIS_LEFTX == (int)SDL_GAMEPAD_AXIS_LEFTX, "DIPad/SDL axis drift");
+static_assert((int)DIPAD_AXIS_LEFTY == (int)SDL_GAMEPAD_AXIS_LEFTY, "DIPad/SDL axis drift");
+static_assert((int)DIPAD_AXIS_RIGHTX == (int)SDL_GAMEPAD_AXIS_RIGHTX, "DIPad/SDL axis drift");
+static_assert((int)DIPAD_AXIS_RIGHTY == (int)SDL_GAMEPAD_AXIS_RIGHTY, "DIPad/SDL axis drift");
+static_assert((int)DIPAD_AXIS_LEFT_TRIGGER == (int)SDL_GAMEPAD_AXIS_LEFT_TRIGGER, "DIPad/SDL axis drift");
+static_assert((int)DIPAD_AXIS_RIGHT_TRIGGER == (int)SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, "DIPad/SDL axis drift");
+static_assert(DIPAD_BUTTON_SLOTS >= SDL_GAMEPAD_BUTTON_COUNT, "DIPad button slots too few");
 
 namespace {
 
@@ -117,6 +173,16 @@ bool gPrevButtons[SDL_GAMEPAD_BUTTON_COUNT] = {};
 bool gPrevRT = false, gPrevLT = false;
 bool gPrevChord = false;
 
+// ── Unified pad state (padfix) ───────────────────────────────────────────────
+// Whichever backend is active (SDL gamepad or DirectInput) refills this once
+// per frame in CapturePadState(); the mapping logic reads ONLY this state,
+// so both backends drive identical MAPPING.md semantics.
+DIPadState gState;
+bool       gStateValid = false;
+
+bool PadButton(int b) { return gStateValid && b >= 0 && b < DIPAD_BUTTON_SLOTS && gState.buttons[b]; }
+short PadAxis(int a) { return (gStateValid && a >= 0 && a < DIPAD_AXIS_SLOTS) ? gState.axes[a] : 0; }
+
 // ── Self-test (virtual pad) state ────────────────────────────────────────────
 bool           gSelfTest   = false;
 SDL_Joystick*  gVirtJoy    = nullptr;
@@ -135,9 +201,19 @@ void PadLog(const char* fmt, ...)
     fflush(stderr);
 }
 
+#if defined(_WIN32)
+bool XInputPresent();                                // XInput backend, below
+void XInputRumble(Uint16 low, Uint16 high, Uint32 ms);
+#endif
+
 void Rumble(Uint16 low, Uint16 high, Uint32 ms)
 {
-    if (gPad) SDL_RumbleGamepad(gPad, low, high, ms);
+    if (gPad) { SDL_RumbleGamepad(gPad, low, high, ms); return; }
+#if defined(_WIN32)
+    if (XInputPresent()) { XInputRumble(low, high, ms); return; }
+#endif
+    // DirectInput backend: no rumble — driving the Dual Action's motors
+    // would need FF effect objects; cosmetic only, out of padfix scope.
 }
 
 void SendMouse(Platform::InputEventType type, float x, float y)
@@ -391,9 +467,9 @@ void SelfTestDrive()
     }
     gSelfStep = step;
     if (gPad) PadLog("PAD-SELFTEST: [diag] gamepad axes LX=%d LY=%d RX=%d RY=%d LT=%d RT=%d",
-        SDL_GetGamepadAxis(gPad, SDL_GAMEPAD_AXIS_LEFTX), SDL_GetGamepadAxis(gPad, SDL_GAMEPAD_AXIS_LEFTY),
-        SDL_GetGamepadAxis(gPad, SDL_GAMEPAD_AXIS_RIGHTX), SDL_GetGamepadAxis(gPad, SDL_GAMEPAD_AXIS_RIGHTY),
-        SDL_GetGamepadAxis(gPad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER), SDL_GetGamepadAxis(gPad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER));
+        PadAxis(SDL_GAMEPAD_AXIS_LEFTX), PadAxis(SDL_GAMEPAD_AXIS_LEFTY),
+        PadAxis(SDL_GAMEPAD_AXIS_RIGHTX), PadAxis(SDL_GAMEPAD_AXIS_RIGHTY),
+        PadAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER), PadAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER));
     // NOTE: the virtual device's raw axes follow SDL gamepad order
     // (0=LX 1=LY 2=RX 3=RY 4=LT 5=RT); face/shoulder raw buttons follow the
     // mapping string (A=0 B=1 X=2 Y=3 LB=4 RB=5 Back=6 Start=7); the D-pad
@@ -437,6 +513,324 @@ void SelfTestDrive()
     }
 }
 
+// ── DirectInput backend (Windows only; padfix) ──────────────────────────────
+// Enumerates native DI8 game controllers and reads DIJOYSTATE2 each frame,
+// translating into the unified state (GamepadDI.h). Adopted ONLY while no
+// SDL gamepad is present; re-enumerates every 2 s while idle (hot-plug);
+// released the moment an SDL gamepad appears (SDL/XInput keeps priority,
+// exactly as before the fix).
+#if defined(_WIN32)
+IDirectInput8*       gDI = nullptr;
+IDirectInputDevice8* gDIDev = nullptr;
+DIPadRawState        gDIRawProto;        // per-axis presence + ranges, read at adopt
+char                 gDIName[128] = {};
+int                  gDIFailStreak = 0;  // consecutive failed poll/acquire rounds
+Uint64               gDINextScanMs = 0;  // next enumeration attempt
+
+struct DIFoundDevice { bool found = false; GUID guid{}; char name[128] = {}; };
+
+// XInput pads also surface through DirectInput enumeration; the SDL path
+// owns them, so never adopt one here (belt and braces — adoption only runs
+// while SDL reports no gamepad at all).
+bool DINameLooksXInput(const char* name)
+{
+    auto contains = [](const char* hay, const char* needle) {
+        const size_t nl = strlen(needle);
+        for (const char* p = hay; *p; ++p) {
+            size_t i = 0;
+            while (i < nl && p[i] && tolower((unsigned char)p[i]) == tolower((unsigned char)needle[i])) ++i;
+            if (i == nl) return true;
+        }
+        return false;
+    };
+    return contains(name, "xbox") || contains(name, "xinput");
+}
+
+BOOL CALLBACK DIEnumDeviceCb(const DIDEVICEINSTANCE* inst, VOID* ctx)
+{
+    DIFoundDevice* out = (DIFoundDevice*)ctx;
+    if (out->found) return DIENUM_STOP;
+    // The client builds MultiByte (_MBCS), so tszProductName is char[].
+    char name[128] = {};
+    strncpy_s(name, inst->tszProductName, sizeof(name) - 1);
+    if (DINameLooksXInput(name)) return DIENUM_CONTINUE;
+    out->found = true;
+    out->guid = inst->guidInstance;
+    strncpy_s(out->name, name, sizeof(out->name) - 1);
+    return DIENUM_STOP;
+}
+
+BOOL CALLBACK DIEnumAxisCb(const DIDEVICEOBJECTINSTANCE* inst, VOID* ctx)
+{
+    IDirectInputDevice8* dev = (IDirectInputDevice8*)ctx;
+    int slot = -1;
+    if (inst->guidType == GUID_XAxis) slot = DIRA_X;
+    else if (inst->guidType == GUID_YAxis) slot = DIRA_Y;
+    else if (inst->guidType == GUID_ZAxis) slot = DIRA_Z;
+    else if (inst->guidType == GUID_RxAxis) slot = DIRA_RX;
+    else if (inst->guidType == GUID_RyAxis) slot = DIRA_RY;
+    else if (inst->guidType == GUID_RzAxis) slot = DIRA_RZ;
+    if (slot < 0) return DIENUM_CONTINUE;
+    gDIRawProto.axisPresent[slot] = true;
+    DIPROPRANGE range{};
+    range.diph.dwSize = sizeof(DIPROPRANGE);
+    range.diph.dwHeaderSize = sizeof(DIPROPHEADER);
+    range.diph.dwHow = DIPH_BYOFFSET;
+    range.diph.dwObj = inst->dwOfs;
+    if (SUCCEEDED(dev->GetProperty(DIPROP_RANGE, &range.diph))) {
+        gDIRawProto.axisMin[slot] = range.lMin;
+        gDIRawProto.axisMax[slot] = range.lMax;
+    }
+    return DIENUM_CONTINUE;
+}
+
+void DIPadRelease()
+{
+    if (gDIDev) { gDIDev->Unacquire(); gDIDev->Release(); gDIDev = nullptr; }
+    gDIName[0] = '\0';
+    gDIFailStreak = 0;
+}
+
+bool DIPadAdopt()
+{
+    if (!gDI) {
+        HINSTANCE hinst = Platform::NativeInstance();
+        if (!hinst) hinst = GetModuleHandleW(nullptr);
+        if (FAILED(DirectInput8Create(hinst, DIRECTINPUT_VERSION, IID_IDirectInput8, (void**)&gDI, nullptr))) {
+            PadLog("PAD-DI: DirectInput8Create failed");
+            return false;
+        }
+    }
+    DIFoundDevice found;
+    if (FAILED(gDI->EnumDevices(DI8DEVCLASS_GAMECTRL, DIEnumDeviceCb, &found, DIEDFL_ATTACHEDONLY)) || !found.found)
+        return false;   // nothing attached right now — caller schedules the rescan
+
+    IDirectInputDevice8* dev = nullptr;
+    if (FAILED(gDI->CreateDevice(found.guid, &dev, nullptr)) || !dev) return false;
+    if (FAILED(dev->SetDataFormat(&c_dfDIJoystick2))) { dev->Release(); return false; }
+    HWND hwnd = Platform::NativeWindow();
+    if (!hwnd) hwnd = GetForegroundWindow();
+    if (hwnd && FAILED(dev->SetCooperativeLevel(hwnd, DISCL_BACKGROUND | DISCL_NONEXCLUSIVE)))
+        PadLog("PAD-DI: SetCooperativeLevel failed (continuing; foreground acquire may still work)");
+    gDIRawProto = DIPadRawState{};
+    dev->EnumObjects(DIEnumAxisCb, dev, DIDFT_AXIS);
+    if (FAILED(dev->Acquire()))
+        PadLog("PAD-DI: initial Acquire failed (retried per-frame in capture)");
+    gDIDev = dev;
+    gDIFailStreak = 0;
+    strncpy_s(gDIName, found.name, sizeof(gDIName) - 1);
+    PadLog("PAD-DI: connected '%s' (DirectInput fallback)", gDIName);
+    memset(gPrevButtons, 0, sizeof(gPrevButtons));
+    gPrevRT = gPrevLT = false;
+    gPrevChord = false;
+    return true;
+}
+
+// One frame of DirectInput state into the unified state. False = no fresh
+// state this frame (transient loss keeps last state semantics via
+// gStateValid going false, i.e. all inputs read as released-edge-safe).
+bool DIPadCapture()
+{
+    if (!gDIDev) return false;
+    HRESULT hr = gDIDev->Poll();
+    if (FAILED(hr)) {
+        hr = gDIDev->Acquire();
+        if (FAILED(hr)) {
+            // Sustained acquire failure = the device is gone (unplugged);
+            // drop it cleanly and let PollPadPresence rescan on its timer.
+            if (++gDIFailStreak >= 30) {
+                PadLog("PAD-DI: disconnected ('%s') - releasing held inputs", gDIName);
+                ReleaseAllInputs();
+                DIPadRelease();
+                gDINextScanMs = SDL_GetTicks() + 2000;
+            }
+            return false;
+        }
+    }
+    DIJOYSTATE2 js{};
+    hr = gDIDev->GetDeviceState(sizeof(js), &js);
+    if (FAILED(hr)) {
+        gDIDev->Acquire();   // input lost mid-frame; retry next frame
+        return false;
+    }
+    gDIFailStreak = 0;
+    DIPadRawState raw = gDIRawProto;
+    raw.axis[DIRA_X] = js.lX;   raw.axis[DIRA_Y] = js.lY;   raw.axis[DIRA_Z] = js.lZ;
+    raw.axis[DIRA_RX] = js.lRx; raw.axis[DIRA_RY] = js.lRy; raw.axis[DIRA_RZ] = js.lRz;
+    for (int i = 0; i < 4; ++i) raw.pov[i] = js.rgdwPOV[i];
+    memcpy(raw.buttons, js.rgbButtons, sizeof(raw.buttons));
+    DIPadTranslate(raw, gState);
+    return true;
+}
+#endif // _WIN32
+
+bool DIPadPresent()
+{
+#if defined(_WIN32)
+    return gDIDev != nullptr;
+#else
+    return false;
+#endif
+}
+
+// ── XInput backend (Windows only; padfix base-path fix) ─────────────────────
+// Native XInput polling, independent of SDL's Windows joystick stack. The
+// ABI structs are declared locally (stable since 2005) and the DLL is
+// loaded dynamically in the order xinput1_4.dll (ships with Windows 8+) ->
+// xinput9_1_0.dll (ships with Vista+) -> xinput1_3.dll (legacy DirectX
+// redist — NOT part of Windows; last resort only). All four slots are
+// polled every frame: hot-plug and unplug need no enumeration state.
+#if defined(_WIN32)
+struct XIGamepadABI { WORD wButtons; BYTE bLeftTrigger; BYTE bRightTrigger; SHORT sThumbLX; SHORT sThumbLY; SHORT sThumbRX; SHORT sThumbRY; };
+struct XIStateABI { DWORD dwPacketNumber; XIGamepadABI Gamepad; };
+struct XIVibrationABI { WORD wLeftMotorSpeed; WORD wRightMotorSpeed; };
+struct XICapsABI { BYTE Type; BYTE SubType; WORD Flags; XIGamepadABI Gamepad; XIVibrationABI Vibration; };
+using XInputGetStateFn = DWORD (WINAPI *)(DWORD, XIStateABI*);
+using XInputSetStateFn = DWORD (WINAPI *)(DWORD, XIVibrationABI*);
+using XInputGetCapsFn = DWORD (WINAPI *)(DWORD, DWORD, XICapsABI*);
+
+HMODULE           gXIDll = nullptr;
+XInputGetStateFn  gXIGetState = nullptr;
+XInputSetStateFn  gXISetState = nullptr;
+XInputGetCapsFn   gXIGetCaps = nullptr;
+bool              gXILoadTried = false;
+int               gXISlot = -1;
+char              gXIDllName[32] = {};
+bool              gXIRumbleActive = false;
+Uint64            gXIRumbleStopMs = 0;
+
+bool XInputLoad()
+{
+    if (gXILoadTried) return gXIGetState != nullptr;
+    gXILoadTried = true;
+    static const char* kDlls[] = { "xinput1_4.dll", "xinput9_1_0.dll", "xinput1_3.dll" };
+    for (const char* name : kDlls) {
+        HMODULE dll = LoadLibraryA(name);
+        if (!dll) continue;
+        auto getState = (XInputGetStateFn)GetProcAddress(dll, "XInputGetState");
+        if (!getState) { FreeLibrary(dll); continue; }
+        gXIDll = dll;
+        gXIGetState = getState;
+        gXISetState = (XInputSetStateFn)GetProcAddress(dll, "XInputSetState");
+        gXIGetCaps = (XInputGetCapsFn)GetProcAddress(dll, "XInputGetCapabilities");
+        strncpy_s(gXIDllName, name, sizeof(gXIDllName) - 1);
+        PadLog("PAD-XI: XInput loaded from %s", name);
+        return true;
+    }
+    PadLog("PAD-XI: no XInput DLL found (tried xinput1_4 / xinput9_1_0 / xinput1_3)");
+    return false;
+}
+
+void XInputRumbleStop()
+{
+    if (gXIRumbleActive && gXISlot >= 0 && gXISetState) {
+        XIVibrationABI vib{ 0, 0 };
+        gXISetState(gXISlot, &vib);
+    }
+    gXIRumbleActive = false;
+}
+
+void XInputRumble(Uint16 low, Uint16 high, Uint32 ms)
+{
+    if (gXISlot < 0 || !gXISetState) return;
+    XIVibrationABI vib{ low, high };
+    if (gXISetState(gXISlot, &vib) == ERROR_SUCCESS) {
+        gXIRumbleActive = true;
+        gXIRumbleStopMs = SDL_GetTicks() + ms;
+    }
+}
+
+// One frame of XInput state into the unified state; also the adoption scan
+// (runs every frame while no XInput device is active). False = no XInput
+// device this frame.
+bool XInputCapture()
+{
+    if (!XInputLoad()) return false;
+    if (gXISlot < 0) {
+        for (int slot = 0; slot < 4; ++slot) {
+            XIStateABI st{};
+            if (gXIGetState(slot, &st) != ERROR_SUCCESS) continue;
+            if (gXIGetCaps) {
+                XICapsABI caps{};
+                // SubType 1 = gamepad; 0 = unknown (accept). Skip wheels,
+                // guitars, dance pads and other non-gamepad subtypes.
+                if (gXIGetCaps(slot, 1 /*XINPUT_FLAG_GAMEPAD*/, &caps) == ERROR_SUCCESS &&
+                    caps.SubType != 1 && caps.SubType != 0)
+                    continue;
+            }
+            gXISlot = slot;
+            memset(gPrevButtons, 0, sizeof(gPrevButtons));
+            gPrevRT = gPrevLT = false;
+            gPrevChord = false;
+            PadLog("PAD-XI: connected slot %d (native XInput via %s)", slot, gXIDllName);
+            XInputRumble(0, 6000, 90);   // connect confirmation buzz, as on the SDL path
+            break;
+        }
+        if (gXISlot < 0) return false;
+    }
+    XIStateABI st{};
+    if (gXIGetState(gXISlot, &st) != ERROR_SUCCESS) {
+        PadLog("PAD-XI: disconnected (slot %d) - releasing held inputs", gXISlot);
+        ReleaseAllInputs();
+        XInputRumbleStop();
+        gXISlot = -1;
+        return false;
+    }
+    if (gXIRumbleActive && SDL_GetTicks() >= gXIRumbleStopMs) XInputRumbleStop();
+    XIPadRawState raw;
+    raw.thumbLX = st.Gamepad.sThumbLX; raw.thumbLY = st.Gamepad.sThumbLY;
+    raw.thumbRX = st.Gamepad.sThumbRX; raw.thumbRY = st.Gamepad.sThumbRY;
+    raw.leftTrigger = st.Gamepad.bLeftTrigger; raw.rightTrigger = st.Gamepad.bRightTrigger;
+    raw.buttons = st.Gamepad.wButtons;
+    XIPadTranslate(raw, gState);
+    return true;
+}
+#endif // _WIN32
+
+bool XInputPresent()
+{
+#if defined(_WIN32)
+    return gXISlot >= 0;
+#else
+    return false;
+#endif
+}
+
+bool NativePadPresent()
+{
+    return DIPadPresent() || XInputPresent();
+}
+
+// Refill the unified state from the active backend (called once per frame).
+// Priority: SDL gamepad -> native XInput -> native DirectInput.
+void CapturePadState()
+{
+    gState = DIPadState{};
+    gStateValid = false;
+    if (gPad) {
+        for (int a = 0; a < DIPAD_AXIS_SLOTS; ++a)
+            gState.axes[a] = SDL_GetGamepadAxis(gPad, (SDL_GamepadAxis)a);
+        const int nb = SDL_GAMEPAD_BUTTON_COUNT < DIPAD_BUTTON_SLOTS
+            ? SDL_GAMEPAD_BUTTON_COUNT : DIPAD_BUTTON_SLOTS;
+        for (int b = 0; b < nb; ++b)
+            gState.buttons[b] = SDL_GetGamepadButton(gPad, (SDL_GamepadButton)b);
+        gStateValid = true;
+        return;
+    }
+#if defined(_WIN32)
+    if (XInputCapture()) {
+        if (gDIDev) {
+            PadLog("PAD-XI: XInput device active - releasing DirectInput device '%s'", gDIName);
+            ReleaseAllInputs();
+            DIPadRelease();
+        }
+        gStateValid = true;
+        return;
+    }
+    if (gDIDev) gStateValid = DIPadCapture();
+#endif
+}
+
 // ── Pad adoption (hot-plug by polling) ───────────────────────────────────────
 void PollPadPresence()
 {
@@ -447,24 +841,57 @@ void PollPadPresence()
             SDL_CloseGamepad(gPad);
             gPad = nullptr; gPadId = 0;
         }
-        return;
+        if (gPad) return;
     }
     int count = 0;
     SDL_JoystickID* ids = SDL_GetGamepads(&count);
-    if (!ids) return;
-    if (count > 0) {
-        gPad = SDL_OpenGamepad(ids[0]);
-        if (gPad) {
-            gPadId = ids[0];
-            const char* name = SDL_GetGamepadName(gPad);
-            PadLog("PAD: connected '%s' (id %u)", name ? name : "?", (unsigned)gPadId);
-            memset(gPrevButtons, 0, sizeof(gPrevButtons));
-            gPrevRT = gPrevLT = false;
-            gPrevChord = false;
-            Rumble(0, 6000, 90);   // connect confirmation buzz
+    if (ids) {
+        if (count > 0) {
+            gPad = SDL_OpenGamepad(ids[0]);
+            if (gPad) {
+                gPadId = ids[0];
+                const char* name = SDL_GetGamepadName(gPad);
+                PadLog("PAD: connected '%s' (id %u)", name ? name : "?", (unsigned)gPadId);
+                memset(gPrevButtons, 0, sizeof(gPrevButtons));
+                gPrevRT = gPrevLT = false;
+                gPrevChord = false;
+                Rumble(0, 6000, 90);   // connect confirmation buzz
+            }
+        }
+        SDL_free(ids);
+    }
+#if defined(_WIN32)
+    if (gPad) {
+        if (gDIDev) {
+            PadLog("PAD-DI: SDL gamepad present - releasing DirectInput device '%s'", gDIName);
+            ReleaseAllInputs();
+            DIPadRelease();
+        }
+        return;
+    }
+    if (gDIDev) return;   // DI device active; DIPadCapture health-checks it
+    const Uint64 nowMs = SDL_GetTicks();
+    if (!XInputPresent() && nowMs >= gDINextScanMs) {
+        if (!DIPadAdopt()) gDINextScanMs = nowMs + 2000;   // hot-plug rescan every 2 s
+    }
+#endif
+    // Diagnostic (padfix): while no backend has a pad, report what SDL
+    // sees, throttled to 5 s — joysticks>0 with gamepads=0 means SDL
+    // detection works but no mapping matched; both 0 means SDL's joystick
+    // stack sees nothing at all. Lands in debug.log via PadLog.
+    if (!gPad && !NativePadPresent()) {
+        static Uint64 s_lastWaitLog = 0;
+        const Uint64 nowMs2 = SDL_GetTicks();
+        if (nowMs2 - s_lastWaitLog >= 5000) {
+            s_lastWaitLog = nowMs2;
+            int nj = 0, ng = 0;
+            SDL_JoystickID* jids = SDL_GetJoysticks(&nj);
+            if (jids) SDL_free(jids);
+            SDL_JoystickID* gids = SDL_GetGamepads(&ng);
+            if (gids) SDL_free(gids);
+            PadLog("PAD: waiting for pad (SDL sees %d joystick(s), %d gamepad(s))", nj, ng);
         }
     }
-    SDL_free(ids);
 }
 
 } // namespace
@@ -501,7 +928,7 @@ void SelfTestEnterWorld()
 // ── Tap/hold buttons (A = Space/quick-3, Y = Inventory/quick-2) ─────────────
 void TapHoldTick(TapHold& th, Uint64 now)
 {
-    const bool down = SDL_GetGamepadButton(gPad, th.btn);
+    const bool down = PadButton(th.btn);
     if (down && !th.down) {
         th.down = true; th.longFired = false; th.downMs = now;
     } else if (down && th.down && !th.longFired && now - th.downMs >= kLongPressMs) {
@@ -516,7 +943,7 @@ void TapHoldTick(TapHold& th, Uint64 now)
 }
 
 
-bool Gamepad_IsActive() { return gEnabled && gPad != nullptr; }
+bool Gamepad_IsActive() { return gEnabled && (gPad != nullptr || NativePadPresent()); }
 bool Gamepad_IsDriving() { return gDriving; }
 
 void Gamepad_RenderIndicator()
@@ -554,7 +981,8 @@ void Gamepad_Tick()
     if (gUiClickUpPending) { gUiClickUpPending = false; SetLeftButton(kLeftUI, false); }
 
     PollPadPresence();
-    if (!gPad) { gLastMs = SDL_GetTicks(); gDriving = false; return; }
+    CapturePadState();
+    if (!gStateValid) { gLastMs = SDL_GetTicks(); gDriving = false; return; }
 
     const Uint64 now = SDL_GetTicks();
     float dt = (now - gLastMs) / 1000.0f;
@@ -571,7 +999,7 @@ void Gamepad_Tick()
 
     // ── Back: tap = M (move list), hold = Tab (minimap) ─────────────────────
     {
-        const bool down = SDL_GetGamepadButton(gPad, SDL_GAMEPAD_BUTTON_BACK);
+        const bool down = PadButton(SDL_GAMEPAD_BUTTON_BACK);
         if (down && !gBackDown) { gBackDown = true; gBackDownMs = now; }
         else if (down && gBackDown && !gBackTabHeld && now - gBackDownMs >= kTabHoldMs) {
             gBackTabHeld = true;
@@ -595,8 +1023,8 @@ void Gamepad_Tick()
     // over; the keyboard wins ties so arrows + pad triggers can combo).
     const bool arrowsHeld = NavMove_ArrowsHeld();
     float ldx, ldy;
-    const float lmag = StickVector(SDL_GetGamepadAxis(gPad, SDL_GAMEPAD_AXIS_LEFTX),
-                                   SDL_GetGamepadAxis(gPad, SDL_GAMEPAD_AXIS_LEFTY), ldx, ldy);
+    const float lmag = StickVector(PadAxis(SDL_GAMEPAD_AXIS_LEFTX),
+                                   PadAxis(SDL_GAMEPAD_AXIS_LEFTY), ldx, ldy);
     const bool moving = lmag > 0.0f && !arrowsHeld;
     if (moving) {
         const float radius = kMoveRadius * (winW < winH ? winW : winH) * (0.4f + 0.6f * lmag);
@@ -609,8 +1037,8 @@ void Gamepad_Tick()
 
         // ── Right stick: free cursor (only when not steering) ────────────────
         float rdx, rdy;
-        const float rmag = StickVector(SDL_GetGamepadAxis(gPad, SDL_GAMEPAD_AXIS_RIGHTX),
-                                       SDL_GetGamepadAxis(gPad, SDL_GAMEPAD_AXIS_RIGHTY), rdx, rdy);
+        const float rmag = StickVector(PadAxis(SDL_GAMEPAD_AXIS_RIGHTX),
+                                       PadAxis(SDL_GAMEPAD_AXIS_RIGHTY), rdx, rdy);
         if (rmag > 0.0f) {
             float nx = gCursorX + rdx * rmag * gCursorSpd * dt;
             float ny = gCursorY + rdy * rmag * gCursorSpd * dt;
@@ -624,9 +1052,9 @@ void Gamepad_Tick()
     }
 
     // ── Triggers ─────────────────────────────────────────────────────────────
-    const bool rt = SDL_GetGamepadAxis(gPad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > kTriggerOn;
+    const bool rt = PadAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > kTriggerOn;
     if (rt != gPrevRT) { gPrevRT = rt; PadLog(rt ? "PAD: RT down" : "PAD: RT up"); SetLeftButton(kLeftRT, rt); }
-    const bool lt = SDL_GetGamepadAxis(gPad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > kTriggerOn;
+    const bool lt = PadAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > kTriggerOn;
     if (lt != gPrevLT) {
         gPrevLT = lt;
         SetRightButton(kRightLT, lt);
@@ -635,8 +1063,8 @@ void Gamepad_Tick()
     gDriving = moving || rt || lt;
 
     // ── Bumpers: skill cycling (+ LB+RB chord = skill list) ─────────────────
-    const bool lb = SDL_GetGamepadButton(gPad, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
-    const bool rb = SDL_GetGamepadButton(gPad, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+    const bool lb = PadButton(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+    const bool rb = PadButton(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
     if (lb && !gPrevButtons[SDL_GAMEPAD_BUTTON_LEFT_SHOULDER])  { PadLog("PAD: button LB down"); CycleSkill(-1); }
     if (rb && !gPrevButtons[SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER]) { PadLog("PAD: button RB down"); CycleSkill(+1); }
     gPrevButtons[SDL_GAMEPAD_BUTTON_LEFT_SHOULDER]  = lb;
@@ -646,7 +1074,7 @@ void Gamepad_Tick()
     gPrevChord = chord;
 
     // ── Stick clicks: L3 auto-cast latch, R3 cursor recenter ────────────────
-    const bool l3 = SDL_GetGamepadButton(gPad, SDL_GAMEPAD_BUTTON_LEFT_STICK);
+    const bool l3 = PadButton(SDL_GAMEPAD_BUTTON_LEFT_STICK);
     if (l3 && !gPrevButtons[SDL_GAMEPAD_BUTTON_LEFT_STICK]) {
         gAutoCast = !gAutoCast;
         SetRightButton(kRightAuto, gAutoCast);
@@ -654,7 +1082,7 @@ void Gamepad_Tick()
         Rumble(0, 5000, 60);
     }
     gPrevButtons[SDL_GAMEPAD_BUTTON_LEFT_STICK] = l3;
-    const bool r3 = SDL_GetGamepadButton(gPad, SDL_GAMEPAD_BUTTON_RIGHT_STICK);
+    const bool r3 = PadButton(SDL_GAMEPAD_BUTTON_RIGHT_STICK);
     if (r3 && !gPrevButtons[SDL_GAMEPAD_BUTTON_RIGHT_STICK]) {
         MoveCursorTo(winW * 0.5f, winH * 0.5f, true);
         PadLog("PAD: R3 - cursor recentered on hero");
@@ -673,7 +1101,7 @@ void Gamepad_Tick()
         { SDL_GAMEPAD_BUTTON_DPAD_LEFT,  "DLeft",  0x43, "C/character"  },
     };
     for (const auto& kb : kBtns) {
-        const bool down = SDL_GetGamepadButton(gPad, kb.b);
+        const bool down = PadButton(kb.b);
         if (down && !gPrevButtons[kb.b]) {
             PadLog("PAD: button %s down", kb.name);
             PulseKey(kb.vk, kb.what);
@@ -682,7 +1110,7 @@ void Gamepad_Tick()
     }
 
     // ── X: quick skill slot 1 ────────────────────────────────────────────────
-    const bool x = SDL_GetGamepadButton(gPad, SDL_GAMEPAD_BUTTON_WEST);
+    const bool x = PadButton(SDL_GAMEPAD_BUTTON_WEST);
     if (x && !gPrevButtons[SDL_GAMEPAD_BUTTON_WEST]) {
         PadLog("PAD: button X down");
         QuickSlot(1);

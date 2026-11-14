@@ -67,21 +67,22 @@ bool Equip_CanPlace(const ITEM* item, int a5)
 
     bool rightHandChecks = false;
     if (pt != 135 && pt != 143) {
-        if (left != -1 && left != 135 && left != 143 && a5 == 1) {
-            if (IA[pt].Width >= 2 && (pt < 192 || pt >= 224)) ok = false;
-            if (IA[left].Width >= 2) ok = false;
-        }
+        // MEAMU DUAL-WIELD (G ruling 2026-11-13): the Width>=2 two-hand
+        // rejections that used to live here are REMOVED, mirroring the
+        // server (CItemManager::CheckItemMoveToInventory) -- any weapon,
+        // two-handers included, may be held in each hand at once.
         if (right != -1 && right != 135 && right != 143 && a5 == 0) {
-            if (IA[pt].Width >= 2) ok = false;
-            if (IA[right].Width >= 2 && (right < 192 || right >= 224)) ok = false;
             rightHandChecks = true;                         // LABEL_118
         }
     }
     if (!rightHandChecks && a5 == 1) {
         if (pt == 143) ok = false;
+        // MEAMU DUAL-WIELD (2026-11-13): the DW/FE slot-1 weapon bans
+        // (types [0,128) and [160,192)) are REMOVED, mirroring the
+        // server -- a wizard or elf may now hold a weapon in the off
+        // hand too. Only the ammo pairing below survives: it is the
+        // elf bow/crossbow ammo system, not a two-hand rule.
         if (cls == 0 || cls == 2) {
-            if (pt >= 0 && pt < 128) ok = false;
-            if (pt >= 160 && pt < 192) ok = false;
             if (left == 143) {
                 if (pt == 135 || pt < 128 || pt > 160) ok = false;
             } else if (pt == 135 && left != -1 && (left < 128 || left > 160)) {
@@ -119,7 +120,12 @@ bool Equip_CanPlace(const ITEM* item, int a5)
     if (!invalid && part != (BYTE)a5) {
         if (part == 10) {
             if (a5 != 11) invalid = true;
-        } else if (part != 0 || a5 != 1 || IA[pt].Width >= 2) {
+        } else if (part != 0 || a5 != 1) {
+            invalid = true;
+        } else if (cls == 2 && ((pt >= 136 && pt < 143) || pt == 146)) {
+            // MEAMU DUAL-WIELD (2026-11-13): part-0 weapons of any Width
+            // may now enter slot 1 (server parity), except elf crossbows,
+            // which the server keeps out of slot 1 (ammo system).
             invalid = true;
         }
     }
