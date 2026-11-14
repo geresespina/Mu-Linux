@@ -369,15 +369,12 @@ skip_wings: ;
             PlusSpecial(&maxB, 60, AsItem(wp_L));
             unsigned short minNet = minB - (unsigned short)((double)minB * (double)durP);
             unsigned short maxNet = maxB - (unsigned short)((double)maxB * (double)durP);
-            short t = *(short*)wp_L;
-            // Two-hand weapons (160..192): half the bonus to L hand
-            if (t >= 160 && t <= 192) {
-                *atkMinL += minNet >> 1;
-                *atkMaxL += maxNet >> 1;
-            } else {
-                *atkMinL += minNet;
-                *atkMaxL += maxNet;
-            }
+            // MEAMU DUAL-WIELD (2026-11-13): staves (160..192) used to
+            // contribute only HALF their damage to this hand's display
+            // range. The server counts every weapon at 100% in both
+            // hands, so the display now adds the full value.
+            *atkMinL += minNet;
+            *atkMaxL += maxNet;
             PlusSpecial(atkMinL, 73, AsItem(wp_L));
             PlusSpecial(atkMaxL, 73, AsItem(wp_L));
             PlusSpecialPercent((short*)atkMinL, 74, AsItem(wp_L), 2);
@@ -401,14 +398,9 @@ skip_wings: ;
             PlusSpecial(&maxB, 60, AsItem(wp_R));
             unsigned short minNet = minB - (unsigned short)((double)minB * (double)durP);
             unsigned short maxNet = maxB - (unsigned short)((double)maxB * (double)durP);
-            short t = *(short*)wp_R;
-            if (t >= 160 && t <= 192) {
-                *atkMinR += minNet >> 1;
-                *atkMaxR += maxNet >> 1;
-            } else {
-                *atkMinR += minNet;
-                *atkMaxR += maxNet;
-            }
+            // MEAMU DUAL-WIELD (2026-11-13): full value, as slot 0.
+            *atkMinR += minNet;
+            *atkMaxR += maxNet;
             PlusSpecial(atkMinR, 73, AsItem(wp_R));
             PlusSpecial(atkMaxR, 73, AsItem(wp_R));
             PlusSpecialPercent((short*)atkMinR, 74, AsItem(wp_R), 2);
