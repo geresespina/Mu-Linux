@@ -443,6 +443,11 @@ static void HUD_PickUpNearestItem(void)
         const float dy = *(const float*)(item + 92) - heroY;
         const float d2 = dx * dx + dy * dy;
         if (d2 >= 300.0f * 300.0f) continue;
+        // MEAMU kb-toggle (2026-11-13): con el control por teclado APAGADO
+        // (F9 / [Keyboard] Enable=0), Space vuelve a la seleccion previa a
+        // kb-play: el primer item del pool en rango, sin "mas cercano" ni
+        // paso al siguiente.
+        if (!KbPlay_Enabled()) { if (best < 0) best = i; continue; }
         if (d2 < bestAnyD2) { bestAnyD2 = d2; bestAny = i; }
         if (fetching && (DWORD)i == ItemKey) continue;   // ya va por este
         if (d2 < bestD2) { bestD2 = d2; best = i; }
