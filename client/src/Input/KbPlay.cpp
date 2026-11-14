@@ -42,8 +42,11 @@
 //   digit casts (Gates), no arrow movement (NavMove's own InputEnable
 //   gate), no Tab changes (HUD_HotkeyTick's gates), and F8 does not
 //   toggle — and closing chat hands control back with AUTO untouched.
-//   AUTO ends on: F8 again (chat closed), a physical mouse-button press
-//   (the player taking over), an error modal, leaving the world scene,
+//   AUTO ends on: F8 again (chat closed), a NEW physical mouse-button
+//   press (the player taking over; releasing the hold that armed AUTO is
+//   not one — its RightUp clears the shared hold flag the Attack gate
+//   reads, so the drive re-asserts the hold, see AutoDriveButton), an
+//   error modal, leaving the world scene,
 //   or the hero's death. A hand-held digit cast and the gamepad both
 //   outrank AUTO while they drive; AUTO resumes when they stop.
 //
@@ -448,6 +451,29 @@ void AutoSet(bool on, const char* why, bool announce)
     KbLog("KB-AUTO: %s (%s)", on ? "ON" : "OFF", why);
 }
 
+// AUTO's button step — keep the synthetic hold alive in the game's
+// shared MouseRButton flag (DAT_083a42ac). That flag is the hold the
+// hero Attack gate reads (Combat.cpp: MouseRButtonPush || MouseRButton),
+// and Input_WndProc sets/clears it on RightDown/RightUp events from ANY
+// source: real device events and this module's synthetic ones share the
+// one flag. So when AUTO latches out of a physical mouse hold and the
+// player then lets go of the button — the natural "AUTO is on, hands
+// off" move — the real RightUp clears the flag under us. gRightDown
+// cannot see that clobber: it tracks only our own sends, and the
+// KeyHeld key table is written by real SDL device events only, so the
+// drive's SetRightButton(true) would no-op forever after the release:
+// AUTO lit, hero idle (G's report, 2026-11-14). The digit path never
+// hits this because no physical button is involved there. Repair:
+// whenever the shared flag is down, forget our press and send a fresh
+// RightDown to re-assert the hold. A NEW physical press is unaffected —
+// the press-edge cancel in the tick samples it before the drive runs
+// and takes AUTO down first, exactly as on the F8 path.
+void AutoDriveButton()
+{
+    if (DAT_083a42ac == 0) gRightDown = false;
+    SetRightButton(true);
+}
+
 // ── Cast-streak AUTO latch ──────────────────────────────────────────────────
 // LatchNow is the streak clock; the self-test substitutes a simulated
 // time so the state machine can be exercised deterministically at the
@@ -668,6 +694,44 @@ void SelfTestDrive()
         gSelfForced = false;
         KbLog("KB-LATCH-SELFTEST: segment complete (AUTO on=%d, expect 0)", gAutoOn ? 1 : 0);
         break;
+    case 28: KbLog("KB-CLOBBER-SELFTEST: segment starts - physical RMB hold simulated (the streak-building hold)");
+        gSelfForced = true;
+        gSelfWorldSim = true;
+        gLatchSimT = 700000;
+        gLatchSuppress = false; gStreakStart = 0; gLastCastT = 0;   // clean slate
+        Platform::InjectVirtualKey(2, true);    // physical RMB goes down
+        DAT_083a42ac = 1;                        // WndProc state from that real press
+        KbLog("KB-CLOBBER-SELFTEST: RMB held=%d shared-flag=%d (expect 1/1)",
+              KeyHeld(2) ? 1 : 0, (int)DAT_083a42ac);
+        break;
+    case 29: for (int k = 0; k < 6; ++k) { LatchNoteCast(gLatchSimT); gLatchSimT += 400; }
+        // casts at T..T+2000 under the held RMB: the span latches on the 6th
+        KbLog("KB-CLOBBER-SELFTEST: 2 s of casts under a held RMB: AUTO=%d RMB held=%d (expect 1/1 - latched, the hold did not cancel)",
+              gAutoOn ? 1 : 0, KeyHeld(2) ? 1 : 0);
+        AutoDriveButton();   // the drive's first button step
+        KbLog("KB-CLOBBER-SELFTEST: drive button step: synth-held=%d shared-flag=%d (expect 1/1)",
+              gRightDown ? 1 : 0, (int)DAT_083a42ac);
+        break;
+    case 30: Platform::InjectVirtualKey(2, false);   // player lets go of the mouse
+        DAT_083a42ac = 0;   // the real RightUp clears the shared flag (Input_WndProc)
+        KbLog("KB-CLOBBER-SELFTEST: RMB released: held=%d AUTO=%d (expect 0/1 - the arming hold's release is not an off input)",
+              KeyHeld(2) ? 1 : 0, gAutoOn ? 1 : 0);
+        AutoDriveButton();   // the drive must re-assert the clobbered hold
+        KbLog("KB-CLOBBER-SELFTEST: after drive step: shared-flag=%d synth-held=%d (expect 1/1 - hold re-asserted, AUTO keeps casting)",
+              (int)DAT_083a42ac, gRightDown ? 1 : 0);
+        break;
+    case 31: KbLog("KB-CLOBBER-SELFTEST: injecting a NEW physical RMB press - AUTO must cancel (standing rule)");
+        Platform::InjectVirtualKey(2, true);
+        DAT_083a42ac = 1;   // WndProc state from the real press (already 1 via the synth hold)
+        break;
+    case 32: KbLog("KB-CLOBBER-SELFTEST: after new press: AUTO=%d (expect 0 - cancelled by fresh mouse input)",
+              gAutoOn ? 1 : 0);
+        Platform::InjectVirtualKey(2, false);
+        gLatchSimT = 0;
+        gSelfWorldSim = false;
+        gSelfForced = false;
+        KbLog("KB-CLOBBER-SELFTEST: segment complete (AUTO on=%d, expect 0)", gAutoOn ? 1 : 0);
+        break;
     default: break;
     }
 }
@@ -753,8 +817,15 @@ void KbPlay_Tick()
     // Target tracking is not keyboard input, so it follows AutoGates():
     // AUTO's own casts keep feeding it while the player chats, and a chat
     // session no longer clears the Tab lock AUTO is aiming with.
-    if (AutoGates() && Attacking >= 0 && ValidMonster(Attacking))
-        gLastIdx = Attacking;
+    // Attacking itself is only the 0/1 attack-state flag (globals.h) —
+    // the engaged target's character index rides in DAT_00559c70, which
+    // Player_InputTick writes next to it (= SelectedCharacter on engage,
+    // -1 when the target dies). Reading Attacking as an index fed 0/1
+    // here, which ValidMonster essentially never accepts, so the mouse
+    // path's target preference silently never landed and AUTO fell back
+    // to the nearest scan instead of the player's current target.
+    if (AutoGates() && Attacking == 1 && ValidMonster(DAT_00559c70))
+        gLastIdx = DAT_00559c70;
     // A dead/gone lock clears silently.
     if (gLockIdx >= 0 && (!AutoGates() || !ValidMonster(gLockIdx)))
         gLockIdx = -1;
@@ -866,7 +937,7 @@ void KbPlay_Tick()
             }
         } else if (!gCastVk) {   // a hand-held digit cast outranks AUTO
             if (gAutoYielded) { gAutoYielded = false; KbLog("KB-AUTO: re-engages"); }
-            if (SelectedSkillType() != 0) { AimAndPark(); SetRightButton(true); }
+            if (SelectedSkillType() != 0) { AimAndPark(); AutoDriveButton(); }
             else SetRightButton(false);   // empty slot selected: stand + scan
         }
     }
