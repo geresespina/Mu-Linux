@@ -553,6 +553,7 @@ void  __cdecl FUN_0050f700(const char *FileName);                  // SaveMacro 
 void  __cdecl OpenMacro(char *FileName);                            // 0x0050F750
 // FUN_0050f7a0 NO es "Map_Unload": es sub_50F7A0, el envio de opciones F3/30.
 // Portada como SaveOptionsToServer97k en UI/UI_InGameMenu.cpp.
+void  SaveOptionsToServer97k(void);
 // FUN_0050f5f0 @ 0x0050F5F0 (IDA)
 void  __cdecl Font_CreateTextDib(int dc);
 // FUN_0040f570 @ 0x0040F570 (IDA)
