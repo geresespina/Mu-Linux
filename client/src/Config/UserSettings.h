@@ -155,6 +155,10 @@ public:
     int GetMusicLevel()  const { return m_MusicLevel; }
     // MEAMU rev.5: gamepad (Config.ini [Gamepad]).
     bool GetGamepadEnable() const { return m_GamepadEnable; }
+    // MEAMU kb-toggle (2026-11-13): keyboard-only play master switch
+    // (Config.ini [Keyboard] Enable; F9 in game). Missing key = enabled.
+    bool GetKeyboardEnable() const { return m_KeyboardEnable; }
+    void SetKeyboardEnable(bool enabled);
     int GetGamepadDeadzone() const { return m_GamepadDeadzone; }       // percent 5..60
     int GetGamepadCursorSpeed() const { return m_GamepadCursorSpeed; } // px/s 100..3000
     bool GetDeleteHealthBar() const { return m_Antilag[ANTILAG_HEALTH_BAR]; }
@@ -224,6 +228,7 @@ private:
     int  m_SoundLevel  = -1;
     int  m_MusicLevel  = -1;
     bool m_GamepadEnable = true;
+    bool m_KeyboardEnable = true;
     int  m_GamepadDeadzone = 25;
     int  m_GamepadCursorSpeed = 900;
     bool m_Antilag[MAX_ANTILAG] = {};

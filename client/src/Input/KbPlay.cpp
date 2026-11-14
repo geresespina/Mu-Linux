@@ -47,12 +47,37 @@
 //   or the hero's death. A hand-held digit cast and the gamepad both
 //   outrank AUTO while they drive; AUTO resumes when they stop.
 //
+// * Cast-streak AUTO latch (MEAMU, G's ask 2026-11-13, design revised
+//   same night): casting the selected skill continuously for 2.0 s --
+//   casts never more than ~0.6 s apart -- latches AUTO on through the
+//   same AutoSet path as F8 (same banner + indicator). The trigger is
+//   the cast itself, not any one input: mouse hold-to-cast, held digit
+//   keys, gamepad hold-cast and repeated clicks all count equally,
+//   because every source funnels into Combat_DispatchHeroSkillAttack,
+//   whose branches stamp SkillStage = 1 at the cast-commit point; the
+//   tick polls that stamp for rising edges. The streak builds only
+//   while AUTO is off, keyboard controls are on, chat is closed and
+//   the world gates pass; chat, a scene change, an error modal or the
+//   hero's death resets it. Anti-re-latch: when AUTO turns off (say a
+//   mouse press stops it mid-hold), no new streak can arm until
+//   casting has fully stopped for ~0.8 s, so the same hold that was
+//   interrupted can never instantly re-latch.
+//
+// * Master toggle (MEAMU kb-toggle, 2026-11-13): Config.ini [Keyboard]
+//   Enable (default 1 when missing) decides the boot state; F9 flips it
+//   in game under the AUTO toggle's gate discipline and persists the new
+//   value. OFF folds into the shared Gates() so digits/Tab/Enter/Space
+//   all revert to stock behavior at once, and AUTO is taken down with
+//   the switch (F8 while OFF only announces the state). Gamepad input
+//   has no connection to the switch.
+//
 // Sandbox proof hooks: MU_KB_SELFTEST=1 injects digit keys at the title
 // screen and logs the module's gate reactions (in-world proof is G's
 // playtest + the rig session recorded in the build pack).
 
 #include "stdafx.h"
 #include "Input/KbPlay.h"
+#include "Config/UserSettings.h" // gUserSettings ([Keyboard] Enable)
 #include "Input/Gamepad.h"       // Gamepad_IsDriving (cast yield)
 #include "Input/NavMove.h"       // NavMove_ArrowsHeld (NPC click guard)
 #include "Platform/IInput.h"     // Platform::InputEvent, GetInput
@@ -82,9 +107,20 @@ constexpr int kDigitVal[10]  = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 0 };
 constexpr int kTabRadius     = 12;   // tiles (Chebyshev) for Tab candidates
 constexpr int kNpcRadius     = 15;   // tiles for Enter (hero walks the rest)
 constexpr int kAutoVk        = 0x77; // VK_F8 — AUTO toggle. Free: no
-                                     // PressKey/KeyState consumer anywhere
-                                     // (F9 = benchmark, Debug/MU_BENCHMARK
-                                     // only; F10/F11 = camera, F12 = FPS)
+                                     // PressKey/KeyState consumer anywhere.
+constexpr int kToggleVk      = 0x78; // VK_F9 — keyboard controls ON/OFF
+                                     // (master toggle). Free in every shipped
+                                     // build: the only VK_F9 consumer in the
+                                     // tree is the MU_BENCHMARK test rig
+                                     // (Debug/Benchmark.cpp), compiled only
+                                     // for Debug configs or with
+                                     // -DMU_BENCHMARK=ON (default OFF) —
+                                     // published releases never define it.
+                                     // (F10/F11 = camera, F12 = FPS counter,
+                                     // so the F-key fallbacks are all taken.)
+constexpr Uint64 kLatchSpanMs  = 2000; // continuous casting that latches AUTO
+constexpr Uint64 kLatchGapMs   = 600;  // max silence between casts in a streak
+constexpr Uint64 kLatchRearmMs = 800;  // cast silence required after AUTO off
 
 // ── State ────────────────────────────────────────────────────────────────────
 bool gDigitPrev[10] = {};        // raw held state last frame, per digit
@@ -99,9 +135,19 @@ bool gEnterPrev     = false;
 float gCurX = 0.0f, gCurY = 0.0f;   // last parked cursor (window px)
 bool gAutoOn        = false;     // AUTO mode (F8) master state
 bool gF8Prev        = false;     // toggle key last frame
+bool gKbEnabled     = true;      // keyboard controls master switch
+                                 // ([Keyboard] Enable at boot, F9 in game)
+bool gF9Prev        = false;     // master toggle key last frame
 bool gMouseLPrev    = false;     // physical mouse buttons last frame
 bool gMouseRPrev    = false;
 bool gAutoYielded   = false;     // AUTO on, gamepad owns the right button
+Uint64 gStreakStart = 0;         // cast-streak latch: first cast of the span
+Uint64 gLastCastT   = 0;         // cast-streak latch: most recent cast stamp
+BYTE gSkillStagePrev = 0;        // hero SkillStage last tick (edge detect)
+bool gLatchSuppress = false;     // anti-re-latch: waiting out the silence beat
+Uint64 gSuppressT   = 0;         // when the current suppression engaged
+bool gAutoPrevLatch = false;     // AUTO state last tick (off-transition watch)
+Uint64 gLatchSimT   = 0;         // self-test: simulated latch clock (0 = real)
 bool gChatPrev      = false;     // chat focus last frame (transition logs)
 
 // ── Self-test state ──────────────────────────────────────────────────────────
@@ -112,6 +158,7 @@ int    gSelfStep   = -1;
 unsigned gSelfFrame = 0;
 bool   gSelfChatSim = false;     // self-test: simulated chat focus (AUTO)
 bool   gSelfForced  = false;     // self-test: AUTO force-on at title
+bool   gSelfWorldSim = false;    // self-test: F9 world gates simulated
 
 void KbLog(const char* fmt, ...)
 {
@@ -180,6 +227,11 @@ bool Gates()
            InputEnable == 0 && GuildInputEnable == 0 && DAT_07e11d71 == 0 &&
            DAT_083a7c24 == 0;
 }
+
+// The keyboard-controls master switch (Config.ini [Keyboard] Enable at
+// boot, F9 in game). Every KbPlay input path consults it; the gamepad
+// never does.
+bool KbEnabled() { return gKbEnabled; }
 
 CHARACTER* HeroC() { return (CHARACTER*)(uintptr_t)Hero; }
 
@@ -396,6 +448,88 @@ void AutoSet(bool on, const char* why, bool announce)
     KbLog("KB-AUTO: %s (%s)", on ? "ON" : "OFF", why);
 }
 
+// ── Cast-streak AUTO latch ──────────────────────────────────────────────────
+// LatchNow is the streak clock; the self-test substitutes a simulated
+// time so the state machine can be exercised deterministically at the
+// title screen (no world, no real casts there).
+Uint64 LatchNow()
+{
+    return (gSelfTest && gLatchSimT != 0) ? gLatchSimT : SDL_GetTicks();
+}
+
+// One observed cast of the player's selected skill. In the real path
+// this is fed by the SkillStage rising edge in LatchFrame; the
+// self-test feeds synthetic stamps through the same entry.
+void LatchNoteCast(Uint64 now)
+{
+    const Uint64 prev = gLastCastT;
+    gLastCastT = now;
+    if (gAutoOn || gLatchSuppress || !KbEnabled()) { gStreakStart = 0; return; }
+    if (gStreakStart == 0 || prev == 0 || now - prev > kLatchGapMs) {
+        gStreakStart = now;   // first cast, or the gap broke the old span
+        return;
+    }
+    if (now - gStreakStart >= kLatchSpanMs) {
+        gStreakStart = 0;
+        AutoSet(true, "cast-streak latch", true);
+    }
+}
+
+// Per-tick latch bookkeeping: poll the hero's SkillStage for cast
+// edges, reset the streak when the world moves on, and run the
+// anti-re-latch beat off AUTO's on->off transitions.
+void LatchFrame(bool chat)
+{
+    const Uint64 now = LatchNow();
+    const BYTE stage = Hero ? HeroC()->SkillStage : 0;
+    if (stage == 1 && gSkillStagePrev != 1) LatchNoteCast(now);
+    gSkillStagePrev = stage;
+
+    const bool world = AutoGates() || (gSelfTest && gSelfWorldSim);
+    if (chat || !world || HeroDead()) gStreakStart = 0;
+
+    if (gAutoPrevLatch && !gAutoOn) {
+        gLatchSuppress = true;   // AUTO just turned off: arm the beat
+        gSuppressT = now;
+        gStreakStart = 0;
+        KbLog("KB-AUTO: cast-streak latch suppressed until casting stops for %d ms",
+              (int)kLatchRearmMs);
+    }
+    gAutoPrevLatch = gAutoOn;
+    if (gLatchSuppress) {
+        // The beat runs from the later of the suppression start and
+        // the last cast: a quiet AUTO off clears on its own, while a
+        // hold that keeps casting keeps the beat alive.
+        const Uint64 beatFrom = gLastCastT > gSuppressT ? gLastCastT : gSuppressT;
+        if (now - beatFrom >= kLatchRearmMs) {
+            gLatchSuppress = false;
+            KbLog("KB-AUTO: cast-streak latch re-armed (silence beat served)");
+        }
+    }
+}
+
+// ── Keyboard controls master switch (F9 / boot config) ──────────────────────
+// OFF silences every KbPlay input path at once (digit casts, Tab cycle,
+// Enter talk, the Space nearest-pick) and takes AUTO down with it — AUTO
+// is a keyboard feature and must never outlive its master switch, so no
+// orphan state survives the flip. ON restores the shipped behavior
+// exactly. The flip applies immediately and persists to Config.ini
+// [Keyboard] Enable through the settings writer (targeted write of that
+// one value into the same file the client read at boot).
+void KbSet(bool on, const char* why)
+{
+    if (on == gKbEnabled) return;
+    gKbEnabled = on;
+    if (!on) {
+        StopCast("keyboard controls off");
+        if (gAutoOn) AutoSet(false, "keyboard controls off", true);
+        gLockIdx = -1;   // the Tab lock belongs to the feature
+    }
+    gUserSettings.SetKeyboardEnable(on);
+    if (SceneFlag == 5) Say("KEYBOARD CONTROLS: %s", on ? "ON" : "OFF");
+    KbLog("KB: keyboard controls %s (%s)", on ? "ON" : "OFF", why);
+}
+
 // ── Self-test (title screen; proves dispatch + gates without a server) ───────
 void SelfTestDrive()
 {
@@ -446,17 +580,110 @@ void SelfTestDrive()
         gSelfForced = false;
         KbLog("KB-AUTO-SELFTEST: timeline complete (AUTO on=%d, expect 0)", gAutoOn ? 1 : 0);
         break;
+    case 14: KbLog("KB-TOGGLE-SELFTEST: exercise starts - world gates simulated, AUTO forced on (KB on=%d, expect 1)",
+               gKbEnabled ? 1 : 0);
+        gSelfForced = true;
+        gSelfWorldSim = true;
+        AutoSet(true, "self-test toggle exercise", false);
+        break;
+    case 15: KbLog("KB-TOGGLE-SELFTEST: injecting F9 down - KB must flip OFF and clear AUTO");
+        Platform::InjectVirtualKey(kToggleVk, true);  break;
+    case 16: Platform::InjectVirtualKey(kToggleVk, false);
+        KbLog("KB-TOGGLE-SELFTEST: after F9: KB on=%d (expect 0), AUTO on=%d (expect 0)",
+              gKbEnabled ? 1 : 0, gAutoOn ? 1 : 0);
+        KbLog("KB-TOGGLE-SELFTEST: injecting '1' down - digit must be ignored (KB off)");
+        Platform::InjectVirtualKey(0x31, true);
+        break;
+    case 17: Platform::InjectVirtualKey(0x31, false);
+        KbLog("KB-TOGGLE-SELFTEST: injecting F8 down - AUTO must stay off (KB off)");
+        Platform::InjectVirtualKey(kAutoVk, true);  break;
+    case 18: Platform::InjectVirtualKey(kAutoVk, false);
+        KbLog("KB-TOGGLE-SELFTEST: after F8: AUTO on=%d (expect 0). Injecting F9 down - KB back ON",
+              gAutoOn ? 1 : 0);
+        Platform::InjectVirtualKey(kToggleVk, true);  break;
+    case 19: Platform::InjectVirtualKey(kToggleVk, false);
+        KbLog("KB-TOGGLE-SELFTEST: after F9: KB on=%d (expect 1). Injecting '1' down - normal digit routing resumes",
+              gKbEnabled ? 1 : 0);
+        Platform::InjectVirtualKey(0x31, true);
+        break;
+    case 20: Platform::InjectVirtualKey(0x31, false);
+        gSelfWorldSim = false;
+        gSelfForced = false;
+        KbLog("KB-TOGGLE-SELFTEST: timeline complete (KB on=%d expect 1, AUTO on=%d expect 0)",
+              gKbEnabled ? 1 : 0, gAutoOn ? 1 : 0);
+        break;
+    case 21: KbLog("KB-LATCH-SELFTEST: streak segment starts (simulated clock; KB on=%d, AUTO on=%d, expect 1/0)",
+               gKbEnabled ? 1 : 0, gAutoOn ? 1 : 0);
+        gSelfForced = true;
+        gSelfWorldSim = true;
+        gLatchSimT = 500000;
+        LatchNoteCast(gLatchSimT);            // streak opens
+        gLatchSimT += 400; LatchNoteCast(gLatchSimT);
+        gLatchSimT += 400; LatchNoteCast(gLatchSimT);
+        KbLog("KB-LATCH-SELFTEST: 3 casts over 800 ms: streaking=%d AUTO=%d (expect 1/0)",
+              gStreakStart != 0 ? 1 : 0, gAutoOn ? 1 : 0);
+        break;
+    case 22: gLatchSimT += 400; LatchNoteCast(gLatchSimT);
+        gLatchSimT += 400; LatchNoteCast(gLatchSimT);
+        gLatchSimT += 400; LatchNoteCast(gLatchSimT);   // span reaches 2000 ms
+        KbLog("KB-LATCH-SELFTEST: span 2000 ms reached: AUTO=%d (expect 1 - latched)",
+              gAutoOn ? 1 : 0);
+        break;
+    case 23: AutoSet(false, "self-test streak exercise", false);
+        LatchFrame(false);   // the off transition must engage suppression
+        gLatchSimT += 300; LatchNoteCast(gLatchSimT);   // player keeps casting
+        gLatchSimT += 300; LatchNoteCast(gLatchSimT);
+        KbLog("KB-LATCH-SELFTEST: AUTO killed mid-hold: suppress=%d streaking=%d AUTO=%d (expect 1/0/0)",
+              gLatchSuppress ? 1 : 0, gStreakStart != 0 ? 1 : 0, gAutoOn ? 1 : 0);
+        break;
+    case 24: gLatchSimT += 900;               // full cast silence: beat served
+        LatchFrame(false);
+        KbLog("KB-LATCH-SELFTEST: after 900 ms silence: suppress=%d (expect 0 - re-armed)",
+              gLatchSuppress ? 1 : 0);
+        break;
+    case 25: for (int k = 0; k < 6; ++k) { gLatchSimT += 400; LatchNoteCast(gLatchSimT); }
+        KbLog("KB-LATCH-SELFTEST: fresh 2000 ms streak: AUTO=%d (expect 1 - latched again)",
+              gAutoOn ? 1 : 0);
+        break;
+    case 26: AutoSet(false, "self-test streak exercise", false);
+        LatchFrame(false);
+        gLatchSimT += 900; LatchFrame(false);   // serve the beat again
+        gStreakStart = 0; gLastCastT = 0;       // clean slate for the gap test
+        gLatchSimT += 100; LatchNoteCast(gLatchSimT);
+        gLatchSimT += 400; LatchNoteCast(gLatchSimT);
+        gLatchSimT += 700; LatchNoteCast(gLatchSimT);   // 700 ms gap: span restarts
+        gLatchSimT += 400; LatchNoteCast(gLatchSimT);
+        gLatchSimT += 400; LatchNoteCast(gLatchSimT);
+        gLatchSimT += 400; LatchNoteCast(gLatchSimT);
+        KbLog("KB-LATCH-SELFTEST: gap-broken span at 1200 ms: AUTO=%d (expect 0)",
+              gAutoOn ? 1 : 0);
+        break;
+    case 27: gLatchSimT += 400; LatchNoteCast(gLatchSimT);
+        gLatchSimT += 400; LatchNoteCast(gLatchSimT);   // restarted span hits 2000 ms
+        KbLog("KB-LATCH-SELFTEST: restarted span reaches 2000 ms: AUTO=%d (expect 1)",
+              gAutoOn ? 1 : 0);
+        AutoSet(false, "self-test streak exercise", false);
+        gLatchSimT = 0;
+        gSelfWorldSim = false;
+        gSelfForced = false;
+        KbLog("KB-LATCH-SELFTEST: segment complete (AUTO on=%d, expect 0)", gAutoOn ? 1 : 0);
+        break;
     default: break;
     }
 }
 
 } // namespace
 
+// The master state, for the Space pickup handler in Player_InputTick.cpp.
+bool KbPlay_Enabled() { return KbEnabled(); }
+
 // Tab hook for HUD_HotkeyTick: cycle the combat lock among attackable
 // monsters in range (nearest first, wrapping). True = Tab consumed.
+// With the master switch OFF this returns false at once, so Tab keeps
+// its stock minimap toggle.
 bool KbPlay_TabCycle()
 {
-    if (!Gates()) return false;
+    if (!Gates() || !KbEnabled()) return false;
     CHARACTER* hero = HeroC();
 
     int idxs[400];
@@ -494,7 +721,9 @@ void KbPlay_Tick()
     if (!gInitTried) {
         gInitTried = true;
         gSelfTest = (getenv("MU_KB_SELFTEST") != nullptr);
-        KbLog("KB: module init%s", gSelfTest ? " (self-test)" : "");
+        gKbEnabled = gUserSettings.GetKeyboardEnable();
+        KbLog("KB: module init%s - keyboard controls %s (Config.ini [Keyboard] Enable; F9 toggles)",
+              gSelfTest ? " (self-test)" : "", gKbEnabled ? "ON" : "OFF");
     }
     if (gSelfTest) SelfTestDrive();
 
@@ -504,7 +733,9 @@ void KbPlay_Tick()
         SendMouse(Platform::InputEventType::LeftUp, gCurX, gCurY);
     }
 
-    const bool gates = Gates();
+    // The master switch folds into the shared gates: with KB OFF a held
+    // cast stops, and no digit/Enter press is ever acted on.
+    const bool gates = Gates() && KbEnabled();
 
     // Chat focus transitions. Chat is tracked apart from Gates(): AUTO
     // keeps running while the chat input is open (G's amendment) — only
@@ -536,6 +767,8 @@ void KbPlay_Tick()
         if (held && !gDigitPrev[i]) {
             if (gSelfTest && gSelfChatSim)
                 KbLog("KB-AUTO-SELFTEST: digit %d press yielded to chat (no cast, no select)", kDigitVal[i]);
+            else if (!KbEnabled())
+                KbLog("KB: digit %d press ignored - keyboard controls OFF (F9 re-enables)", kDigitVal[i]);
             else if (gates && !modifiers) OnDigitPress(vk, kDigitVal[i]);
             else if (gSelfTest)
                 KbLog("KB-SELFTEST: digit %d press ignored (gates=%d modifiers=%d scene=%d)",
@@ -565,6 +798,13 @@ void KbPlay_Tick()
         if (chat) {
             if (gSelfTest)
                 KbLog("KB-AUTO-SELFTEST: F8 pressed while chat focused - no toggle (key belongs to chat)");
+        } else if (!KbEnabled()) {
+            // AUTO rides the keyboard controls: with the master switch
+            // OFF, F8 cannot start it — surface the state instead of
+            // failing silently. (AUTO can never be ON here: KbSet takes
+            // it down with the switch.)
+            if (SceneFlag == 5) Say("KEYBOARD CONTROLS: OFF");
+            KbLog("KB-AUTO: F8 ignored - keyboard controls OFF");
         } else if (gAutoOn) {
             AutoSet(false, "toggle key", true);
         } else if (AutoGates() && !HeroDead()) {
@@ -576,6 +816,25 @@ void KbPlay_Tick()
     }
     gF8Prev = f8;
 
+    // ── Keyboard controls master toggle (F9) ─────────────────────────────
+    // Same discipline as the F8 toggle: the press edge counts only with
+    // the chat input closed (while chat is focused the key belongs to
+    // chat) and the world gates open (AutoGates: in-world scene, hero
+    // present, no error modal). The flip is immediate and persists.
+    const bool f9 = KeyHeld(kToggleVk);
+    if (f9 && !gF9Prev) {
+        if (chat) {
+            if (gSelfTest)
+                KbLog("KB-SELFTEST: F9 pressed while chat focused - no toggle (key belongs to chat)");
+        } else if (AutoGates() || (gSelfTest && gSelfWorldSim)) {
+            KbSet(!gKbEnabled, "toggle key");
+        } else if (gSelfTest) {
+            KbLog("KB-SELFTEST: F9 toggle ignored (autogates=%d scene=%d)",
+                  AutoGates() ? 1 : 0, SceneFlag);
+        }
+    }
+    gF9Prev = f9;
+
     // A physical mouse press is the player taking control back. The key
     // table's button bits are written only by real SDL device events (pad
     // key pulses never use buttons 1/2); virtual buttons from this module,
@@ -585,6 +844,11 @@ void KbPlay_Tick()
     if (gAutoOn && ((mL && !gMouseLPrev) || (mR && !gMouseRPrev)))
         AutoSet(false, "manual mouse input", true);
     gMouseLPrev = mL; gMouseRPrev = mR;
+
+    // Cast-streak latch: observe casts + run the anti-re-latch beat.
+    // Placed before the AUTO drive so a latch that completes starts
+    // driving this same tick.
+    LatchFrame(chat);
 
     if (gAutoOn) {
         if (gSelfTest && gSelfForced) {

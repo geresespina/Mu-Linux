@@ -9,7 +9,6 @@
 #include "Item/ContentCatalog.h"
 #include "Item/ItemDefines.h"
 #include "Net/Recv/NetRecv.h"
-#include <unordered_map>
 
 // ---------------------------------------------------------------------------
 // 0x25 — ReceiveChangePlayer  (@ 0x00429230)
@@ -618,53 +617,6 @@ void NetRecv_45(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
     NetLog("NET: -> 0x45 ViewportChange count=%d transformed=%d", count, transformed);
 }
 
-// MEAMU summon-shrink (2026-11-13): ALL summons render at player-character
-// size. Monster scale is decided client-side (the server sends class only).
-// Factors = target rendered height / native bind-pose model height.
-// Target ~170 world units = a geared player's bind-pose height (~185-198
-// across part sets) x hero Object.Scale (~0.9). Native heights measured
-// from the BMDs with the engine's own transform math (bind pose, Z extent):
-//   Monster03.bmd (Budge Dragon)    170.9 -> 1.00
-//   Monster32.bmd (Red Dragon)      422.8 -> 0.40
-//   Monster34.bmd (Bahamut)         180.8 -> 0.94
-//   Monster55.bmd (Drakan)          720.9 -> 0.24
-//   Monster20.bmd (Goblin)          110.4 -> 1.54
-//   Monster26.bmd (Stone Golem)     321.6 -> 0.53
-//   Monster14.bmd (Elite Yeti)      163.7 -> 1.04
-//   Monster40.bmd (Golden Titan)    190.1 -> 0.89
-//   Monster44.bmd (wolf geometry)   102.6 -> 1.66  (Fenrir.bmd/GhostWolf.bmd)
-//   Monster28.bmd (Balrog)          208.6 -> 0.82
-//   Monster38.bmd (Hydra)           563.7 -> 0.30
-static float SummonRenderScale97k(BYTE type)
-{
-    switch (type) {
-    case 2:  case 43: return 1.00f;  // Budge Dragon / Golden Budge Dragon
-    case 42: case 44: return 0.40f;  // Red Dragon / Dragon
-    case 45: case 51: return 0.94f;  // Bahamut / Great Bahamut
-    case 73: case 75: return 0.24f;  // Drakan / Great Drakan
-    case 26: return 1.54f;           // Goblin
-    case 32: return 0.53f;           // Stone Golem
-    case 20: return 1.04f;           // Elite Yeti
-    case 53: return 0.89f;           // Golden Titan
-    case 154: return 1.66f;          // Ghost Wolf
-    case 38: return 0.82f;           // Balrog
-    case 49: return 0.30f;           // Hydra
-    case 153: return 1.66f;          // Fenrir
-    default: return 0.0f;
-    }
-}
-
-// Registry of live summon keys (object key -> monster type), filled by
-// NetRecv_1F and emptied by NetRecv_14. Why it exists: army summons ALSO
-// travel through the plain 0x13 monster viewport, and CreateMonster resets
-// Object.Scale to the native definition scale on every (re)creation — a
-// summoned Golden Titan was observed live rendering at its wild scale (1.8)
-// despite the 0x1F factor, because a 0x13 re-create landed after the 0x1F.
-// NetRecv_13 consults this registry and re-applies the factor, so the last
-// packet wins correctly in both orders. Wild monsters never enter the
-// registry (they never arrive via 0x1F), so they keep their native scale.
-static std::unordered_map<int, BYTE> gSummonScaleKeys97k;
-
 // 0x13
 void NetRecv_13(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
 {
@@ -756,13 +708,6 @@ void NetRecv_13(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
             int spawnSlot = (int)((slot - basePtr) / CHARACTER_STRIDE);
             NetLog("NET:    0x13 spawn monster slot=%d id=%d type=%d pos=(%d,%d) rot=%.0f",
                    spawnSlot, entityId, type, x, y, rot);
-            // Summon-shrink: a known summon (see gSummonScaleKeys97k) just
-            // had its scale reset by CreateMonster — re-apply its factor.
-            const auto regIt = gSummonScaleKeys97k.find((int)entityId);
-            if (regIt != gSummonScaleKeys97k.end()) {
-                const float summonScale = SummonRenderScale97k(regIt->second);
-                if (summonScale > 0.0f) AsCharacter(slot)->Object.Scale = summonScale;
-            }
         } else {
             NetLog("NET:    0x13 SKIP - CreateMonster returned NULL (type=%d)",
                    type);
@@ -785,10 +730,51 @@ void NetRecv_14(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         const int offset = 4 + i * 2;
         const int entityId = ((Msg[offset] << 8) | Msg[offset + 1]) & 0x7FFF;
         DeleteCharacter(entityId);
-        gSummonScaleKeys97k.erase(entityId);  // summon-shrink registry
     }
     NetLog("NET:  -> 0x14 ViewportDestroy count=%d processed=%d size=%d",
            count, entries, Size);
+}
+
+// MEAMU summon-shrink (2026-11-13): ALL summons render at pet size.
+// Monster scale is decided client-side (the server sends class only),
+// and this 0x1F handler is the ONLY creation path for summons (server:
+// GCViewportSummonSend / GCViewportSimpleSummonSend), so the override lives
+// exactly here. Wild monsters of the same classes keep their native scale —
+// they arrive through the normal monster viewport.
+// Factors = target rendered height / native bind-pose model height.
+// Anchor ~170 world units = the Legion standard G called perfect (a geared
+// player's bind-pose height ~185-198 across part sets x hero Object.Scale
+// ~0.9); per-species targets sit in the 150-190 band by bulk (G delegated
+// the scales to GG, 2026-11-13). Native heights measured from the BMDs
+// with the engine's own transform math (bind pose, Z extent):
+//   Monster03.bmd (Budge)        170.9 -> 1.00  (target 171)
+//   Monster32.bmd (Red)          422.8 -> 0.40  (target 169)
+//   Monster34.bmd (Bahamut)      180.8 -> 0.94  (target 170)
+//   Monster55.bmd (Drakan)       720.9 -> 0.24  (target 173)
+//   Monster20.bmd (Goblin)       110.4 -> 1.43  (target 158)
+//   Monster26.bmd (Stone Golem)  321.6 -> 0.55  (target 177)
+//   Monster14.bmd (Elite Yeti)   163.7 -> 1.04  (target 170)
+//   Monster40.bmd (Golden Titan) 190.1 -> 0.94  (target 179)
+//   Monster44.bmd (wolf geom.)   102.6 -> 1.68 / 1.83 (Ghost Wolf 172 / Fenrir 188)
+//   Monster28.bmd (Balrog)       208.6 -> 0.90  (target 188)
+//   Monster38.bmd (Hydra)        563.7 -> 0.32  (target 180)
+static float SummonRenderScale97k(BYTE type)
+{
+    switch (type) {
+    case 2:  case 43: return 1.00f;  // Budge Dragon / Golden Budge Dragon
+    case 42: case 44: return 0.40f;  // Red Dragon / Dragon
+    case 45: case 51: return 0.94f;  // Bahamut / Great Bahamut
+    case 73: case 75: return 0.24f;  // Drakan / Great Drakan
+    case 26: return 1.43f;           // Goblin
+    case 32: return 0.55f;           // Stone Golem
+    case 20: return 1.04f;           // Elite Yeti
+    case 53: return 0.94f;           // Golden Titan
+    case 154: return 1.68f;          // Ghost Wolf
+    case 38: return 0.90f;           // Balrog
+    case 49: return 0.32f;           // Hydra
+    case 153: return 1.83f;          // Fenrir
+    default: return 0.0f;
+    }
 }
 
 // 0x1F
@@ -834,15 +820,11 @@ void NetRecv_1F(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
             continue;
         }
 
-        // Summon-shrink: a summoned monster renders at player size (see
+        // Summon-shrink: a summoned monster renders at pet size (see
         // SummonRenderScale97k above). Pure cosmetics — stats/ranges are
-        // server-side and untouched. The key joins the registry so a later
-        // 0x13 re-create of the same object cannot restore its wild scale.
-        const float summonScale = SummonRenderScale97k(type);
-        if (summonScale > 0.0f) {
-            AsCharacter(summon)->Object.Scale = summonScale;
-            gSummonScaleKeys97k[(int)key] = type;
-        }
+        // server-side and untouched.
+        const float dragonScale = SummonRenderScale97k(type);
+        if (dragonScale > 0.0f) AsCharacter(summon)->Object.Scale = dragonScale;
 
         // Mantener esto sincronizado con el setup normal del viewport de
         // monstruos 0x13, y después aplicar la etiqueta/estado propios del invocado.

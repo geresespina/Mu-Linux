@@ -128,6 +128,11 @@ void CUserSettings::Load(const char* iniPath)
     m_GamepadDeadzone    = ReadRange("Gamepad", "Deadzone", iniPath, 5, 60, 25);
     m_GamepadCursorSpeed = ReadRange("Gamepad", "CursorSpeed", iniPath, 100, 3000, 900);
 
+    // MEAMU kb-toggle (2026-11-13): keyboard-only play master switch
+    // ([Keyboard] Enable). Missing section/key reads as 1, so existing
+    // installs keep the exact pre-toggle behavior.
+    m_KeyboardEnable = ReadRange("Keyboard", "Enable", iniPath, 0, 1, 1) != 0;
+
     m_EnableSound = ReadFlag("Sound", "EnableSound", iniPath);
     m_EnableMusic = ReadFlag("Sound", "EnableMusic", iniPath);
     m_SoundLevel  = ReadRange("Sound", "SoundLevel", iniPath, 0, 9, -1);
@@ -196,6 +201,15 @@ void CUserSettings::SaveInt(const char* section, const char* key, int value) con
     char text[16];
     Platform::TextFormat(text, "%d", value);
     Platform::GetFileSystem().WriteIniString(section, key, text, m_IniPath);
+}
+
+void CUserSettings::SetKeyboardEnable(bool enabled)
+{
+    m_KeyboardEnable = enabled;
+    // Targeted write of the one value into the same Config.ini that was
+    // read; the platform writer preserves every other line and creates
+    // the [Keyboard] section when it is absent.
+    SaveInt("Keyboard", "Enable", enabled ? 1 : 0);
 }
 
 void CUserSettings::SetLanguage(int language)
