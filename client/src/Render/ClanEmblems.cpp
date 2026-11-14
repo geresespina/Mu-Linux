@@ -149,6 +149,13 @@ Gfx::Texture BuildEmblemTexture(bool uchiha)
     const Gfx::Texture texture = Gfx::CreateTexture();
     Gfx::BindTexture(texture);
     Gfx::TexImage2D(4, kArtLo, kArtLo, Gfx::Format::RGBA, pixels);
+    // Level 0 only + mipmaps off by default: without explicit filters the
+    // texture is incomplete (default MIN_FILTER expects a mip chain) and
+    // samples opaque black. Pin non-mip filters + clamped wrap.
+    Gfx::TexParameter(Gfx::TexParam::MinFilter, Gfx::TexValue::Linear);
+    Gfx::TexParameter(Gfx::TexParam::MagFilter, Gfx::TexValue::Linear);
+    Gfx::TexParameter(Gfx::TexParam::WrapS, Gfx::TexValue::ClampToEdge);
+    Gfx::TexParameter(Gfx::TexParam::WrapT, Gfx::TexValue::ClampToEdge);
     return texture;
 }
 
