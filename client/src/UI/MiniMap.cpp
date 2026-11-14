@@ -1,6 +1,9 @@
 #include "stdafx.h"
 #include "Entity/EntityName.h"
+#include "Entity/EntityView.h"
+#include "Net/MapTrack.h"
 #include "Render/Gfx.h"
+#include "Render/PhantomNames.h"
 #include "Render/BufferedDraw.h"
 #include "Platform/Text.h"
 #include "UI/MiniMap.h"
@@ -253,11 +256,36 @@ void CMiniMap::RenderBackground() const
               v.offsetX, v.offsetY, v.size / 512.0f, v.size / 512.0f);
 }
 
+namespace {
+// MEAMU map markers (2026-11-13): ASCII case-insensitive name
+// equality for the viewport/tracked dedup (names arrive from the
+// same server object table on both paths, but never trust case).
+bool TrackNameEq(const char* a, const char* b)
+{
+    if (!a || !b) return false;
+    while (*a && *b) {
+        char ca = *a, cb = *b;
+        if (ca >= 'A' && ca <= 'Z') ca = (char)(ca - 'A' + 'a');
+        if (cb >= 'A' && cb <= 'Z') cb = (char)(cb - 'A' + 'a');
+        if (ca != cb) return false;
+        ++a; ++b;
+    }
+    return *a == *b;
+}
+}
+
 void CMiniMap::RenderMarkers() const
 {
     const View v = CurrentView(m_Zoom);
     const BYTE* base = (const BYTE*)(uintptr_t)CharactersClient;
     if (!base) return;
+    // Lo que el pase de viewport ya dibujó, para que el pase tracked
+    // (mapa completo, feed F3/F6) no duplique marcadores: jugadores
+    // por nombre, Biju por clase + tile cercano.
+    char seenNames[128][11];
+    int seenCount = 0;
+    struct { int cls, x, y; } seenBiju[16];
+    int seenBijuCount = 0;
     for (int i = 0; i < 400; ++i) {
         const BYTE* c = base + i * CHARACTER_STRIDE;
         if (!c[0]) continue;
@@ -266,11 +294,40 @@ void CMiniMap::RenderMarkers() const
         const BYTE kind = c[0x84];
         float r, g, b, size = 7.0f;
         const char* tooltip = nullptr;
-        if (kind == 1) {            // jugador: el héroe verde, el resto amarillo
-            const bool hero = (uintptr_t)c == (uintptr_t)Hero;
-            r = hero ? 0.0f : 1.0f; g = 1.0f; b = 0.0f;
+        if (kind == 1) {            // jugador
+            const char* name = EntityName::Get(c);
+            if (name && name[0] && seenCount < 128) {
+                int len = 0;
+                while (len < 10 && name[len]) { seenNames[seenCount][len] = name[len]; ++len; }
+                seenNames[seenCount][len] = 0;
+                ++seenCount;
+            }
+            if (Phantom_IsPhantomName(name)) {
+                // Fantasma: gris chico y SIN nombre — no es una
+                // persona (el mismo tell que las etiquetas del mundo).
+                r = 0.45f; g = 0.45f; b = 0.45f; size = 5.0f;
+            } else {
+                // Humano: el héroe verde, el resto amarillo, con nombre.
+                const bool hero = (uintptr_t)c == (uintptr_t)Hero;
+                r = hero ? 0.0f : 1.0f; g = 1.0f; b = 0.0f;
+                tooltip = (name && name[0]) ? name : nullptr;
+            }
         } else if (kind == 2) {     // monstruo
-            r = 0.5f; g = 0.0f; b = 0.0f; size = 6.0f;
+            const int cls = EntityView(c).MonsterIndex();
+            if (cls >= 155 && cls <= 164) {
+                // Biju: dorado grande, con nombre.
+                r = 1.0f; g = 0.84f; b = 0.0f; size = 12.0f;
+                const char* name = EntityName::Get(c);
+                tooltip = (name && name[0]) ? name : MapTrack::BijuName(cls);
+                if (seenBijuCount < 16) {
+                    seenBiju[seenBijuCount].cls = cls;
+                    seenBiju[seenBijuCount].x = (int)(*(const float*)(c + 0x10) / 100.0f);
+                    seenBiju[seenBijuCount].y = (int)(*(const float*)(c + 0x14) / 100.0f);
+                    ++seenBijuCount;
+                }
+            } else {
+                r = 0.5f; g = 0.0f; b = 0.0f; size = 6.0f;
+            }
         } else if (kind == 4) {     // NPC, con su nombre
             r = 1.0f; g = 0.0f; b = 1.0f;
             tooltip = EntityName::Get(c);
@@ -281,6 +338,49 @@ void CMiniMap::RenderMarkers() const
         GL_BindTextureSlot(PointTexture);
         BufferedDraw::Color4f(r, g, b, m_Alpha * 0.1f);
         PointRotate(tx, ty, v.scale * size, v.scale * size, *(const float*)(c + 0x24) - 45.0f,
+                    2.0f / 32.0f, 14.0f / 32.0f, 30.0f / 32.0f, 18.0f / 32.0f, tooltip);
+    }
+
+    // Pase tracked (MEAMU MapTrack, feed F3/F6): Biju + jugadores de
+    // TODO el mapa, incluso fuera del viewport. Mismo transform que
+    // las gates (mapa completo relativo al héroe). Lo ya dibujado
+    // por el pase de viewport no se repite.
+    MapTrackEntry tracked[128];
+    const int trackedCount = MapTrack::Snapshot(gMapManager.GetCurrentMap(), tracked, 128);
+    for (int i = 0; i < trackedCount; ++i) {
+        const MapTrackEntry& e = tracked[i];
+        if ((float)e.X > v.charX + v.range || (float)e.X < v.charX - v.range ||
+            (float)e.Y > v.charY + v.range || (float)e.Y < v.charY - v.range) continue;
+        float r, g, b, size;
+        const char* tooltip = nullptr;
+        if (e.Category == MapTrackBiju) {
+            bool dup = false;
+            for (int s = 0; s < seenBijuCount && !dup; ++s) {
+                int dx = seenBiju[s].x - (int)e.X; if (dx < 0) dx = -dx;
+                int dy = seenBiju[s].y - (int)e.Y; if (dy < 0) dy = -dy;
+                dup = (seenBiju[s].cls == (int)e.Aux && dx <= 2 && dy <= 2);
+            }
+            if (dup) continue;
+            r = 1.0f; g = 0.84f; b = 0.0f; size = 12.0f;
+            tooltip = MapTrack::BijuName(e.Aux);
+        } else {
+            bool dup = false;
+            for (int s = 0; s < seenCount && !dup; ++s)
+                dup = TrackNameEq(seenNames[s], e.Name);
+            if (dup) continue;
+            if (e.Category == MapTrackPhantom) {
+                r = 0.45f; g = 0.45f; b = 0.45f; size = 5.0f;
+            } else {
+                r = 1.0f; g = 1.0f; b = 0.0f; size = 7.0f;
+                tooltip = e.Name[0] ? e.Name : nullptr;
+            }
+        }
+        const float tx = ((float)e.X / 256.0f - v.offsetX) * (MaxSize * v.scale);
+        const float ty = ((256.0f - (float)e.Y) / 256.0f - v.offsetY) * (MaxSize * v.scale);
+        EnableAlphaTest(true);
+        GL_BindTextureSlot(PointTexture);
+        BufferedDraw::Color4f(r, g, b, m_Alpha * 0.1f);
+        PointRotate(tx, ty, v.scale * size, v.scale * size, 0.0f,
                     2.0f / 32.0f, 14.0f / 32.0f, 30.0f / 32.0f, 18.0f / 32.0f, tooltip);
     }
 }

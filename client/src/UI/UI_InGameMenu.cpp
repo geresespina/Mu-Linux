@@ -65,7 +65,7 @@ extern "C" {
 // Se descartan los numeros >= 10: en IDA los 10..14 caerian sobre los bytes de
 // opciones y se pisan acto seguido (mismo paquete final), y >= 15 escribiria
 // fuera del arreglo.
-static void SaveOptionsToServer97k(void)
+void SaveOptionsToServer97k(void)   // skillfix 2026-11-13: no-static — tambien la llama Chat_InputTick al cambiar una hotkey
 {
     BYTE* CA = (BYTE*)CharacterAttribute;
     if (!CA) return;

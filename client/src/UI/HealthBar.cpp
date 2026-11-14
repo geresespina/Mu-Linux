@@ -96,8 +96,16 @@ void DrawLabel(const BYTE* entity, BYTE percent, int center, int y, DWORD backgr
 
 // DESVIACION DLL HealthBar.cpp: HealthBarType=3, como Encoder/MainInfo.ini.
 // IDA: Render_GameFrame (0x004BBFB0), después de RenderPartyHP (0x004BCA20).
+// MEAMU (2026-11-13, G): monster HP bars OFF. This class is monster-only by
+// construction (FindEntity requires Kind == MonsterKind), so disabling both
+// draw entry points removes exactly the monster bars: the above-head bars
+// over every monster in the viewport (here) and the targeted-monster bar at
+// the top of the screen (DrawSelected below). Player HP displays (own HUD,
+// party bars in RenderPartyHP) live elsewhere and are untouched. The packet
+// receive path stays intact; only the drawing is off.
 void CHealthBar::DrawViewport() const
 {
+    return;  // MEAMU: monster HP bars off (see note above).
     if (SceneFlag != 5 || gUserSettings.GetDeleteHealthBar() || !CharactersClient) return;
     const BYTE* base = (const BYTE*)(uintptr_t)CharactersClient;
     for (int i = 0; i < EntityView::Capacity; ++i) {
@@ -129,6 +137,10 @@ void CHealthBar::DrawViewport() const
 // IDA: RenderMonsterName (0x004CB6F0); DLL DrawPointingHealthBar (0x004CB7AD).
 bool CHealthBar::DrawSelected(const BYTE* entity) const
 {
+    // MEAMU (2026-11-13, G): targeted-monster HP bar off. Returning false
+    // restores the stock behavior in RenderMonsterName: the pointed monster's
+    // plain name banner (no HP bar, no "Name: NN%" label).
+    return false;
     if (SceneFlag != 5 || gUserSettings.GetDeleteHealthBar()) return false;
     const auto* bar = FindEntity(entity);
     if (!bar) return false;  // Sin extensión, conservar el nombre del binario.
