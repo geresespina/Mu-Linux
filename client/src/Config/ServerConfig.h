@@ -42,6 +42,6 @@ constexpr char           ClientVersion[]     = "0.97.40";
 // (Scene_Login_ServerSelect) so the running build is identifiable at a
 // glance (G's requirement, 2026-11-12). This is NOT the protocol
 // ClientVersion above — never bump that one for a release.
-constexpr char           BuildVersionLabel[] = "v20261114-0016"; // MEAMU release (format vYYYYMMDD-HHMM, America/Toronto, set at build freeze)
+constexpr char           BuildVersionLabel[] = "v20261114-0233"; // MEAMU release (format vYYYYMMDD-HHMM, America/Toronto, set at build freeze)
 
 } // namespace ServerConfig
