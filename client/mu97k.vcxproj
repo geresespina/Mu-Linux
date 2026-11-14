@@ -238,7 +238,9 @@
     <ClInclude Include="src\Game\Movement.h" />
     <ClInclude Include="src\Input\Input.h" />
     <ClInclude Include="src\Input\Gamepad.h" />
+    <ClInclude Include="src\Input\GamepadDI.h" />
     <ClInclude Include="src\Input\NavMove.h" />
+    <ClInclude Include="src\Input\KbPlay.h" />
     <ClInclude Include="src\Item\Item_Equip.h" />
     <ClInclude Include="src\Monster\Monster.h" />
     <ClInclude Include="src\Net\Net.h" />
@@ -379,6 +381,7 @@
     <ClCompile Include="src\Sound\SoundManager.cpp" />
     <ClCompile Include="src\Game\MapManager.cpp" />
     <ClCompile Include="src\Platform\Win32\ClientWndProc.cpp" />
+    <ClCompile Include="src\Net\MapTrack.cpp" />
     <ClCompile Include="src\Net\Network.cpp" />
     <ClCompile Include="src\Net\Reconnect.cpp" />
     <ClCompile Include="src\Net\Ping.cpp" />
@@ -457,6 +460,8 @@
     <ClCompile Include="src\UI\ChatListBox.cpp" />
     <ClCompile Include="src\UI\CharMenu_Build.cpp" />
     <ClCompile Include="src\Render\HUD_Pass1.cpp" />
+    <ClCompile Include="src\Render\HumanLabels.cpp" />
+    <ClCompile Include="src\Render\ClanEmblems.cpp" />
     <ClCompile Include="src\Render\HUD_Pass2.cpp" />
     <ClCompile Include="src\Render\HUD_Pass3.cpp" />
     <ClCompile Include="src\Render\HUD_Pass4.cpp" />
@@ -577,6 +582,7 @@
     <ClCompile Include="src\Input\Mouse_Hover.cpp" />
     <ClCompile Include="src\Input\Gamepad.cpp" />
     <ClCompile Include="src\Input\NavMove.cpp" />
+    <ClCompile Include="src\Input\KbPlay.cpp" />
     <ClCompile Include="src\Item\Item_Equip.cpp" />
     <ClCompile Include="src\Item\Item_EquipSlots.cpp" />
     <ClCompile Include="src\Item\Item_Move.cpp" />
