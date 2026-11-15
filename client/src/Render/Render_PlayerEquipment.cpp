@@ -70,21 +70,39 @@ extern "C" void EquipWipe_Tick(int op, int sub)
     static int s_prevOccupied = -1;
     static int s_prevOp = -1, s_prevSub = -1;
     // MEAMU hygiene (2026-11-15; spec: 2026-11-14 round notes): stay DISARMED
-    // until the first F3/10 inventory+equipment snapshot lands. Before it, a
+    // until the CharacterMachine holds a real snapshot. Before it, a
     // zero-initialised CharacterMachine reads as 12/12 occupied (0 != -1) and
     // the first legitimate F3/03 reset to -1 then looks exactly like a wipe —
-    // a false positive that blamed innocent packets. Occupancy is still
-    // tracked while disarmed so the first armed comparison is honest.
+    // a false positive that blamed innocent packets.
+    //
+    // Arming paths (either one):
+    //   1. the first F3/10 inventory+equipment snapshot packet (the spec);
+    //   2. the first pass that observes a LIVE wear region — any slot whose
+    //      type or data dword is non-zero, i.e. the machine demonstrably
+    //      holds real content. An all-zero wear region is the zero-init
+    //      state itself: occupancy is not even tracked there (same as a
+    //      null machine). Observation-arming is applied at the END of the
+    //      pass, so the packet that first writes the region (that F3/03
+    //      reset) can never arm and fire in the same pass.
+    // Path 2 is required by the pinned HeroEquipPointer contract: it drives
+    // an already-initialised machine through a stream with no F3/10 in it
+    // and requires the 12-to-0 transition to be reported; F3/10-only
+    // arming failed that test in CI run #34 (and in the Linux x86 job,
+    // which runs the same pointer suite).
     static bool s_armed = false;
     if (op == 0xF3 && sub == 0x10) s_armed = true;
 
     const BYTE* cm = static_cast<const BYTE*>(DAT_07cf1ffc);
     if (cm) {
         int occupied = 0;
+        bool live = false;
         for (int i = 0; i < 12; ++i) {
-            if (*(short*)(cm + 536 + 68 * i) != -1) ++occupied;
+            const short type = *(short*)(cm + 536 + 68 * i);
+            if (type != -1) ++occupied;
+            if (type != 0 || *(const unsigned int*)(cm + 540 + 68 * i) != 0)
+                live = true;
         }
-        if (s_armed && s_prevOccupied > 0 && occupied == 0) {
+        if (live && s_armed && s_prevOccupied > 0 && occupied == 0) {
             char b[192];
             Platform::TextFormatTruncated(b, sizeof(b), Platform::TruncateText,
                 "EQUIPWIPE: los 12 wear slots pasaron a -1 durante el paquete "
@@ -92,7 +110,10 @@ extern "C" void EquipWipe_Tick(int op, int sub)
                 s_prevOp, s_prevSub, op, sub);
             DbgLogPublic(b);
         }
-        s_prevOccupied = occupied;
+        if (live) {
+            s_prevOccupied = occupied;
+            s_armed = true;   // observation-arming: effective from the next pass
+        }
     }
     s_prevOp = op; s_prevSub = sub;
 }
