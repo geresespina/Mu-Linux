@@ -1539,6 +1539,293 @@ static void Attack_WizardBranch97k(char* entity)
     }
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// MEAMU rival targeting — client half (2026-11-15, G; round v20261115-0541).
+// "Skills hit rivals like monsters" (STUDY: builds/rival-targeting-2026-11-15/
+// STUDY.md §8.1/§8.3). The GS half (G1 CheckSkillTarget + G2 0x1D expansion)
+// is already live; this half widens the client: C1 victim collectors
+// (SMD_Parser.cpp + Skills_WarriorLegacy.cpp), C2 snap-targeting (below),
+// C3 AUTO/hover parity (snap runs per dispatch tick + Mouse_Hover keep-branch).
+// ══════════════════════════════════════════════════════════════════════════
+
+extern "C" void DbgLogPublic(const char*);
+
+// Shared hostile-player predicate (STUDY §8.1). The client carries no clan
+// field for other players; the operative signal is the presented PK byte,
+// which the GS stamps 6 for rival-clan viewers only (viewer-relative) — the
+// same byte CheckAttack() already trusts, so PK >= 6 means exactly "rival
+// stamp or genuine outlaw". A rival in the hero's OWN party still presents
+// 6 (the stamp is clan-based), so party membership — by name, the Soul
+// Barrier pattern below — is an explicit exclusion.
+bool Client_IsHostilePlayer(const void* entPtr)
+{
+    if (!entPtr || !Hero) return false;
+    const CHARACTER* ent = (const CHARACTER*)entPtr;
+    if ((const void*)ent == (const void*)(char*)Hero) return false;   // never the hero
+    if (ent->Object.Kind != 1) return false;                          // players only
+    if (ent->Object.Live == 0 || ent->Dead != 0) return false;        // alive
+    if (ent->PK < 6) return false;                                    // rival stamp / real outlaw
+    if (PartyNumber > 0) {
+        const char* const targetName = EntityName::Get(ent);
+        size_t nameLen = strlen(targetName);
+        if (nameLen == 0) nameLen = 1;
+        for (int partyIndex = 0; partyIndex < PartyNumber; ++partyIndex) {
+            if (strncmp(Party_GetName(partyIndex), targetName, nameLen) == 0)
+                return false;                                         // party member: never hostile
+        }
+    }
+    return true;
+}
+
+// Skills whose SelectedCharacter semantics are ALLY/self-targeted rather
+// than attack-targeted. Snapping a hostile into the slot for one of these
+// would hijack the cast (the branch would refuse the non-party target and
+// the buff would fizzle), so the snap serves attack skills only.
+static bool Combat_IsAllyTargetSkill97k(int iType)
+{
+    return iType == 15 ||   // Teleport Ally (recalls the selected party member)
+           iType == 16 ||   // Soul Barrier (ally)
+           iType == 26 || iType == 27 || iType == 28 ||   // Elf heal/buff line
+           iType == 48 ||   // Greater Life
+           iType == 57;     // Omni Buff (self)
+}
+
+// C2 snap-targeting (STUDY §4a): when a cast starts with nothing selected,
+// the nearest hostile player inside the skill's range and a ±60° front arc
+// becomes the target — the courtesy the hover scan already gives monsters.
+// A deliberate pick (SelectedCharacter != -1) is never overridden. All
+// downstream machinery (CheckTarget, Attack_SeedSkillTarget97k,
+// walk-into-range, the queue gate) then works unmodified, because a PK-6
+// target passes CheckAttack() by design. Running inside the dispatch makes
+// it fire on AUTO drive ticks too: when the current rival dies and the
+// selection clears, the next tick re-acquires (C3; KbPlay.cpp untouched).
+static void Combat_SnapHostileTarget97k(int iType)
+{
+    if (SelectedCharacter != -1) return;
+    if (!Hero || !CharactersClient) return;
+    if (Combat_IsAllyTargetSkill97k(iType)) return;
+    const int range = Combat_GetSkillRange97k(iType);
+    if (range <= 0) return;
+    CHARACTER* hero = (CHARACTER*)(uintptr_t)Hero;
+    const float maxDist = (float)range * 100.0f;   // skill ranges are in tiles
+    int   best   = -1;
+    float bestD2 = 0.0f;
+    for (int i = 0; i < 400; ++i) {
+        char* raw = (char*)(uintptr_t)CharactersClient + i * CHARACTER_STRIDE;
+        if (raw == (char*)hero) continue;
+        CHARACTER* cand = (CHARACTER*)raw;
+        if (!cand->Object.Visible) continue;
+        if (!Client_IsHostilePlayer(raw)) continue;
+        const float dx = cand->Object.Position[0] - hero->Object.Position[0];
+        const float dy = cand->Object.Position[1] - hero->Object.Position[1];
+        const float d2 = dx * dx + dy * dy;
+        if (d2 > maxDist * maxDist) continue;
+        const float ang = CreateAngle(hero->Object.Position[0], hero->Object.Position[1],
+                                      cand->Object.Position[0], cand->Object.Position[1]);
+        const float arc = fabsf((float)FarAngle(hero->Object.Angle[2], ang, '\x01'));
+        if (arc > 60.0f) continue;
+        if (best < 0 || d2 < bestD2) { best = i; bestD2 = d2; }
+    }
+    if (best >= 0) SelectedCharacter = best;
+}
+
+// ── MU_TARGET_SELFTEST=1 — title-screen rig (pattern of MU_HEALTHBAR_SELFTEST).
+// Fabricates a scratch CharactersClient pool + hero, runs the production
+// predicate / snap / collectors against it (STUDY §8.6 client items 6-8),
+// then restores every borrowed global. Dev-only proof; no-op unless the
+// env var is set.
+void Targeting_SelfTestTick()
+{
+    static bool done = false;
+    if (done) return;
+    if (!std::getenv("MU_TARGET_SELFTEST")) { done = true; return; }
+    if (SceneFlag < 2) return;   // title reached (KbPlay rig convention)
+    done = true;
+
+    bool ok = true;
+    auto expect = [&ok](bool cond, const char* what) {
+        if (!cond) { ok = false; fprintf(stderr, "TARGET SELFTEST FAIL: %s\n", what); }
+    };
+
+    static char pool[400 * CHARACTER_STRIDE];
+    memset(pool, 0, sizeof(pool));
+    const std::uintptr_t savedPool = CharactersClient;
+    char* const savedHero = Hero;
+    const int savedSelected = SelectedCharacter;
+
+    CharactersClient = (std::uintptr_t)pool;
+    Hero = pool;   // hero = scratch slot 0
+    SelectedCharacter = -1;
+
+    auto mkEnt = [&pool](int slot, BYTE kind, BYTE pk, const char* name,
+                         float x, float y, bool dead) {
+        CHARACTER* c = (CHARACTER*)(pool + slot * CHARACTER_STRIDE);
+        memset(c, 0, CHARACTER_STRIDE);
+        c->Object.Live = 1;
+        c->Object.Visible = 1;
+        c->Object.Kind = kind;
+        c->PK = pk;
+        c->Dead = dead ? 1 : 0;
+        c->Object.Position[0] = x;
+        c->Object.Position[1] = y;
+        c->Key = (WORD)(1000 + slot);
+        EntityName::Set(c, name);
+        return c;
+    };
+    auto entAt = [&pool](int slot) { return (CHARACTER*)(pool + slot * CHARACTER_STRIDE); };
+
+    CHARACTER* hero = mkEnt(0, 1, 3, "Tester", 10000.0f, 10000.0f, false);
+    // Calibrate facing off CreateAngle itself: the hero faces the +X point.
+    hero->Object.Angle[2] = CreateAngle(10000.0f, 10000.0f, 10100.0f, 10000.0f);
+
+    // ── Predicate matrix (STUDY §8.6 item 6) ─────────────────────────────
+    CHARACTER* rival    = mkEnt(5, 1, 6, "RivalA",   10100.0f, 10000.0f, false);
+    CHARACTER* clanmate = mkEnt(6, 1, 3, "Clanmate", 10050.0f, 10000.0f, false);
+    CHARACTER* neutral  = mkEnt(7, 1, 3, "Neutral",  10050.0f, 10050.0f, false);
+    CHARACTER* monster  = mkEnt(8, 2, 6, "MobPK6",   10050.0f,  9950.0f, false);
+    CHARACTER* deadRival= mkEnt(9, 1, 6, "DeadRival",10080.0f, 10000.0f, true);
+    expect(Client_IsHostilePlayer(rival),    "predicate: rival PK6 -> true");
+    expect(!Client_IsHostilePlayer(clanmate),"predicate: clanmate PK3 -> false");
+    expect(!Client_IsHostilePlayer(neutral), "predicate: neutral PK3 -> false");
+    expect(!Client_IsHostilePlayer(monster), "predicate: monster Kind2 PK6 -> false");
+    expect(!Client_IsHostilePlayer(deadRival),"predicate: dead PK6 -> false");
+    expect(!Client_IsHostilePlayer(hero),    "predicate: hero slot -> false");
+
+    // ── Snap (STUDY §8.6 item 7) ─────────────────────────────────────────
+    const int range9 = Combat_GetSkillRange97k(9);   // Evil Spirit
+    expect(range9 > 0, "snap precondition: skill 9 range loaded");
+    mkEnt(10, 1, 6, "RivalFar",  10300.0f, 10000.0f, false);   // in arc, farther
+    mkEnt(11, 1, 6, "RivalBack",  9900.0f, 10000.0f, false);   // behind: out of arc
+    mkEnt(12, 1, 6, "RivalOut",  10000.0f + (float)range9 * 100.0f + 500.0f, 10000.0f, false); // out of range
+    SelectedCharacter = -1;
+    Combat_SnapHostileTarget97k(9);
+    expect(SelectedCharacter == 5, "snap: nearest hostile in range+arc wins");
+    SelectedCharacter = 6;   // a deliberate (even if odd) pick
+    Combat_SnapHostileTarget97k(9);
+    expect(SelectedCharacter == 6, "snap: existing selection never overridden");
+    entAt(5)->Dead = 1;      // nearest dies -> next tick re-acquires (C3 chain)
+    SelectedCharacter = -1;
+    Combat_SnapHostileTarget97k(9);
+    expect(SelectedCharacter == 10, "snap: re-acquires next nearest after death");
+    entAt(5)->Dead = 0;
+
+    // ── Warrior collector (STUDY §8.6 item 8, warrior twin) ──────────────
+    {
+        mkEnt(20, 2, 0, "MobA",     10050.0f, 10000.0f, false);  // Key 1020
+        mkEnt(21, 1, 6, "RivalB",   10060.0f, 10000.0f, false);  // Key 1021
+        mkEnt(22, 1, 3, "ClanmateB",10060.0f, 10060.0f, false);  // Key 1022
+        // Isolate: the predicate/snap cast is still on stage and in radius.
+        for (int s2 = 5; s2 <= 12; ++s2) entAt(s2)->Object.Live = 0;
+        float centre[3] = { 10000.0f, 10000.0f, 0.0f };
+        int keys[6] = {};
+        Warrior_SelfTestCollect(centre, 100.0f, 9999, keys, 6);
+        bool hasMob = false, hasRival = false, hasClan = false;
+        int count = 0;
+        for (int k = 0; k < 6; ++k) {
+            if (keys[k] == 0) continue;
+            ++count;
+            if (keys[k] == 1020) hasMob = true;
+            if (keys[k] == 1021) hasRival = true;
+            if (keys[k] == 1022) hasClan = true;
+        }
+        expect(count == 2 && hasMob && hasRival && !hasClan,
+               "warrior collector: monster + rival in, clanmate out");
+        int keys2[6] = {};
+        Warrior_SelfTestCollect(centre, 100.0f, 1022, keys2, 6);
+        bool hasClan2 = false; int count2 = 0;
+        for (int k = 0; k < 6; ++k) { if (keys2[k] != 0) ++count2; if (keys2[k] == 1022) hasClan2 = true; }
+        expect(count2 == 3 && hasClan2,
+               "warrior collector: designated relationKey still collected (stock behaviour)");
+        for (int s2 = 5; s2 <= 12; ++s2) entAt(s2)->Object.Live = 1;   // restore cast
+    }
+
+    // ── SMD collector (STUDY §8.6 item 8) — return-value probing: the
+    // collector returns 1 iff its victim list is non-empty (the send itself
+    // drops silently with no connection, see CNetwork::SendRaw). ─────────
+    if (DAT_07cf1ff4) {
+        float pos[2] = { 10000.0f, 10000.0f };
+        // Scene A: only clanmate + neutral players in radius -> empty list.
+        entAt(5)->Object.Live = 0; entAt(10)->Object.Live = 0;   // rivals off-stage
+        entAt(11)->Object.Live = 0; entAt(12)->Object.Live = 0;
+        entAt(21)->Object.Live = 0;
+        entAt(8)->Object.Live = 0; entAt(20)->Object.Live = 0;   // monsters off-stage too
+        float* rA = Entity_FindNearby_SendPacket(0, pos, 150.0f, 0, 9999);
+        expect(rA == (float*)(uintptr_t)0, "SMD collector: no hostile in radius -> no packet");
+        // Scene B: a rival steps in -> list non-empty.
+        entAt(5)->Object.Live = 1;
+        float* rB = Entity_FindNearby_SendPacket(0, pos, 150.0f, 0, 9999);
+        expect(rB == (float*)(uintptr_t)1, "SMD collector: rival in radius -> packet");
+        // Scene C: monsters only (players off-stage) -> still a packet (unchanged).
+        entAt(5)->Object.Live = 0; entAt(6)->Object.Live = 0; entAt(7)->Object.Live = 0;
+        entAt(9)->Object.Live = 0; entAt(22)->Object.Live = 0;
+        entAt(8)->Object.Live = 1; entAt(20)->Object.Live = 1;   // monsters on-stage
+        float* rC = Entity_FindNearby_SendPacket(0, pos, 150.0f, 0, 9999);
+        expect(rC == (float*)(uintptr_t)1, "SMD collector: monsters only -> packet (unchanged)");
+        entAt(6)->Object.Live = 1; entAt(7)->Object.Live = 1; entAt(9)->Object.Live = 1;
+        entAt(10)->Object.Live = 1; entAt(11)->Object.Live = 1; entAt(12)->Object.Live = 1;
+        entAt(21)->Object.Live = 1; entAt(22)->Object.Live = 1; entAt(5)->Object.Live = 1;
+    } else {
+        fprintf(stderr, "TARGET SELFTEST NOTE: CharacterAttribute absent — SMD collector probe skipped\n");
+    }
+
+    // ── Party exclusion (STUDY §8.6 items 6/8): a cross-clan party member
+    // presents PK 6 and must never be treated as hostile. Fed through the
+    // REAL party-list handler (opcode 0x42) so the production name table is
+    // what the predicate reads. ──────────────────────────────────────────
+    {
+        CHARACTER* partyRival = mkEnt(30, 1, 6, "PartyRival", 10060.0f, 10000.0f, false);
+        BYTE pkt[6 + 52] = {};
+        pkt[0] = 0xC2; pkt[1] = 0; pkt[2] = (BYTE)sizeof(pkt); pkt[3] = 0x42;
+        pkt[4] = 1;   // result
+        pkt[5] = 1;   // count
+        memcpy(pkt + 6, "PartyRival", 10);
+        ReceivePartyList97k(pkt, (int)sizeof(pkt));
+        expect(PartyNumber == 1, "party rig: list handler accepted the fabricated roster");
+        expect(!Client_IsHostilePlayer(partyRival),
+               "predicate: party member PK6 -> false (mandatory exclusion)");
+        SelectedCharacter = -1;
+        Combat_SnapHostileTarget97k(9);
+        expect(SelectedCharacter == 21,
+               "snap: nearest open rival chosen, party rival at same range not chosen");
+        // Party rival is now the NEAREST hostile by far: it must be skipped
+        // and the snap must land on the farther open rival instead.
+        entAt(21)->Object.Live = 0; entAt(5)->Object.Live = 0;
+        SelectedCharacter = -1;
+        Combat_SnapHostileTarget97k(9);
+        expect(SelectedCharacter == 10,
+               "snap: party rival skipped even when nearest (farther rival chosen)");
+        entAt(21)->Object.Live = 1; entAt(5)->Object.Live = 1;
+        if (DAT_07cf1ff4) {
+            // Only the party rival remains in radius -> SMD list must be empty.
+            entAt(5)->Object.Live = 0; entAt(10)->Object.Live = 0;
+            entAt(6)->Object.Live = 0; entAt(7)->Object.Live = 0; entAt(9)->Object.Live = 0;
+            entAt(20)->Object.Live = 0; entAt(21)->Object.Live = 0; entAt(22)->Object.Live = 0;
+            entAt(8)->Object.Live = 0; entAt(11)->Object.Live = 0;
+            float pos[2] = { 10000.0f, 10000.0f };
+            float* rD = Entity_FindNearby_SendPacket(0, pos, 150.0f, 0, 9999);
+            expect(rD == (float*)(uintptr_t)0, "SMD collector: party rival alone -> no packet");
+        }
+        BYTE emptyPkt[6] = { 0xC2, 0, 6, 0x42, 1, 0 };
+        ReceivePartyList97k(emptyPkt, (int)sizeof(emptyPkt));   // PartyNumber back to 0
+    }
+
+    // Restore every borrowed global + clear fabricated names.
+    for (int s = 0; s < 400; ++s) {
+        CHARACTER* c = (CHARACTER*)(pool + s * CHARACTER_STRIDE);
+        if (c->Object.Live) EntityName::Clear(c);
+    }
+    SelectedCharacter = savedSelected;
+    Hero = savedHero;
+    CharactersClient = savedPool;
+
+    char line[128];
+    snprintf(line, sizeof(line), "COMBAT: Targeting SELFTEST %s (predicate + snap + collectors, C1-C3)",
+             ok ? "PASS" : "FAIL");
+    DbgLogPublic(line);
+    fprintf(stderr, "%s\n", line);
+    fflush(stderr);
+}
+
 void __cdecl Combat_DispatchHeroSkillAttack(void *entity_v /* IDA: c */)
 {
     char* entity = (char*)entity_v;   // IDA: c
@@ -1665,6 +1952,9 @@ void __cdecl Combat_DispatchHeroSkillAttack(void *entity_v /* IDA: c */)
     //     condiciones ni side effects.  Verificado en los 12 sitios de Attack.
 
     // ══════════════════════════════════════════════════════════════════════════
+    // MEAMU rival targeting C2 (2026-11-15): nothing selected -> snap the
+    // nearest hostile player in range + front arc (also AUTO re-acquire).
+    Combat_SnapHostileTarget97k(iType);
     // IDA L1346-1484 — bucle de manos equipadas, comun a las clases != 0.
     // ══════════════════════════════════════════════════════════════════════════
     if ((*(char *)&AsCharacter(entity)->Class & 7) != 0) {

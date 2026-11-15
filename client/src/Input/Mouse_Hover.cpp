@@ -91,7 +91,10 @@ void Mouse_UpdateHoverTargets(void)
         Attacking = -1;
     } else if (SelectedCharacter >= 0 &&
                *(char *)(DAT_07abf5d0 + EntityOffset(0x2fd) + SelectedCharacter * CHARACTER_STRIDE) == '\0' &&
-               *(char *)(DAT_07abf5d0 + SelectedCharacter * CHARACTER_STRIDE + 0x84) == '\x02') {
+               (*(char *)(DAT_07abf5d0 + SelectedCharacter * CHARACTER_STRIDE + 0x84) == '\x02' ||
+                /* MEAMU rival targeting C3 (2026-11-15): hostile players persist
+                   like monsters instead of being force-cleared every frame. */
+                Client_IsHostilePlayer((char*)DAT_07abf5d0 + SelectedCharacter * CHARACTER_STRIDE))) {
         // Current hover target is a valid alive monster.
         // Keep the original transient hover state.  Leaving this selected
         // after the cursor moves away turns later ground clicks into a basic

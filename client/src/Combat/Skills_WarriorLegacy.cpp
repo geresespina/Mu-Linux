@@ -92,7 +92,10 @@ static void Warrior_CollectMultiTargets(const float* centre, float radius,
 
         const int key = *(short *)&AsCharacter(candidate)->Key; // IDA: *(std::int16_t *)(v9 + 456)
         const BYTE type = AsCharacter(candidate)->Object.Kind; // IDA: v10 = *(_BYTE *)(v9 + 112)
-        if (type != 2 && (type != 1 || key != relationKey))
+        // MEAMU rival targeting C1 (2026-11-15): hostile players join the
+        // victim list like monsters (STUDY §8.1); the party exclusion
+        // inside Client_IsHostilePlayer keeps cross-clan party members safe.
+        if (type != 2 && (type != 1 || (key != relationKey && !Client_IsHostilePlayer(candidate))))
             continue;
 
         const float dx = AsCharacter(candidate)->Object.Position[0] - centre[0];
@@ -472,3 +475,12 @@ void __cdecl Entity_MeleeAttackStart(intptr_t param_1) {
 }
 
 // RenderPoints @ 0x00479330 — RenderPoints (damage popup renderer)
+
+// MU_TARGET_SELFTEST entry (Combat.cpp rig): runs the production collector
+// over the live pool globals and returns how many victims were gathered.
+int Warrior_SelfTestCollect(const float* centre, float radius, unsigned short relationKey, int* keys, int maximum)
+{
+    int count = 0;
+    Warrior_CollectMultiTargets(const_cast<float*>(centre), radius, (WORD)relationKey, keys, &count, maximum);
+    return count;
+}

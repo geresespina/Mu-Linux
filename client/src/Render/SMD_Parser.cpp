@@ -600,7 +600,10 @@ float* __cdecl Entity_FindNearby_SendPacket(unsigned int param_1, float* param_2
         // IDA L170-171: Kind == 2 (monstruo) o Kind == 1 (jugador) con Key == a5
         char cType = *(char *)&AsCharacter(pcEnt)->Object.Kind;                          // IDA: *(v16 - 615)
         short sKey  = *(short *)&AsCharacter(pcEnt)->Key;            // IDA: *(_WORD *)(v16 - 271)
-        if (cType != '\x02' && !(cType == '\x01' && sKey == param_5))
+        // MEAMU rival targeting C1 (2026-11-15): hostile players join the
+        // 0x1D victim list like monsters (STUDY §8.1); the party exclusion
+        // inside Client_IsHostilePlayer keeps cross-clan party members safe.
+        if (cType != '\x02' && !(cType == '\x01' && (sKey == param_5 || Client_IsHostilePlayer(pcEnt))))
             continue;
 
         // IDA L173-180: marca de AOE para los grupos de skill 8 y 9.
