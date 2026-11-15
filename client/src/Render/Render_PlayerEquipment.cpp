@@ -69,6 +69,14 @@ extern "C" void EquipWipe_Tick(int op, int sub)
 {
     static int s_prevOccupied = -1;
     static int s_prevOp = -1, s_prevSub = -1;
+    // MEAMU hygiene (2026-11-15; spec: 2026-11-14 round notes): stay DISARMED
+    // until the first F3/10 inventory+equipment snapshot lands. Before it, a
+    // zero-initialised CharacterMachine reads as 12/12 occupied (0 != -1) and
+    // the first legitimate F3/03 reset to -1 then looks exactly like a wipe —
+    // a false positive that blamed innocent packets. Occupancy is still
+    // tracked while disarmed so the first armed comparison is honest.
+    static bool s_armed = false;
+    if (op == 0xF3 && sub == 0x10) s_armed = true;
 
     const BYTE* cm = static_cast<const BYTE*>(DAT_07cf1ffc);
     if (cm) {
@@ -76,7 +84,7 @@ extern "C" void EquipWipe_Tick(int op, int sub)
         for (int i = 0; i < 12; ++i) {
             if (*(short*)(cm + 536 + 68 * i) != -1) ++occupied;
         }
-        if (s_prevOccupied > 0 && occupied == 0) {
+        if (s_armed && s_prevOccupied > 0 && occupied == 0) {
             char b[192];
             Platform::TextFormatTruncated(b, sizeof(b), Platform::TruncateText,
                 "EQUIPWIPE: los 12 wear slots pasaron a -1 durante el paquete "
