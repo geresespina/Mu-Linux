@@ -42,6 +42,12 @@ typedef long double float10;
 void  __cdecl HashTable_Insert(void *ctx, void *obj, void *key); // IDA: HashTable_Insert (0x00403F80)
 void* AntiTamper_HashNode(void);
 extern "C" void EquipWipe_Tick(int op, int sub);  // diagnostico: ver Render_PlayerEquipment.cpp  // nodo compartido: la hash-table esta neutralizada (ver System_Legacy.cpp)
+// MEAMU rival targeting (round v20261115-0541): shared hostile-player predicate
+// + env-gated self-test tick — ver Combat/Combat.cpp.
+bool Client_IsHostilePlayer(const void* ent);
+void Targeting_SelfTestTick();
+int  Warrior_SelfTestCollect(const float* centre, float radius, unsigned short relationKey, int* keys, int maximum);  // test entry: ver Combat/Skills_WarriorLegacy.cpp
+void ReceivePartyList97k(BYTE* pkt, int size);   // Party.cpp: opcode 0x42 roster handler (self-test rig feeds it fabricated rosters)
 void  __cdecl Packet_DecryptByte(void *a, void *b); // IDA: Packet_DecryptByte (0x00404330)
 void* __cdecl HashTable_GetNode(void *ctx, void *key); // IDA: HashTable_GetNode (0x00404280)
 uint  __cdecl HashTable_GetIndex(void *ctx, void *key);       // Returns slot index (0xffffffff = not found)
