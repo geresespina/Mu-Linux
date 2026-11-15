@@ -889,7 +889,12 @@ void CContentCatalog::ApplyItem(const BYTE* record, int recordSize)
     extra.Behavior = (row.Behavior < ITEM_MAX_EX) ? row.Behavior : row.Index;
     extra.Slot = (row.Slot < 12) ? row.Slot : -1;
     if (row.Flags & Proto::CATALOG_ITEM_HAS_GLOW) {
-        extra.HasGlow = true;
+        // MEAMU NO-SHINE (regla de G, 2026-11-15): el GlowColor del catalogo
+        // (CustomGlow) se sigue parseando, pero NUNCA se activa: HasGlow es el
+        // unico gate de CContentCatalog::GetItemGlow — el unico punto de
+        // lectura del glow, consumido por PartObjectColor — y queda siempre
+        // en false, asi ningun item se tine con su color de brillo propio.
+        extra.HasGlow = false;
         extra.Glow[0] = ((row.GlowColor >> 16) & 0xFF) / 255.0f;
         extra.Glow[1] = ((row.GlowColor >> 8) & 0xFF) / 255.0f;
         extra.Glow[2] = (row.GlowColor & 0xFF) / 255.0f;
