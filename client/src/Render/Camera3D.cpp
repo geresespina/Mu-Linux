@@ -26,6 +26,8 @@ void CCamera3D::Restore()
     m_Fov = kDefaultFov;
     m_Pitch = kDefaultPitch;
     m_Height = kDefaultHeight;
+    m_ZoomTarget = 1.0f;
+    m_ZoomCurrent = 1.0f;
     CameraAngle[2] = kDefaultYaw;
     UI_AddNotice((char*)"Camara 3D restaurada", 1);
 }
@@ -60,6 +62,50 @@ bool CCamera3D::Wheel(int delta)
     if (delta < 0 && m_Fov <= kDefaultFov * 2.0f) m_Fov += 2.0f;
     if (delta > 0 && m_Fov >= kDefaultFov * 0.5f) m_Fov -= 2.0f;
     return true;
+}
+
+// ── MEAMU (round v20261115-1341): zoom de distancia de la cámara principal ──
+// Rango del factor: 0.40..2.00 sobre la distancia stock (offset horizontal
+// 1000, cámara a 850 sobre el héroe; distancia 3D ≈ 1312).
+//   - 0.40×: offset 400 / +340 de alto / ≈525 al héroe. El plano cercano es
+//     20 (CameraViewNear): ni el héroe ni alas/armas llegan a recortarse.
+//   - 2.00×: offset 2000 / +1700 / ≈2624 al héroe. MoveMainCamera estira
+//     CameraViewFar con el mismo factor (6000), así el frustum de culling
+//     (90 % del alcance = 5400 desde la cámara, ≈2776 más allá del héroe)
+//     cubre el suelo que se ve por el borde superior (≈1908 con pitch 48.5
+//     y FOV 50), y la niebla se estira con el alcance como ya hace
+//     GL_BeginViewport. Espejo del tope 200 % que GetViewFar aplica al FOV.
+// Paso multiplicativo por muesca (1.18): de 1.0 a 2.0 en ≈4 muescas, a 0.40
+// en ≈5; se siente uniforme en todo el rango. Un paso por evento, igual
+// que Wheel() con el FOV.
+// La rueda sólo llega acá si el cursor está sobre el mundo (ver el caso
+// Wheel de Input_WndProc): sobre una ventana/lista conserva su scroll.
+namespace {
+    const float kZoomMin  = 0.40f;
+    const float kZoomMax  = 2.00f;
+    const float kZoomStep = 1.18f;
+}
+
+bool CCamera3D::DistanceWheel(int delta)
+{
+    if (m_Dragging || SceneFlag != 5 || delta == 0) return false;
+    if (delta > 0) m_ZoomTarget /= kZoomStep;   // rueda hacia adelante: acerca
+    if (delta < 0) m_ZoomTarget *= kZoomStep;   // rueda hacia atrás: aleja
+    if (m_ZoomTarget < kZoomMin) m_ZoomTarget = kZoomMin;
+    if (m_ZoomTarget > kZoomMax) m_ZoomTarget = kZoomMax;
+    return true;
+}
+
+// Interpola el factor una vez por paso de simulación (MoveMainCamera corre
+// a 25 Hz desde PrepareCamera): 25 % del resto por paso asienta un salto
+// completo en ≈0.5 s, sin escalones; la interpolación de render suaviza
+// además la posición entre pasos.
+float CCamera3D::UpdateDistanceZoom()
+{
+    const float diff = m_ZoomTarget - m_ZoomCurrent;
+    if (diff > -0.001f && diff < 0.001f) m_ZoomCurrent = m_ZoomTarget;
+    else m_ZoomCurrent += diff * 0.25f;
+    return m_ZoomCurrent;
 }
 
 float CCamera3D::GetViewFar() const

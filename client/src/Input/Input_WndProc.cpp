@@ -135,6 +135,15 @@ void Input_OnEvent(const Platform::InputEvent& event)
             // DESVIACION: con el historial de chat abierto (L), la rueda es suya.
             if (gChatLogWindow.IsOpen())
                 gChatLogWindow.ScrollWheel(event.wheel / 120);
+            // MEAMU (round v20261115-1341): zoom de distancia de la cámara
+            // principal, SOLO con el cursor sobre el mundo. MouseOnWindow
+            // (DAT_07d78094, el mismo flag que frena el ataque sobre la UI)
+            // vale 1 sobre cualquier ventana/lista/barra: ahí la rueda
+            // conserva su trabajo de scroll vía el acumulador de siempre,
+            // y el widget bajo el cursor lo consume en su tick.
+            else if (SceneFlag == 5 && DAT_07d78094 == 0 &&
+                     gCamera3D.DistanceWheel(event.wheel))
+                ;
             else
                 ChatListBox_AddWheel(event.wheel / 120);
         }
