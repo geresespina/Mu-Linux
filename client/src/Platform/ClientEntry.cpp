@@ -723,6 +723,7 @@ int main(int, char**)
         NavMove_Tick();
         KbPlay_Tick();
         HealthBar_SelfTestTick();   // MEAMU: env-gated Biju HP-bar gate check (no-op unset)
+        Targeting_SelfTestTick();  // MEAMU rival targeting rig (MU_TARGET_SELFTEST=1)
         if (Platform::GetWindow().CloseRequested()) break;
 #ifdef _WIN32
         if (!Platform::GetWindow().UsesPlatformPump() && PeekMessageW(&msg, NULL, 0, 0, PM_NOREMOVE))
