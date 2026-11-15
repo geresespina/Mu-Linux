@@ -377,10 +377,11 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
         }
 
         // ── 4. Sin full set (v230==false) → no glow, exit ─────────────────
-        // DESVIACION (antilag propio): sin el brillo del set completo.
-        if (!v230 || gUserSettings.GetAntilag(ANTILAG_GLOW)) {
-            return puVar13;
-        }
+        // MEAMU NO-SHINE (regla de G, 2026-11-15): el brillo del set completo
+        // (pasos 5 y 6: destellos en las armas + rayos del set +10/+11) queda
+        // desactivado SIEMPRE — antes dependia del ajuste antilag del usuario.
+        (void)v230;
+        return puVar13;
 
         // ── 5. Full set body glow: PartObjectColor + 6 sparkles (3 bones × 2) ──
         // IDA línea 2191: PartObjectColor(c->Boot.Type, alpha, 0.5, Light, 0)
