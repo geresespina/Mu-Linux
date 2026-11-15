@@ -95,7 +95,10 @@ void DrawLabel(const BYTE* entity, BYTE percent, int center, int y, DWORD backgr
 // MEAMU (2026-11-15, G): Biju HP-bar carve-out. Monster classes 155-164 are
 // the ten tailed beasts; they — and only they — get their viewport HP bar
 // back (DrawViewport below). Every other monster stays bar-less.
-bool IsBijuMonsterClass(int cls) { return cls >= 155 && cls <= 164; }
+// MEAMU (2026-11-15, round v20261115-0541): the Kayito bosses join the list —
+// 174 (Selupan) and 175 (Winged Balgass) are world bosses in the Biju band,
+// so they get the same above-head boss bar. The wolf pack (176-180) does not.
+bool IsBijuMonsterClass(int cls) { return (cls >= 155 && cls <= 164) || cls == 174 || cls == 175; }
 
 bool IsBijuEntity(const BYTE* entity)
 {
@@ -131,10 +134,15 @@ void RunHealthBarSelfTestOnce()
         !probe(2,   true,  EntityView::MonsterKind) &&   // Budge Dragon
         !probe(153, true,  EntityView::MonsterKind) &&   // Fenrir
         !probe(200, true,  EntityView::MonsterKind) &&   // Soccer Ball
+        !probe(173, true,  EntityView::MonsterKind) &&   // Christmas gift prop (below the bosses)
+         probe(174, true,  EntityView::MonsterKind) &&   // Selupan (Kayito boss)
+         probe(175, true,  EntityView::MonsterKind) &&   // Winged Balgass (Kayito boss)
+        !probe(176, true,  EntityView::MonsterKind) &&   // Dire Werewolf (pack mob, no boss bar)
+        !probe(174, true,  EntityView::PlayerKind) &&    // boss class, wrong kind
         !probe(160, true,  EntityView::PlayerKind) &&    // right class, wrong kind
         !probe(160, false, EntityView::MonsterKind);     // inactive entity
     char line[128];
-    snprintf(line, sizeof(line), "UI:   HealthBar SELFTEST %s (Biju gate: classes 155-164)",
+    snprintf(line, sizeof(line), "UI:   HealthBar SELFTEST %s (Biju gate: classes 155-164 + 174-175)",
              ok ? "PASS" : "FAIL");
     DbgLogPublic(line);
     fprintf(stderr, "%s\n", line);
@@ -158,7 +166,7 @@ void HealthBar_SelfTestTick() { RunHealthBarSelfTestOnce(); }
 // party bars in RenderPartyHP) live elsewhere and are untouched. The packet
 // receive path stays intact; only the drawing is off.
 // MEAMU (2026-11-15, G): Biju carve-out — the viewport path below is back
-// ON, gated per-entity by IsBijuEntity (classes 155-164 only), so a Biju in
+// ON, gated per-entity by IsBijuEntity (classes 155-164 + 174-175), so a Biju in
 // view shows its HP bar while every other monster stays bar-less.
 // DrawSelected stays off (no top-of-screen duplicate for the same beast).
 void CHealthBar::DrawViewport() const
