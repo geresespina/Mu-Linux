@@ -18,3 +18,7 @@ private:
 };
 
 extern CHealthBar gHealthBar;
+
+// MEAMU: per-frame entry for the env-gated Biju gate check
+// (MU_HEALTHBAR_SELFTEST=1); a no-op unless the env var is set.
+void HealthBar_SelfTestTick();
