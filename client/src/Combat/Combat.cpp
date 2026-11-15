@@ -1016,6 +1016,14 @@ static Attack_Flow97k Attack_ElfBranch97k(char* entity, int iType)
 
     CheckTarget(AsCharacter(entity));               // IDA L1778 (retorno ignorado)
 
+    if (iType == 57) {
+        // MEAMU (2026-11-14): Omni Buff -- auto-cast sobre el heroe,
+        // mismo envio 0x19 auto-objetivo que las invocaciones.
+        Attack_SendSkill19_97k(iType, (WORD)HeroKey);
+        SetPlayerMagic(AsCharacter(entity));
+        return AF_RETURN;
+    }
+
     if ((iType >= 30 && iType <= 37) || iType == 44 || iType == 45) {
         // IDA L2617-2680: invocaciones del arbol Elf.
         // MEAMU rev.4 (2026-11-12): extendido a 37 (Fenrir) y 44 (Legion);
@@ -1117,7 +1125,7 @@ static void Attack_WarriorBranch97k(char* entity)
         // MEAMU rev.4 (2026-11-12): las invocaciones (30-37, 44) tampoco
         // dependen del arma en mano — las ramas Elf/Wizard las castean sin
         // gate de arma — asi que pasan este filtro junto al 48.
-        if (iType != 48 && !(iType >= 30 && iType <= 37) && iType != 44 && iType != 45)
+        if (iType != 48 && iType != 57 && !(iType >= 30 && iType <= 37) && iType != 44 && iType != 45)
             return;
     }
     // IDA L2930-2937: v222 / HIBYTE(v1025) = "alcanza el AG del skill".
@@ -1173,6 +1181,7 @@ static void Attack_WarriorBranch97k(char* entity)
         SetPlayerMagic(AsCharacter(entity));
         return;
     }
+    case 57:                                                  // MEAMU (2026-11-14) -- Omni Buff: self-cast, comparte el cuerpo del 48
     case 48: {                                                // IDA L4177 — Greater Life
         if (lowMana) { Attack_UseManaScroll97k(); return; }
         if (!hasAg) return;                                   // IDA L4397
@@ -1520,6 +1529,10 @@ static void Attack_WizardBranch97k(char* entity)
         Attack_SendSkill19_97k(iType, (WORD)HeroKey);
         SetPlayerMagic(AsCharacter(entity));                 // IDA LABEL_1430
         return;
+    case 57:                                                  // MEAMU (2026-11-14) -- Omni Buff: auto-cast 0x19 sobre el heroe
+        Attack_SendSkill19_97k(iType, (WORD)HeroKey);
+        SetPlayerMagic(AsCharacter(entity));
+        return;
     default:                                                  // IDA L10109
         Attack_Label1158_97k(entity, iType, hasTarget);
         return;
@@ -1604,7 +1617,7 @@ void __cdecl Combat_DispatchHeroSkillAttack(void *entity_v /* IDA: c */)
     // 6) Segundo gate de SafeZone (IDA Attack L1314): dentro del pueblo solo
     //    pasan los skills 26/27/28 (buffs de Elf), 16 y 48 (Greater Life).
     if (*(char *)&AsCharacter(entity)->SafeZone != 0 && iType != 26 && iType != 27 && iType != 28
-        && iType != 16 && iType != 48) {
+        && iType != 16 && iType != 48 && iType != 57) {
         return;
     }
 

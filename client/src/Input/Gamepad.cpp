@@ -16,10 +16,12 @@
 //   LT            virtual right click hold = cast selected skill, sustained
 //   LB / RB       cycle selected skill down/up through learned skills
 //   LB+RB chord   open the expanded skill list (clicks the grid toggle)
-//   A (tap)       Space = pick up / interact    A (hold)  quick skill slot 3
-//   X             quick skill slot 1
-//   Y (tap)       Inventory (I)                 Y (hold)  quick skill slot 2
-//   B             Esc (the client's own back/close key; opens menu if idle)
+//   Face buttons (G's remap, 2026-11-14): taps select skill shortcuts 1-4;
+//   the displaced utility functions live on the hold layer (>= 350 ms):
+//   A (tap)       quick skill slot 1            A (hold)  Space held = pick up / interact
+//   X (tap)       quick skill slot 2            X (hold)  hold-cast slot 2 (virtual digit '2' held)
+//   Y (tap)       quick skill slot 3            Y (hold)  Inventory (I)
+//   B (tap)       quick skill slot 4            B (hold)  Esc (the client's own back/close key)
 //   D-pad         Up = Q (HP potion) · Right = W (MP) · Down = E (SD) · Left = C
 //   Start         Esc = main menu               Back (tap) = M move list
 //   Back (hold)   Tab held = minimap
@@ -121,7 +123,7 @@ namespace {
 // ── Tuning (MAPPING.md; deadzone + cursor speed come from Config.ini) ───────
 constexpr int   kTriggerOn   = 16000;    // of 32767
 constexpr float kMoveRadius  = 0.22f;    // of min(winW, winH)
-constexpr Uint64 kLongPressMs = 350;     // A/Y tap-vs-hold split
+constexpr Uint64 kLongPressMs = 350;     // face-button tap-vs-hold split
 constexpr Uint64 kTabHoldMs   = 400;     // Back tap (M) vs hold (Tab minimap)
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -151,19 +153,41 @@ struct KeyPulse { int vk; bool upPending; };
 KeyPulse gPulses[8];
 int      gPulseCount = 0;
 
-// Tap/hold buttons (A and Y): tap fires a key pulse on release; holding past
-// kLongPressMs fires a quick-skill selection instead.
+// Tap/hold face buttons (G's remap, 2026-11-14): a tap (release before
+// kLongPressMs) selects a quick skill slot; crossing the threshold fires the
+// hold action instead and the later release fires nothing more. Hold kinds:
+// a one-shot key pulse (Y = Inventory, B = Esc), a key latch (A = Space held
+// until release, for pickup/interact), and a virtual digit hold (X = the
+// keyboard '2' key held, which KbPlay turns into select + repeat-cast of
+// shortcut 2 — the exact digit path, aim and gates included).
+enum class TapKind  { kPulseKey, kQuickSlot };
+enum class HoldKind { kPulseKey, kKeyLatch, kDigitCast };
 struct TapHold {
     SDL_GamepadButton btn;
     bool     down = false;
     bool     longFired = false;
+    bool     holdEngaged = false;   // latch/digit key currently injected down
     Uint64   downMs = 0;
-    int      tapVk = 0;
+    TapKind  tapKind;
+    int      tapVk = 0;             // kPulseKey tap: virtual key
     const char* tapWhat = nullptr;
-    int      quickSlot = 0;
+    int      tapSlot = 0;           // kQuickSlot tap: quick skill slot
+    HoldKind holdKind;
+    int      holdVk = 0;            // pulse/latch/digit virtual key
+    const char* holdWhat = nullptr;
 };
-TapHold gTapA{ SDL_GAMEPAD_BUTTON_SOUTH, false, false, 0, 32,   "Space/pickup",  3 };
-TapHold gTapY{ SDL_GAMEPAD_BUTTON_NORTH, false, false, 0, 0x49, "I/inventory",   2 };
+TapHold gTapA{ SDL_GAMEPAD_BUTTON_SOUTH, false, false, false, 0,
+               TapKind::kQuickSlot, 0, nullptr, 1,
+               HoldKind::kKeyLatch, 32, "Space/pickup" };
+TapHold gTapX{ SDL_GAMEPAD_BUTTON_WEST, false, false, false, 0,
+               TapKind::kQuickSlot, 0, nullptr, 2,
+               HoldKind::kDigitCast, 0x32, "cast slot 2 (digit 2)" };
+TapHold gTapY{ SDL_GAMEPAD_BUTTON_NORTH, false, false, false, 0,
+               TapKind::kQuickSlot, 0, nullptr, 3,
+               HoldKind::kPulseKey, 0x49, "I/inventory" };
+TapHold gTapB{ SDL_GAMEPAD_BUTTON_EAST, false, false, false, 0,
+               TapKind::kQuickSlot, 0, nullptr, 4,
+               HoldKind::kPulseKey, 27, "Esc/back" };
 
 // Back button: tap = M, hold = Tab (minimap).
 bool   gBackDown = false, gBackTabHeld = false;
@@ -275,7 +299,11 @@ void ReleaseAllInputs()
     if (gBackTabHeld) { Platform::InjectVirtualKey(9, false); gBackTabHeld = false; }
     gBackDown = false;
     gAutoCast = false;
-    gTapA.down = gTapY.down = false;
+    TapHold* ths[4] = { &gTapA, &gTapX, &gTapY, &gTapB };
+    for (int i = 0; i < 4; ++i) {
+        if (ths[i]->holdEngaged) { Platform::InjectVirtualKey(ths[i]->holdVk, false); ths[i]->holdEngaged = false; }
+        ths[i]->down = false;
+    }
     gUiClickUpPending = false;
     gDriving = false;
 }
@@ -429,7 +457,7 @@ void SelfTestDrive()
     else if (t < 11.0) step = 5;   // RT press          -> left click at cursor
     else if (t < 13.0) step = 6;   // LT hold           -> right click (cast)
     else if (t < 14.0) step = 7;   // idle
-    else if (t < 14.4) step = 8;   // A press           -> Space (pickup)
+    else if (t < 14.4) step = 8;   // A press (held)    -> Space latch (hold layer)
     else if (t < 15.5) step = 9;   // idle
     else if (t < 16.0) step = 10;  // D-pad Up          -> Q (HP potion)
     else if (t < 17.0) step = 11;  // idle
@@ -437,7 +465,7 @@ void SelfTestDrive()
     else if (t < 18.0) step = 13;  // RB released
     else if (t < 18.5) step = 14;  // LB press          -> skill cycle down
     else if (t < 19.0) step = 15;  // LB released
-    else if (t < 19.5) step = 16;  // X press           -> quick skill slot 1
+    else if (t < 19.75) step = 16; // X press (tap)     -> quick skill slot 2 on release
     else if (t < 20.0) step = 17;  // X released
     else if (t < 20.5) step = 18;  // Start press       -> Esc (menu)
     else if (t < 21.0) step = 19;  // Start released
@@ -445,14 +473,30 @@ void SelfTestDrive()
     else if (t < 22.0) step = 21;  // D-pad Right released
     else if (t < 22.5) step = 22;  // D-pad Down        -> E (SD)
     else if (t < 23.5) step = 23;  // D-pad Down released
-    else if (t < 24.5) step = 24;  // detach (hot-unplug release check)
-    else               step = 25;  // done
-    if (getenv("MU_PAD_SELFTEST_HOLD") && step > 23) step = 23;   // never detach
+    else if (t < 23.75) step = 26; // A press (tap test)
+    else if (t < 24.5) step = 27;  // A released (250 ms tap) -> quick slot 1
+    else if (t < 25.5) step = 28;  // A press (hold test)
+    else if (t < 26.0) step = 29;  // A released (hold) -> Space up, no slot
+    else if (t < 26.25) step = 30; // X press (tap test)
+    else if (t < 27.0) step = 31;  // X released (250 ms tap) -> quick slot 2
+    else if (t < 28.0) step = 32;  // X press (hold test) -> digit '2' held
+    else if (t < 28.5) step = 33;  // X released (hold) -> digit '2' up
+    else if (t < 28.75) step = 34; // Y press (tap test)
+    else if (t < 29.5) step = 35;  // Y released (250 ms tap) -> quick slot 3
+    else if (t < 30.5) step = 36;  // Y press (hold test) -> Inventory pulse
+    else if (t < 31.0) step = 37;  // Y released (hold)
+    else if (t < 31.25) step = 38; // B press (tap test)
+    else if (t < 32.0) step = 39;  // B released (250 ms tap) -> quick slot 4
+    else if (t < 33.0) step = 40;  // B press (hold test) -> Esc pulse
+    else if (t < 33.5) step = 41;  // B released (hold)
+    else if (t < 34.5) step = 42;  // detach (hot-unplug release check)
+    else               step = 43;  // done
+    if (getenv("MU_PAD_SELFTEST_HOLD") && step > 41) step = 41;   // never detach
     if (step == gSelfStep) {
         // Login-drive roam: after the scripted timeline, walk a slow
         // N/E/S/W square so an in-world hero visibly moves each leg.
-        if (getenv("MU_PAD_SELFTEST_HOLD") && t >= 26.0 && gVirtJoy) {
-            const int leg = (int)((t - 26.0) / 4.0) % 4;
+        if (getenv("MU_PAD_SELFTEST_HOLD") && t >= 36.0 && gVirtJoy) {
+            const int leg = (int)((t - 36.0) / 4.0) % 4;
             static int s_lastLeg = -1;
             if (leg != s_lastLeg) {
                 s_lastLeg = leg;
@@ -495,20 +539,36 @@ void SelfTestDrive()
     case 13: PadLog("PAD-SELFTEST: step 13 - RB released"); btn(5, false); break;
     case 14: PadLog("PAD-SELFTEST: step 14 - LB press"); btn(4, true); break;
     case 15: PadLog("PAD-SELFTEST: step 15 - LB released"); btn(4, false); break;
-    case 16: PadLog("PAD-SELFTEST: step 16 - X press"); btn(2, true); break;
-    case 17: PadLog("PAD-SELFTEST: step 17 - X released"); btn(2, false); break;
+    case 16: PadLog("PAD-SELFTEST: step 16 - X press (tap)"); btn(2, true); break;
+    case 17: PadLog("PAD-SELFTEST: step 17 - X released (tap - quick slot 2)"); btn(2, false); break;
     case 18: PadLog("PAD-SELFTEST: step 18 - Start press"); btn(7, true); break;
     case 19: PadLog("PAD-SELFTEST: step 19 - Start released"); btn(7, false); break;
     case 20: PadLog("PAD-SELFTEST: step 20 - D-pad RIGHT"); btn(14, true); break;
     case 21: PadLog("PAD-SELFTEST: step 21 - D-pad released"); btn(14, false); break;
     case 22: PadLog("PAD-SELFTEST: step 22 - D-pad DOWN"); btn(12, true); break;
     case 23: PadLog("PAD-SELFTEST: step 23 - D-pad released"); btn(12, false); break;
-    case 24:
-        PadLog("PAD-SELFTEST: step 24 - DETACH virtual pad");
+    case 26: PadLog("PAD-SELFTEST: step 26 - A press (tap test)"); btn(0, true); break;
+    case 27: PadLog("PAD-SELFTEST: step 27 - A released (tap - expect quick slot 1, no Space)"); btn(0, false); break;
+    case 28: PadLog("PAD-SELFTEST: step 28 - A press (hold test)"); btn(0, true); break;
+    case 29: PadLog("PAD-SELFTEST: step 29 - A released (hold - expect Space latch only, no quick slot)"); btn(0, false); break;
+    case 30: PadLog("PAD-SELFTEST: step 30 - X press (tap test)"); btn(2, true); break;
+    case 31: PadLog("PAD-SELFTEST: step 31 - X released (tap - expect quick slot 2)"); btn(2, false); break;
+    case 32: PadLog("PAD-SELFTEST: step 32 - X press (hold test - expect digit 2 held)"); btn(2, true); break;
+    case 33: PadLog("PAD-SELFTEST: step 33 - X released (hold - expect digit 2 up, no quick slot)"); btn(2, false); break;
+    case 34: PadLog("PAD-SELFTEST: step 34 - Y press (tap test)"); btn(3, true); break;
+    case 35: PadLog("PAD-SELFTEST: step 35 - Y released (tap - expect quick slot 3)"); btn(3, false); break;
+    case 36: PadLog("PAD-SELFTEST: step 36 - Y press (hold test - expect Inventory pulse)"); btn(3, true); break;
+    case 37: PadLog("PAD-SELFTEST: step 37 - Y released (hold - no quick slot)"); btn(3, false); break;
+    case 38: PadLog("PAD-SELFTEST: step 38 - B press (tap test)"); btn(1, true); break;
+    case 39: PadLog("PAD-SELFTEST: step 39 - B released (tap - expect quick slot 4, no Esc)"); btn(1, false); break;
+    case 40: PadLog("PAD-SELFTEST: step 40 - B press (hold test - expect Esc pulse)"); btn(1, true); break;
+    case 41: PadLog("PAD-SELFTEST: step 41 - B released (hold - no quick slot)"); btn(1, false); break;
+    case 42:
+        PadLog("PAD-SELFTEST: step 42 - DETACH virtual pad");
         SDL_CloseJoystick(gVirtJoy); gVirtJoy = nullptr;
         SDL_DetachVirtualJoystick(gVirtId); gVirtId = 0;
         break;
-    case 25: PadLog("PAD-SELFTEST: timeline complete"); break;
+    case 43: PadLog("PAD-SELFTEST: timeline complete"); break;
     default: break;
     }
 }
@@ -925,7 +985,11 @@ void SelfTestEnterWorld()
     }
 }
 
-// ── Tap/hold buttons (A = Space/quick-3, Y = Inventory/quick-2) ─────────────
+// ── Tap/hold face buttons (G's remap, 2026-11-14) ───────────────────────────
+// Tap (release before kLongPressMs) fires the tap action; crossing the
+// threshold fires the hold action instead — a hold that fired never also
+// fires the tap on release, and vice versa. Latch/digit holds stay engaged
+// until the button is released.
 void TapHoldTick(TapHold& th, Uint64 now)
 {
     const bool down = PadButton(th.btn);
@@ -933,11 +997,32 @@ void TapHoldTick(TapHold& th, Uint64 now)
         th.down = true; th.longFired = false; th.downMs = now;
     } else if (down && th.down && !th.longFired && now - th.downMs >= kLongPressMs) {
         th.longFired = true;
-        PadLog("PAD: button hold - quick skill slot %d", th.quickSlot);
-        QuickSlot(th.quickSlot);
+        switch (th.holdKind) {
+        case HoldKind::kPulseKey:
+            PadLog("PAD: button hold - %s", th.holdWhat);
+            PulseKey(th.holdVk, th.holdWhat);
+            break;
+        case HoldKind::kKeyLatch:
+        case HoldKind::kDigitCast:
+            th.holdEngaged = true;
+            Platform::InjectVirtualKey(th.holdVk, true);
+            PadLog("PAD: button hold - %s (key held)", th.holdWhat);
+            break;
+        }
     } else if (!down && th.down) {
         th.down = false;
-        if (!th.longFired) PulseKey(th.tapVk, th.tapWhat);
+        if (th.holdEngaged) {
+            th.holdEngaged = false;
+            Platform::InjectVirtualKey(th.holdVk, false);
+            PadLog("PAD: button released - %s (key up)", th.holdWhat);
+        } else if (!th.longFired) {
+            if (th.tapKind == TapKind::kQuickSlot) {
+                PadLog("PAD: button tap - quick skill slot %d", th.tapSlot);
+                QuickSlot(th.tapSlot);
+            } else {
+                PulseKey(th.tapVk, th.tapWhat);
+            }
+        }
     }
     gPrevButtons[th.btn] = down;
 }
@@ -968,7 +1053,7 @@ void Gamepad_Tick()
     }
     if (!gEnabled) { gLastMs = SDL_GetTicks(); return; }
 
-    if (gSelfTest && !gVirtJoy && gSelfStep < 24) SelfTestAttach();
+    if (gSelfTest && !gVirtJoy && gSelfStep < 42) SelfTestAttach();
     if (gSelfTest) SelfTestDrive();
     if (gSelfTest && getenv("MU_PAD_ENTERWORLD")) SelfTestEnterWorld();
 
@@ -993,9 +1078,11 @@ void Gamepad_Tick()
     const float winH = (float)gWindow.GetRealHeight();
     if (!gCursorInit) { gCursorX = winW * 0.5f; gCursorY = winH * 0.5f; gCursorInit = true; }
 
-    // ── Tap/hold face buttons (A / Y) ────────────────────────────────────────
+    // ── Tap/hold face buttons (A / X / Y / B) ────────────────────────────────
     TapHoldTick(gTapA, now);
+    TapHoldTick(gTapX, now);
     TapHoldTick(gTapY, now);
+    TapHoldTick(gTapB, now);
 
     // ── Back: tap = M (move list), hold = Tab (minimap) ─────────────────────
     {
@@ -1090,10 +1177,11 @@ void Gamepad_Tick()
     gPrevButtons[SDL_GAMEPAD_BUTTON_RIGHT_STICK] = r3;
 
     // ── Simple edge buttons ──────────────────────────────────────────────────
-    // B and Start both pulse Esc: in this client Esc is the single back key —
-    // it closes the D-menu/chat log, closes the system menu, or opens it.
+    // Start pulses Esc: in this client Esc is the single back key — it closes
+    // the D-menu/chat log, closes the system menu, or opens it. (B carried
+    // the same Esc pulse until the 2026-11-14 remap made it a tap/hold face
+    // button: tap = quick slot 4, hold = Esc, via TapHoldTick above.)
     static const struct { SDL_GamepadButton b; const char* name; int vk; const char* what; } kBtns[] = {
-        { SDL_GAMEPAD_BUTTON_EAST,       "B",      27,   "Esc/back"     },
         { SDL_GAMEPAD_BUTTON_START,      "Start",  27,   "Esc/menu"     },
         { SDL_GAMEPAD_BUTTON_DPAD_UP,    "DUp",    0x51, "Q/HP-potion"  },
         { SDL_GAMEPAD_BUTTON_DPAD_RIGHT, "DRight", 0x57, "W/MP-potion"  },
@@ -1109,11 +1197,7 @@ void Gamepad_Tick()
         gPrevButtons[kb.b] = down;
     }
 
-    // ── X: quick skill slot 1 ────────────────────────────────────────────────
-    const bool x = PadButton(SDL_GAMEPAD_BUTTON_WEST);
-    if (x && !gPrevButtons[SDL_GAMEPAD_BUTTON_WEST]) {
-        PadLog("PAD: button X down");
-        QuickSlot(1);
-    }
-    gPrevButtons[SDL_GAMEPAD_BUTTON_WEST] = x;
+    // X and B are tap/hold face buttons — handled by TapHoldTick above
+    // (X: tap = quick slot 2, hold = digit-2 cast; B: tap = quick slot 4,
+    // hold = Esc).
 }
