@@ -53,6 +53,13 @@ void __cdecl RenderPartObjectEffect(intptr_t param_1, int param_2, float *param_
         param_5 = 0;
     }
     ItemLevelFx = (int)param_5;
+    // MEAMU NO-SHINE (regla de G, 2026-11-15): param_6 trae el byte Option1
+    // del item (flags excellent, mascara 0x3F) y su UNICO uso en esta funcion
+    // es el pulso aditivo excellent del bloque final. Se neutraliza en la
+    // entrada: ningun item excellent emite ese pase, en ninguna superficie
+    // (mundo, inventario, tienda, suelo). Los llamantes que no son items ya
+    // pasaban 0, asi que el comportamiento para entidades no cambia.
+    param_6 = 0;
     // 0.97.20: un modelo del catálogo usa el brillo por nivel del vanilla que
     // imita (las alas, por ejemplo, no brillan).
     const int fxType = gContentCatalog.LogicModel(param_2);
@@ -343,8 +350,12 @@ void __cdecl RenderPartObjectEffect(intptr_t param_1, int param_2, float *param_
         //
         // ItemLevelFx ya es el ItemLevel: al principio se hizo
         // `param_5 = ((int)param_5 >> 3) & 0xf;` — no volver a shiftear.
-        // DESVIACION (antilag propio): sin el brillo de los +N.
-        uint ItemLevel = gUserSettings.GetAntilag(ANTILAG_GLOW) ? 0u : (uint)ItemLevelFx;
+        // MEAMU NO-SHINE (regla de G, 2026-11-15): el brillo de los +N queda
+        // desactivado SIEMPRE (antes dependia del ajuste antilag del usuario):
+        // ItemLevel entra como 0 a todo el bloque, asi un +15 se dibuja con la
+        // luz plana de un +0 — sin tintes por nivel ni pases aditivos
+        // 0x44/0x48/0x240 — en mundo, inventario, tienda y suelo.
+        uint ItemLevel = 0u;
 
         bool didExtraRender = false;
         if (ItemLevel > 2 && effectType != 863) {
