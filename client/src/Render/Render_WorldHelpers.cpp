@@ -1116,17 +1116,25 @@ bool __cdecl MoveMainCamera(void) {
         const float normalRange = gCamera3D.GetViewFar();
         // Sólo con la cámara 3D (F10): con la normal, el alcance de siempre.
         const float scale = gCamera3D.IsEnabled() ? gUserSettings.DrawDistanceScale() : 1.0f;
-        CameraViewFar = normalRange * scale;
+        // MEAMU (round v20261115-1341): zoom de distancia. Al alejar, el
+        // alcance crece con el mismo factor (mismo criterio que GetViewFar
+        // con el FOV) para que el borde superior no quede más allá del
+        // plano lejano ni del frustum de culling.
+        const float zoom = gCamera3D.UpdateDistanceZoom();
+        CameraViewFar = normalRange * scale * (zoom > 1.0f ? zoom : 1.0f);
         DrawDistance::Set(*(float*)(Hero + 16), *(float*)(Hero + 20), scale > 1.0f ? normalRange * 1.25f : 0.0f);
         CameraDistance = 1000.0f;                    // CameraDistance
         in1[0] = 0.0f;
-        in1[1] = -1000.0f;
+        in1[1] = -1000.0f * zoom;
         in1[2] = 0.0f;
         AngleMatrix(CameraAngle, matrix);
         VectorIRotate(in1, matrix, out);
         CameraPosition[0] = out[0] + *(float*)(Hero + 16);
         CameraPosition[1] = out[1] + *(float*)(Hero + 20);
-        CameraPosition[2] = *(float*)(Hero + 24) + CameraDistance - gCamera3D.GetHeight();
+        // MEAMU zoom: el alto escala con el mismo factor que el offset
+        // horizontal — la cámara se mueve sobre el rayo héroe→cámara y la
+        // dirección de vista stock (pitch fijado abajo) no cambia.
+        CameraPosition[2] = *(float*)(Hero + 24) + (CameraDistance - gCamera3D.GetHeight()) * zoom;
         CameraAngle[0] = EarthQuake - gCamera3D.GetPitch();       // pitch después de la posición
     }
     if (gMapManager.GetCurrentMap() == 5) {

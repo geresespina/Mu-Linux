@@ -4,6 +4,7 @@
 
 #include "stdafx.h"
 #include "Model/ModelTypes.h"
+#include "Physics/ClothTypes.h"
 #include "Render/BufferedDraw.h"
 #include "Render/MeshDraw.h"
 #include "Render/BMDDevice.h"
@@ -1820,6 +1821,73 @@ constexpr std::array<InventoryPoseDefinition, MODEL_MAX_VANILLA> MakeInventoryPo
 
 constexpr auto InventoryPoses = MakeInventoryPoses();
 constexpr InventoryPoseDefinition DefaultInventoryPose{};
+
+// MEAMU ALIGN (round v20261115): caja envolvente posada (accion 0) de un BMD
+// bajo las matrices de hueso ya calculadas en `bones` (3x4 por hueso, mismo
+// layout que el scratch de BMD_Animation). Espejo del escaneo de vertices de
+// BMD_CreateBoundingBox, transformando cada vertice por su hueso.
+bool ComputePosedBBox(const BMD* model, const float* bones, float mn[3], float mx[3])
+{
+    if (!model || !bones) return false;
+    if (model->NumMeshs <= 0 || model->NumMeshs > 200) return false;
+    if (model->NumBones <= 0 || model->NumBones > 200) return false;
+    if ((uintptr_t)model->Meshs < 0x10000u) return false;
+    const auto* meshes = reinterpret_cast<const ClothModelMesh*>(model->Meshs);
+    bool any = false;
+    for (int m = 0; m < model->NumMeshs; ++m) {
+        const int vc = meshes[m].VertexCount;
+        if (vc <= 0 || vc > 15000) continue;
+        if ((uintptr_t)meshes[m].Vertices < 0x10000u) continue;
+        const auto* verts = reinterpret_cast<const ModelRuntimeVertex*>(meshes[m].Vertices);
+        for (int v = 0; v < vc; ++v) {
+            const int bone = verts[v].Bone;
+            if (bone < 0 || bone >= model->NumBones) continue;
+            const float* M = bones + bone * 12;
+            const float x = verts[v].Position[0];
+            const float y = verts[v].Position[1];
+            const float z = verts[v].Position[2];
+            const float w[3] = { M[0]*x + M[1]*y + M[2]*z + M[3],
+                                 M[4]*x + M[5]*y + M[6]*z + M[7],
+                                 M[8]*x + M[9]*y + M[10]*z + M[11] };
+            if (!any) {
+                for (int a = 0; a < 3; ++a) { mn[a] = w[a]; mx[a] = w[a]; }
+                any = true;
+            } else {
+                for (int a = 0; a < 3; ++a) {
+                    if (w[a] < mn[a]) mn[a] = w[a];
+                    if (w[a] > mx[a]) mx[a] = w[a];
+                }
+            }
+        }
+    }
+    return any;
+}
+
+// Extension en pantalla (unidades del espacio scratch, proporcionales a las
+// de pantalla a la profundidad del ancla) de una caja 3D sobre la base
+// (right, up) de la vista actual.
+void ProjectedExtents(const float mn[3], const float mx[3],
+                      const float right[3], const float up[3],
+                      float& outW, float& outH)
+{
+    float wMin = 0.0f, wMax = 0.0f, hMin = 0.0f, hMax = 0.0f;
+    for (int c = 0; c < 8; ++c) {
+        const float p[3] = { (c & 1) ? mx[0] : mn[0],
+                             (c & 2) ? mx[1] : mn[1],
+                             (c & 4) ? mx[2] : mn[2] };
+        const float pr = p[0]*right[0] + p[1]*right[1] + p[2]*right[2];
+        const float pu = p[0]*up[0] + p[1]*up[1] + p[2]*up[2];
+        if (c == 0) { wMin = wMax = pr; hMin = hMax = pu; }
+        else {
+            if (pr < wMin) wMin = pr;
+            if (pr > wMax) wMax = pr;
+            if (pu < hMin) hMin = pu;
+            if (pu > hMax) hMax = pu;
+        }
+    }
+    outW = wMax - wMin;
+    outH = hMax - hMin;
+}
 } // namespace
 
 // IDA: RenderObjectScreen (0x004E13A0).
@@ -1897,6 +1965,78 @@ void __cdecl RenderObjectScreen(int Type, unsigned int ItemLevel, unsigned char 
     float headAngle[3] = { ObjectSelect_HeadAngle, 0.0f, 0.0f };
     BMD_Animation(model, reinterpret_cast<float*>(&DAT_06970a9c), 0.0f, 0, 0,
                  (unsigned int*)renderAngle, headAngle, '\0', '\0');
+
+    // MEAMU ALIGN (round v20261115): un modelo propio del catalogo se dibuja
+    // con la pose, la escala y el ancla del vanilla que imita, pero su caja
+    // envolvente no es la del vanilla: el centro cae fuera de la casilla y el
+    // tamano no llena su huella (ej.: el casco de Madara quedaba 33% mas abajo
+    // y 1.55x mas alto que su caja de 2x2). Aca se centra la caja posada del
+    // modelo propio sobre la caja posada del vanilla de referencia y se
+    // escala para caber en su huella en pantalla. Los vanilla nunca entran
+    // (drawType < MODEL_MAX_VANILLA) y un item con pose propia del catalogo
+    // manda el: si tiene CatalogItemPose, este bloque no se aplica.
+    if (drawType >= MODEL_MAX_VANILLA && Type >= 0 && Type < MODEL_MAX_VANILLA &&
+        Type != drawType && !pose) {
+        const BMD* customModel = reinterpret_cast<const BMD*>(model);
+        BMD* behModel = AsModel(DAT_05828d58 + (int)Type * BMD_STRIDE);
+        float cMn[3], cMx[3], bMn[3], bMx[3];
+        if (ComputePosedBBox(customModel, reinterpret_cast<const float*>(&DAT_06970a9c), cMn, cMx)) {
+            // Animar el vanilla de referencia en un scratch propio, con la
+            // misma pose, y restaurar su cabecera al salir.
+            static float s_alignBones[200 * 12];
+            const float savedAngle[3] = { behModel->BodyAngle[0], behModel->BodyAngle[1], behModel->BodyAngle[2] };
+            const float savedHeight = behModel->BodyHeight;
+            const float savedAnim = behModel->CurrentAnimation;
+            const short savedFrame = behModel->CurrentAnimationFrame;
+            const unsigned char savedAction = behModel->CurrentAction;
+            behModel->BodyHeight = inventoryPose.BodyHeight;
+            *(BYTE*)&behModel->CurrentAction = 0;
+            BMD_Animation(behModel, s_alignBones, 0.0f, 0, 0,
+                          (unsigned int*)renderAngle, headAngle, '\0', '\0');
+            const bool behOk = ComputePosedBBox(behModel, s_alignBones, bMn, bMx);
+            behModel->BodyAngle[0] = savedAngle[0];
+            behModel->BodyAngle[1] = savedAngle[1];
+            behModel->BodyAngle[2] = savedAngle[2];
+            behModel->BodyHeight = savedHeight;
+            behModel->CurrentAnimation = savedAnim;
+            behModel->CurrentAnimationFrame = savedFrame;
+            *(BYTE*)&behModel->CurrentAction = savedAction;
+            if (behOk) {
+                const float cCtr[3] = { (cMn[0] + cMx[0]) * 0.5f, (cMn[1] + cMx[1]) * 0.5f, (cMn[2] + cMx[2]) * 0.5f };
+                const float bCtr[3] = { (bMn[0] + bMx[0]) * 0.5f, (bMn[1] + bMx[1]) * 0.5f, (bMn[2] + bMx[2]) * 0.5f };
+                // Factor de encaje sobre la base de la vista actual.
+                float k = 1.0f;
+                float dir[3] = { direction[0], direction[1], direction[2] };
+                const float dl = sqrtf(dir[0]*dir[0] + dir[1]*dir[1] + dir[2]*dir[2]);
+                if (dl > 1e-6f) {
+                    dir[0] /= dl; dir[1] /= dl; dir[2] /= dl;
+                    float right[3] = { dir[1], -dir[0], 0.0f };
+                    const float rl = sqrtf(right[0]*right[0] + right[1]*right[1]);
+                    if (rl > 1e-4f) {
+                        right[0] /= rl; right[1] /= rl;
+                        const float up[3] = { right[1]*dir[2] - right[2]*dir[1],
+                                              right[2]*dir[0] - right[0]*dir[2],
+                                              right[0]*dir[1] - right[1]*dir[0] };
+                        float bw, bh, cw, ch;
+                        ProjectedExtents(bMn, bMx, right, up, bw, bh);
+                        ProjectedExtents(cMn, cMx, right, up, cw, ch);
+                        if (cw > 1e-3f && ch > 1e-3f && bw > 1e-3f && bh > 1e-3f) {
+                            k = bw / cw;
+                            const float kh = bh / ch;
+                            if (kh < k) k = kh;
+                            if (k < 0.34f) k = 0.34f;
+                            if (k > 3.0f) k = 3.0f;
+                        }
+                    }
+                }
+                // El centro propio (escalado por k) aterriza donde aterriza el
+                // centro del vanilla: P' = P + s * (cBeh - k * cCust).
+                for (int a = 0; a < 3; ++a)
+                    position[a] += scale * (bCtr[a] - k * cCtr[a]);
+                scale *= k;
+            }
+        }
+    }
 
     char object[0x200] = {};
     *(short*)(object + 2) = (short)drawType;
