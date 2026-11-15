@@ -49,6 +49,7 @@
 #include "Input/Gamepad.h"
 #include "Input/NavMove.h"
 #include "Input/KbPlay.h"
+#include "UI/HealthBar.h"
 #include "Scene/Scene.h"
 #include "Sound/SoundManager.h"
 #include "Config/UserSettings.h"
@@ -721,6 +722,7 @@ int main(int, char**)
         Gamepad_Tick();
         NavMove_Tick();
         KbPlay_Tick();
+        HealthBar_SelfTestTick();   // MEAMU: env-gated Biju HP-bar gate check (no-op unset)
         if (Platform::GetWindow().CloseRequested()) break;
 #ifdef _WIN32
         if (!Platform::GetWindow().UsesPlatformPump() && PeekMessageW(&msg, NULL, 0, 0, PM_NOREMOVE))
