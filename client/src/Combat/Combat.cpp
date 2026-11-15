@@ -1657,7 +1657,10 @@ void Targeting_SelfTestTick()
     Hero = pool;   // hero = scratch slot 0
     SelectedCharacter = -1;
 
-    auto mkEnt = [&pool](int slot, BYTE kind, BYTE pk, const char* name,
+    // CI fix (2026-11-15): pool has static storage duration, so it is used
+    // directly and must NOT appear in a capture list — MSVC rejects a simple
+    // capture of a static (C3495) where GCC/Clang accept it. No captures.
+    auto mkEnt = [](int slot, BYTE kind, BYTE pk, const char* name,
                          float x, float y, bool dead) {
         CHARACTER* c = (CHARACTER*)(pool + slot * CHARACTER_STRIDE);
         memset(c, 0, CHARACTER_STRIDE);
@@ -1672,7 +1675,7 @@ void Targeting_SelfTestTick()
         EntityName::Set(c, name);
         return c;
     };
-    auto entAt = [&pool](int slot) { return (CHARACTER*)(pool + slot * CHARACTER_STRIDE); };
+    auto entAt = [](int slot) { return (CHARACTER*)(pool + slot * CHARACTER_STRIDE); };
 
     CHARACTER* hero = mkEnt(0, 1, 3, "Tester", 10000.0f, 10000.0f, false);
     // Calibrate facing off CreateAngle itself: the hero faces the +X point.
