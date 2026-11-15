@@ -24,11 +24,13 @@
 //             off, a fresh streak cannot arm until casting has fully
 //             stopped for ~0.8 s (anti-re-latch beat).
 //   F9        keyboard-controls master toggle (MEAMU kb-toggle,
-//             2026-11-13): flips the whole feature ON/OFF in-world and
-//             persists Config.ini [Keyboard] Enable. OFF silences every
-//             KbPlay input path at once (digits, Tab cycle, Enter, the
-//             Space nearest-pick upgrade) and takes AUTO down with it;
-//             F8 while OFF only announces "KEYBOARD CONTROLS: OFF".
+//             2026-11-13): flips the keyboard feature ON/OFF in-world
+//             and persists Config.ini [Keyboard] Enable. OFF silences
+//             every KbPlay KEYBOARD input path at once (digits, Tab
+//             cycle, Enter, the Space nearest-pick upgrade). AUTO is
+//             decoupled from the switch (2026-11-15): F8 toggles it
+//             with the switch on or off, an F9 flip mid-AUTO leaves
+//             AUTO running, and the cast-streak latch arms either way.
 //             Boot state comes from Config.ini ([Keyboard] Enable,
 //             default 1 = ON when the section/key is missing). The
 //             gamepad is never affected.
