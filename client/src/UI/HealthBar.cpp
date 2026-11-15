@@ -6,6 +6,7 @@
 #include "Entity/EntityView.h"
 
 extern "C" SIZE* __cdecl RenderCenteredText(int x, int y, const char* text);
+extern "C" void DbgLogPublic(const char* msg);
 
 CHealthBar gHealthBar;
 
@@ -91,8 +92,61 @@ void DrawLabel(const BYTE* entity, BYTE percent, int center, int y, DWORD backgr
     gFont.SelectFont(gFont.GetTextDC(), oldFont);
     GL_ResetState();
 }
+// MEAMU (2026-11-15, G): Biju HP-bar carve-out. Monster classes 155-164 are
+// the ten tailed beasts; they — and only they — get their viewport HP bar
+// back (DrawViewport below). Every other monster stays bar-less.
+bool IsBijuMonsterClass(int cls) { return cls >= 155 && cls <= 164; }
+
+bool IsBijuEntity(const BYTE* entity)
+{
+    const EntityView view(entity);
+    return view.IsActive() && view.Kind() == EntityView::MonsterKind &&
+           IsBijuMonsterClass(view.MonsterIndex());
+}
+
+// MU_HEALTHBAR_SELFTEST=1: code-level gate check — fabricates entity buffers
+// (only the bytes EntityView reads: Live +0, Kind +0x84, class at
+// EntityOffset(0x2EB)) and runs them through the same IsBijuEntity gate the
+// DrawViewport loop uses. Dev-only proof, env-gate style of MU_KB_SELFTEST.
+void RunHealthBarSelfTestOnce()
+{
+    static bool done = false;
+    if (done) return;
+    done = true;
+    if (!std::getenv("MU_HEALTHBAR_SELFTEST")) return;
+    auto probe = [](int cls, bool active, BYTE kind) {
+        static BYTE buf[EntityView::Stride];
+        memset(buf, 0, sizeof(buf));
+        buf[0] = active ? 1 : 0;
+        buf[0x84] = kind;
+        buf[EntityOffset(0x2EB)] = (BYTE)cls;
+        return IsBijuEntity(buf);
+    };
+    const bool ok =
+        !probe(154, true,  EntityView::MonsterKind) &&   // just below the band
+         probe(155, true,  EntityView::MonsterKind) &&   // Shukaku
+         probe(160, true,  EntityView::MonsterKind) &&   // mid-band
+         probe(164, true,  EntityView::MonsterKind) &&   // Ten-Tails
+        !probe(165, true,  EntityView::MonsterKind) &&   // just above the band
+        !probe(2,   true,  EntityView::MonsterKind) &&   // Budge Dragon
+        !probe(153, true,  EntityView::MonsterKind) &&   // Fenrir
+        !probe(200, true,  EntityView::MonsterKind) &&   // Soccer Ball
+        !probe(160, true,  EntityView::PlayerKind) &&    // right class, wrong kind
+        !probe(160, false, EntityView::MonsterKind);     // inactive entity
+    char line[128];
+    snprintf(line, sizeof(line), "UI:   HealthBar SELFTEST %s (Biju gate: classes 155-164)",
+             ok ? "PASS" : "FAIL");
+    DbgLogPublic(line);
+    fprintf(stderr, "%s\n", line);
+    fflush(stderr);
+}
 
 } // namespace
+
+// Per-frame entry for the env-gated gate check: the main loop calls this in
+// every scene, the title screen included — DrawViewport is an in-world HUD
+// pass and never runs in the title-screen test rig.
+void HealthBar_SelfTestTick() { RunHealthBarSelfTestOnce(); }
 
 // DESVIACION DLL HealthBar.cpp: HealthBarType=3, como Encoder/MainInfo.ini.
 // IDA: Render_GameFrame (0x004BBFB0), después de RenderPartyHP (0x004BCA20).
@@ -103,13 +157,18 @@ void DrawLabel(const BYTE* entity, BYTE percent, int center, int y, DWORD backgr
 // the top of the screen (DrawSelected below). Player HP displays (own HUD,
 // party bars in RenderPartyHP) live elsewhere and are untouched. The packet
 // receive path stays intact; only the drawing is off.
+// MEAMU (2026-11-15, G): Biju carve-out — the viewport path below is back
+// ON, gated per-entity by IsBijuEntity (classes 155-164 only), so a Biju in
+// view shows its HP bar while every other monster stays bar-less.
+// DrawSelected stays off (no top-of-screen duplicate for the same beast).
 void CHealthBar::DrawViewport() const
 {
-    return;  // MEAMU: monster HP bars off (see note above).
+    RunHealthBarSelfTestOnce();  // MEAMU: Biju carve-out gate check (env-gated).
     if (SceneFlag != 5 || gUserSettings.GetDeleteHealthBar() || !CharactersClient) return;
     const BYTE* base = (const BYTE*)(uintptr_t)CharactersClient;
     for (int i = 0; i < EntityView::Capacity; ++i) {
         const BYTE* entity = base + i * EntityView::Stride;
+        if (!IsBijuEntity(entity)) continue;  // MEAMU: Biju-only carve-out.
         const auto* bar = FindEntity(entity);
         if (!bar) continue;
         const EntityView view(entity);
