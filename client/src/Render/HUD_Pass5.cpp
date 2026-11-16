@@ -223,11 +223,19 @@ extern "C" void __cdecl sub_4BB940(float HeightArg, float xArg, float yArg,
     float fw = (float)a4;
     float fh = (float)a5;
 
+    if (v10 == 58) {
+        // MEAMU 2026-11-15: Mangekyou Sharingan -- no cell exists in
+        // the 256px Skill.jpg atlas for skill 58 (row 7 is off the
+        // texture), so it draws its dedicated texture (bitmap 299)
+        // full-frame, then falls through to the keybind digit.
+        GL_DrawTexture(299, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+    } else {
     float v_uv = (float)((double)(a5 * ((v10 - 1) / 8)) * 0.00390625);
     float u_uv = (float)((double)(a4 * ((v10 - 1) % 8)) * 0.00390625);
     float uW   = fw * 0.00390625f;
     float vH   = (fh - 1.0f) * 0.00390625f;
     GL_DrawTexture(298, fx, fy, fw, fh, u_uv, v_uv, uW, vH, 1, 1);
+    }
 
     // Keybind digit per-hero.
     BYTE keybind = *(unsigned char*)(CA + (SelectedHero << 6) + slot + 215);

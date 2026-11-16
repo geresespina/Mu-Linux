@@ -353,6 +353,17 @@ void PacketHandler_0x19(BYTE* pkt)
         goto common_tail;
     }
 
+    case 0x3A:  // 58 Mangekyou Sharingan (MEAMU 2026-11-15)
+    {
+        // Remote cast pose only (same buff-cast action as Greater
+        // Life). The crimson aura itself is NOT spawned here: it is
+        // driven by the synced buff state (C1:07 bit 0x0400 ->
+        // entity+120 -> CharacterEffects aura block), so it renders
+        // for everyone in view for exactly the buff's lifetime.
+        SetAction(AsObject(caster), 63);
+        goto common_tail;
+    }
+
     case 0x31:  // 49 Fire Breath
     {
         SetAction(AsObject(caster),

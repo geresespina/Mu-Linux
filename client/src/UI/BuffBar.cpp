@@ -21,6 +21,13 @@ constexpr int IconW = 16, IconH = 18, Gap = 2, BarY = 10, BarX = 110;
 
 void DrawSkillIcon(int skill, float x, float y)
 {
+    if (skill == 58) {
+        // MEAMU 2026-11-15: Mangekyou Sharingan has no cell in the
+        // 256px Skill.jpg atlas (row 7 falls off the texture); it
+        // draws its own texture (bitmap 299) full-frame.
+        GL_DrawTexture(299, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        return;
+    }
     const int index = skill - 1;
     const float u = (float)((index % 8) * CellW) / 256.0f;
     const float v = (float)((index / 8) * CellH) / 256.0f;
