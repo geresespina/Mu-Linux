@@ -122,7 +122,7 @@ extern "C" bool __cdecl CharacterAnimation(intptr_t c, intptr_t o)
         }
         // Action 63 with frame > 6.0 → half speed (anim slow-down at end)
         if (AsObject(o)->CurrentAction == 63 && AsObject(o)->AnimationFrame > 6.0f) speed *= 0.5f;
-        // MEAMU NINJA RUN: player walk/run cycles play at the same x1.9 as the
+        // MEAMU NINJA RUN: player walk/run cycles play at the same x1.75 as the
         // ground step rate (CharacterMoveSpeed), so feet stay under the body.
         // Attack actions (34..91) are NOT locomotion and keep stock cadence.
         if (type == 390 && EntityView((const void*)c).Kind() == EntityView::PlayerKind &&

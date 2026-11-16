@@ -454,7 +454,7 @@ void __cdecl Game_MainLoop(HDC param_1)
                 pkt.PhysiSpeed = physical >= drink ? physical - drink : 0;
                 pkt.MagicSpeed = magic >= drink ? magic - drink : 0;
             }
-            // MEAMU NINJA RUN: the report scales by the same x1.9 as the
+            // MEAMU NINJA RUN: the report scales by the same x1.75 as the
             // ground step rate, under the GS NinjaRun allowance (report <=
             // server x200% + tolerance is legitimate; MagicSpeed untouched —
             // its GS check has no allowance).
