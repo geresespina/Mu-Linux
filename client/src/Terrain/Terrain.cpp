@@ -657,8 +657,8 @@ float10 __cdecl CharacterMoveSpeed(CHARACTER* c)
   }
   result = 15.0;
 LABEL_12:
-  // MEAMU NINJA RUN: player ground step rate x1.9 (walk 12->22.8, run 15->28.5,
-  // winged 16->30.4 units/tick). The C3/0E PhysiSpeed report scales by the
+  // MEAMU NINJA RUN: player ground step rate x1.75 (walk 12->21, run 15->26.25,
+  // winged 16->28 units/tick). The C3/0E PhysiSpeed report scales by the
   // same factor (Game_MainLoop) under the GS NinjaRun 200% allowance.
   if ( isPlayer )
   {
