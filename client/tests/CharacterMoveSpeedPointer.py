@@ -36,6 +36,11 @@ std::uint64_t RunSpeed(CHARACTER* character) {
             if(grounded) value = run < 40 ? 12.0 : 15.0;
             else { expected.Run = 40; value = wing == 789 ? 16.0 : 15.0; }
         }
+#ifdef MU_NINJA_RUN_TEST
+        // MEAMU NINJA RUN: player branch scales xNinjaRun::kSpeedFactor at
+        // LABEL_12, before the slow halving; monsters/NPCs unscaled.
+        if(type == 390 && kind == 1) value *= NinjaRun::kSpeedFactor;
+#endif
         if(flags & 2) value *= 0.5;
         const float10 actual = CallSpeed(character);
         Require(actual == static_cast<float10>(value));
@@ -77,6 +82,11 @@ def harness(revision=None):
     kind = re.search(r"BYTE\s+Kind\s*;", read_source("src/Entity/EntityTypes.h", revision)).group()
     prefix = prefix.replace("BYTE beforeAction[261 - 28];", "BYTE beforeKind[132 - 28]; " + kind + " BYTE beforeAction[261 - 133];", 1)
     prefix += "\nstatic_assert(sizeof(void*) != 4 || (offsetof(OBJECT, Kind) == 132 && offsetof(CHARACTER, MoveSpeed) == 762));\n"
+    if revision is None:
+        # MEAMU NINJA RUN: the current function reads the factor from the real
+        # header; inject it so the harness compiles the production constant.
+        ninja = read_source("src/Game/NinjaRun.h", revision).replace("#pragma once", "")
+        prefix += "\n#define MU_NINJA_RUN_TEST 1\n" + ninja + "\n"
     speed = function(read_source("src/Terrain/Terrain.cpp", revision), "CharacterMoveSpeed")
     arg = "character" if "CHARACTER* c" in speed else "static_cast<int>(reinterpret_cast<std::uintptr_t>(character))"
     return prefix + MAIN.replace("SPEED_FUNCTION", speed).replace("CALL_SPEED", f"CharacterMoveSpeed({arg})")

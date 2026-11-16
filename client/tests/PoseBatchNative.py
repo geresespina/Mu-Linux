@@ -110,7 +110,11 @@ def harness(revision=None):
  source=read_source('src/Entity/ObjectPose.cpp',revision);source=re.sub(r'^#include[^\n]*\n','',source,flags=re.M)
  existing=set(re.findall(r'\bfloat\s+(\w+)\s*=',prefix,re.M));names=set(re.findall(r'\b_DAT_[0-9a-f]+\b',source));globals=read_source('src/globals.cpp')
  constants='\n'.join(re.search(r'^float\s+'+n+r'\s*=\s*[^;]+;',globals,re.M).group()for n in sorted(names-existing))
- return prefix+SERVICES+constants+function(read_source('src/Math/Math_3D.cpp'),'Vector_InverseRotate')+function(read_source('src/Entity/ObjectBounds.h'),'ObjectBounds_Build')+source+MAIN
+ ninja_header=''
+ if revision is None:
+  # MEAMU NINJA RUN: ObjectPose.cpp references NinjaRun helpers.
+  ninja_header=read_source('src/Game/NinjaRun.h',revision).replace('#pragma once','')+'\n'
+ return prefix+SERVICES+ninja_header+constants+function(read_source('src/Math/Math_3D.cpp'),'Vector_InverseRotate')+function(read_source('src/Entity/ObjectBounds.h'),'ObjectBounds_Build')+source+MAIN
 
 def main():
  p=argparse.ArgumentParser(description=__doc__);p.add_argument('--architecture',choices=('Win32','x64'),default='x64');p.add_argument('--generator');p.add_argument('--reference-ref');a=p.parse_args()
