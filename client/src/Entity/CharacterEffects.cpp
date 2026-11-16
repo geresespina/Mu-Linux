@@ -319,6 +319,45 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
             }
         }
 
+        // ── 0b. Aura Mangekyou (DESVIACION, solo cliente; MEAMU
+        // 2026-11-15) ────────────────────────────────────────────
+        // El buff Mangekyou Sharingan (efecto GS 65) llega como el
+        // bit 0x0400 del estado persistente (entity+120): viewport
+        // F3:F1/F3:F2 al entrar en pantalla y C1:07 al castear, asi
+        // que el aura la ve todo el que ve al personaje, durante
+        // exactamente la vida del buff. Mismas herramientas que el
+        // aura de clan pero MAS GRANDE y en carmesi puro: sprite de
+        // suelo 4.2 (clan: 2.6), halo corporal 3.0 (clan: 1.8),
+        // pulso de 1200 ms (clan: 2400 ms) y deriva de brasas
+        // (particula 0x4ab) con compuerta temporal por entidad.
+        if (bVar7 == 0xFF && AsCharacter(puVar13)->Dead == 0 &&
+            !gUserSettings.GetAntilag(ANTILAG_GLOW) &&
+            (*(DWORD*)((BYTE*)puVar13 + 120) & 0x0400) != 0) {
+            const float mt = 0.5f - 0.5f * cosf(WorldTime * (2.0f * 3.14159265f / 1200.0f));
+            float mkLight[3] = { 0.86f + (1.0f - 0.86f) * mt,
+                                 0.08f + (0.25f - 0.08f) * mt,
+                                 0.16f + (0.20f - 0.16f) * mt };
+            float mkPos[3] = { AsObject(puVar13)->Position[0],
+                               AsObject(puVar13)->Position[1],
+                               AsObject(puVar13)->Position[2] };
+            float mkGround[3] = { mkLight[0] * 0.6f, mkLight[1] * 0.6f, mkLight[2] * 0.6f };
+            Equipment_AddSprite(0x47e, mkPos, 4.2f, mkGround,
+                                (intptr_t)puVar13, 0.0f, 0);
+            float mkOff[3] = { 0.0f, 0.0f, 0.0f };
+            float mkBody[3];
+            BMD_TransformPosition(pvVar23,
+                (float *)((intptr_t)AsObject(puVar13)->BoneMatrices + 0 * 0x30),
+                mkOff, mkBody, '\x01');
+            Equipment_AddSprite(0x47e, mkBody, 3.0f, mkLight,
+                                (intptr_t)puVar13, 0.0f, 0);
+            const int mkPhase = (int)(((intptr_t)puVar13 >> 5) & 0x3F);
+            if ((((int)WorldTime + mkPhase) % 120) < 16) {
+                float emberLight[3] = { 1.0f, 0.3f, 0.15f };
+                Particle_Spawn(0x4ab, mkBody, (float *)(puVar13 + 7),
+                               emberLight, 0, 0.45f, 0);
+            }
+        }
+
 
         // ── 1. Glove sparkle: class byte (cls&7)==0 + (cls_skin&0xF8)==8 ───
         // (DK 2nd-tier with specific skin range): sprite + sin halo at bone 19
