@@ -395,6 +395,7 @@
 #include "Platform/IWindow.h"
 #include "Platform/IFileSystem.h"
 #include "Terrain/Terrain.h"
+#include "Game/NinjaRun.h"
 
 // InitTerrainMappingLayer @ 0x004F6C60 — Terrain_Clear: resets tile/height/noise arrays.
 // Los símbolos son arrays reales en globals.cpp (el decomp accedía por dirección
@@ -629,7 +630,10 @@ float10 __cdecl CharacterMoveSpeed(CHARACTER* c)
   short v3; // cx
 
   result = (double)AsCharacter(c)->MoveSpeed;
-  if ( *(WORD *)&AsCharacter(c)->Object.Type != 390 || AsCharacter(c)->Object.Kind != 1 )
+  // MEAMU NINJA RUN: only the player branch below (type 390, kind 1) scales;
+  // monsters/NPCs keep their own MoveSpeed field untouched.
+  const bool isPlayer = (*(WORD *)&AsCharacter(c)->Object.Type == 390 && AsCharacter(c)->Object.Kind == 1);
+  if ( !isPlayer )
   {
     goto LABEL_12;
   }
@@ -653,6 +657,13 @@ float10 __cdecl CharacterMoveSpeed(CHARACTER* c)
   }
   result = 15.0;
 LABEL_12:
+  // MEAMU NINJA RUN: player ground step rate x1.9 (walk 12->22.8, run 15->28.5,
+  // winged 16->30.4 units/tick). The C3/0E PhysiSpeed report scales by the
+  // same factor (Game_MainLoop) under the GS NinjaRun 200% allowance.
+  if ( isPlayer )
+  {
+    result *= NinjaRun::kSpeedFactor;
+  }
   if ( (*(const BYTE *)(reinterpret_cast<const BYTE*>(c) + 120) & 2) == 2 )
   {
     return result * 0.5;
