@@ -54,18 +54,27 @@
 //   same night): casting the selected skill continuously for 2.0 s --
 //   casts never more than ~0.6 s apart -- latches AUTO on through the
 //   same AutoSet path as F8 (same banner + indicator). The trigger is
-//   the cast itself, not any one input: mouse hold-to-cast, held digit
-//   keys, gamepad hold-cast and repeated clicks all count equally,
-//   because every source funnels into Combat_DispatchHeroSkillAttack,
-//   whose branches stamp SkillStage = 1 at the cast-commit point; the
-//   tick polls that stamp for rising edges. The streak builds only
+//   the cast itself, not any one input: held digit keys, gamepad
+//   hold-cast and repeated clicks all count equally, because every
+//   source funnels into Combat_DispatchHeroSkillAttack, whose
+//   branches stamp SkillStage = 1 at the cast-commit point; the
+//   tick polls that stamp for rising edges. ONE source is excluded
+//   since 2026-11-16 (RMB law, below): casts made while the physical
+//   right mouse button is held. The streak builds only
 //   while AUTO is off, chat is closed and the world gates pass — the
-//   keyboard master switch does NOT gate it (decouple, 2026-11-15: a
-//   mouse-hold streak is not keyboard input); chat, a scene change,
-//   an error modal or the hero's death resets it. Anti-re-latch: when AUTO turns off (say a
-//   mouse press stops it mid-hold), no new streak can arm until
-//   casting has fully stopped for ~0.8 s, so the same hold that was
-//   interrupted can never instantly re-latch.
+//   keyboard master switch does NOT gate it (decouple, 2026-11-15:
+//   a gamepad/click streak is not keyboard input); chat, a scene
+//   change, an error modal or the hero's death resets it.
+//   Anti-re-latch: when AUTO turns off (say a mouse press stops it
+//   mid-hold), no new streak can arm until casting has fully stopped
+//   for ~0.8 s, so the same hold that was interrupted can never
+//   instantly re-latch.
+//   RMB law (MEAMU 2026-11-16, G's order): the mouse is OUT of the
+//   streak — a cast observed while the physical right button is held
+//   stamps the beat clock but kills the span, so holding RMB can
+//   never latch AUTO. Stock hold-to-attack (the Combat gate on the
+//   shared MouseRButton flag) is a different path and is untouched;
+//   digit holds, gamepad casts and clicks streak exactly as before.
 //
 // * Master toggle (MEAMU kb-toggle, 2026-11-13): Config.ini [Keyboard]
 //   Enable (default 1 when missing) decides the boot state; F9 flips it
@@ -489,15 +498,22 @@ Uint64 LatchNow()
 
 // One observed cast of the player's selected skill. In the real path
 // this is fed by the SkillStage rising edge in LatchFrame; the
-// self-test feeds synthetic stamps through the same entry.
-void LatchNoteCast(Uint64 now)
+// self-test feeds synthetic stamps through the same entry. mouseHeld
+// marks a cast made while the physical right mouse button is held.
+void LatchNoteCast(Uint64 now, bool mouseHeld = false)
 {
     const Uint64 prev = gLastCastT;
     gLastCastT = now;
-    // Decoupled from the keyboard master switch (MEAMU 2026-11-15): the
-    // streak is fed by every cast source — mouse holds included — so the
-    // F9 switch never gated it legitimately.
+    // Decoupled from the keyboard master switch (MEAMU 2026-11-15):
+    // the streak is fed by digit holds, gamepad casts and clicks, so
+    // the F9 switch never gated it legitimately.
     if (gAutoOn || gLatchSuppress) { gStreakStart = 0; return; }
+    // RMB law (MEAMU 2026-11-16, G's order): a mouse-held cast never
+    // builds the streak — it kills the span outright, so no mixture
+    // of mouse casting can ever latch AUTO. The gLastCastT stamp
+    // above still lands, so the anti-re-latch beat keeps measuring
+    // from the player's last cast of ANY source, exactly as before.
+    if (mouseHeld) { gStreakStart = 0; return; }
     if (gStreakStart == 0 || prev == 0 || now - prev > kLatchGapMs) {
         gStreakStart = now;   // first cast, or the gap broke the old span
         return;
@@ -515,7 +531,14 @@ void LatchFrame(bool chat)
 {
     const Uint64 now = LatchNow();
     const BYTE stage = Hero ? HeroC()->SkillStage : 0;
-    if (stage == 1 && gSkillStagePrev != 1) LatchNoteCast(now);
+    // KeyHeld(2) reads the key table's button bit, which only real
+    // SDL device events write (synthetic buttons from this module,
+    // NavMove and the gamepad travel via DeliverSDLInput and never
+    // appear there) — it is the physical right mouse button, exactly
+    // as the press-edge cancel in the tick samples it. Casts observed
+    // while it is held are mouse casts: the RMB law excludes them
+    // from the streak (see LatchNoteCast).
+    if (stage == 1 && gSkillStagePrev != 1) LatchNoteCast(now, KeyHeld(2));
     gSkillStagePrev = stage;
 
     const bool world = AutoGates() || (gSelfTest && gSelfWorldSim);
@@ -709,7 +732,7 @@ void SelfTestDrive()
         gSelfForced = false;
         KbLog("KB-LATCH-SELFTEST: segment complete (AUTO on=%d, expect 0)", gAutoOn ? 1 : 0);
         break;
-    case 29: KbLog("KB-CLOBBER-SELFTEST: segment starts - physical RMB hold simulated (the streak-building hold)");
+    case 29: KbLog("KB-CLOBBER-SELFTEST: segment starts - physical RMB hold simulated (RMB-law hold: its casts must never latch)");
         gSelfForced = true;
         gSelfWorldSim = true;
         gLatchSimT = 700000;
@@ -719,17 +742,20 @@ void SelfTestDrive()
         KbLog("KB-CLOBBER-SELFTEST: RMB held=%d shared-flag=%d (expect 1/1)",
               KeyHeld(2) ? 1 : 0, (int)DAT_083a42ac);
         break;
-    case 30: for (int k = 0; k < 6; ++k) { LatchNoteCast(gLatchSimT); gLatchSimT += 400; }
-        // casts at T..T+2000 under the held RMB: the span latches on the 6th
-        KbLog("KB-CLOBBER-SELFTEST: 2 s of casts under a held RMB: AUTO=%d RMB held=%d (expect 1/1 - latched, the hold did not cancel)",
+    case 30: for (int k = 0; k < 6; ++k) { LatchNoteCast(gLatchSimT, KeyHeld(2)); gLatchSimT += 400; }
+        // casts at T..T+2000 under the held RMB, fed through the same
+        // mouse-aware entry the real tick uses: the RMB law (2026-11-16)
+        // says the span can never complete — AUTO must stay off.
+        KbLog("KB-CLOBBER-SELFTEST: 2 s of casts under a held RMB: AUTO=%d RMB held=%d (expect 0/1 - no latch from mouse casting)",
               gAutoOn ? 1 : 0, KeyHeld(2) ? 1 : 0);
+        AutoSet(true, "self-test clobber exercise", false);   // arm AUTO directly (the F8 path) — the clobber scenario below needs a running drive, not a latch
         AutoDriveButton();   // the drive's first button step
         KbLog("KB-CLOBBER-SELFTEST: drive button step: synth-held=%d shared-flag=%d (expect 1/1)",
               gRightDown ? 1 : 0, (int)DAT_083a42ac);
         break;
     case 31: Platform::InjectVirtualKey(2, false);   // player lets go of the mouse
         DAT_083a42ac = 0;   // the real RightUp clears the shared flag (Input_WndProc)
-        KbLog("KB-CLOBBER-SELFTEST: RMB released: held=%d AUTO=%d (expect 0/1 - the arming hold's release is not an off input)",
+        KbLog("KB-CLOBBER-SELFTEST: RMB released: held=%d AUTO=%d (expect 0/1 - the pre-existing hold's release is not an off input)",
               KeyHeld(2) ? 1 : 0, gAutoOn ? 1 : 0);
         AutoDriveButton();   // the drive must re-assert the clobbered hold
         KbLog("KB-CLOBBER-SELFTEST: after drive step: shared-flag=%d synth-held=%d (expect 1/1 - hold re-asserted, AUTO keeps casting)",
