@@ -349,7 +349,7 @@ void QuickSlotDigit(int digitVal)
 bool IsSelfSkill(int skillType)
 {
     // Elf heal/buff line: Heal, Greater Defense, Greater Damage, Greater Life.
-    return skillType == 26 || skillType == 27 || skillType == 28 || skillType == 48 || skillType == 57;  // 57 = Omni Buff (MEAMU 2026-11-14)
+    return skillType == 26 || skillType == 27 || skillType == 28 || skillType == 48 || skillType == 57 || skillType == 58;  // 57 = Omni Buff (MEAMU 2026-11-14), 58 = Mangekyou Sharingan (MEAMU 2026-11-15)
 }
 
 int SelectedSkillType()
