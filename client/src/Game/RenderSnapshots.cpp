@@ -7,6 +7,8 @@
 #include "Game/RenderFxSnapshots.h"
 #include "Game/SimulationPreparation.h"
 #include "Game/MapManager.h"
+#include "Model/ModelTypes.h"
+#include "Render/ResourceTables.h"
 #include "Scene/ObjectRegistry.h"
 #include <cmath>
 #include <cstdint>
@@ -113,6 +115,21 @@ int CharacterSlot(const void* entity) {
     const std::uintptr_t offset = address - base;
     return offset % sizeof(CHARACTER) == 0 ? (int)(offset / sizeof(CHARACTER)) : -1;
 }
+// MEAMU (round v20261115-2132): longitud del ciclo de la acción con la MISMA
+// fórmula de BMD__PlayAnimation (Render/BMD_Anim.cpp): FrameCount menos 1 si
+// el byte +10 (LockPositions) está puesto; 0 si la acción no es en bucle o la
+// tabla no se puede validar. Sin esto, Interpolate no puede distinguir el
+// wrap del ciclo de un reinicio de acción.
+float ActionLoopLength(int type, unsigned char action) {
+    if (type < 0 || (std::size_t)type >= ResourceTables::ModelCount() || !DAT_05828d58) return 0.0f;
+    const BMD* model = AsModel((BYTE*)(uintptr_t)DAT_05828d58 + BMD_STRIDE * type);
+    if (model->NumActions <= 0 || (int)action >= (int)model->NumActions) return 0.0f;
+    const auto* actions = reinterpret_cast<const ModelAnimationAction*>(model->Actions);
+    if ((uintptr_t)actions < 0x100000u) return 0.0f;
+    const ModelAnimationAction& entry = actions[action];
+    if (entry.Unknown0[0] != 0 || entry.FrameCount <= 1) return 0.0f;
+    return (float)entry.FrameCount - (entry.LockPositions != 0 ? 1.0f : 0.0f);
+}
 Sample ObjectSample(const OBJECT& object) {
     Sample sample;
     sample.live = object.Live != 0;
@@ -126,6 +143,7 @@ Sample ObjectSample(const OBJECT& object) {
     sample.pose.priorAnimationFrame = object.PriorAnimationFrame;
     sample.pose.action = object.CurrentAction;
     sample.pose.priorAction = object.PriorAction;
+    sample.pose.loopLength = ActionLoopLength(object.Type, object.CurrentAction);
     sample.pose.scale = object.Scale;
     sample.pose.alpha = object.Alpha;
     return sample;
@@ -251,15 +269,38 @@ RenderPose RenderSnapshots_Interpolate(const RenderPosePair& pair, float alpha) 
         pose.headAngle[axis] = BlendAngle(pair.previous.headAngle[axis], pair.current.headAngle[axis], alpha);
     }
     const bool sameAction = pair.previous.action == pose.action && pair.previous.priorAction == pose.priorAction;
-    if (sameAction && pose.animationFrame >= pair.previous.animationFrame &&
-        pose.priorAnimationFrame >= pair.previous.priorAnimationFrame) {
-        pose.animationFrame = Blend(pair.previous.animationFrame, pose.animationFrame, alpha);
+    // MEAMU (round v20261115-2132): cruce del fin del ciclo (wrap). La mezcla
+    // histórica exigía frames monótonos: en el paso del wrap la descartaba y
+    // la pose quedaba CONGELADA en el frame post-wrap un paso entero mientras
+    // la posición sí se deslizaba el paso completo. Con la cadencia x1.9 de
+    // Ninja Run el wrap llega ~x1.9 más seguido y el deslizamiento congelado
+    // es de 28.5 unidades en vez de 15: tirón rítmico al correr ("twitching").
+    // Firma del wrap genuino: misma acción, el frame baja, y el prior actual
+    // es exactamente el entero del frame previo (lo que BMD__PlayAnimation
+    // guarda al avanzar); un reinicio de acción no la cumple y sigue sin
+    // mezclarse. Se desenvuelve el frame actual con la longitud del ciclo,
+    // se mezcla en espacio desenvuelto y se re-envuelve el resultado; el
+    // prior sigue la regla de siempre evaluada sobre el valor desenvuelto
+    // (los extremos quedan exactos: alpha 0 = previo, alpha 1 = actual).
+    const float loopLength = pair.current.loopLength;
+    const bool wrapped = sameAction && loopLength > 0.0f &&
+        pose.animationFrame < pair.previous.animationFrame &&
+        pair.current.priorAnimationFrame == (float)(int)pair.previous.animationFrame &&
+        pair.current.priorAnimationFrame >= pair.previous.priorAnimationFrame;
+    if (sameAction && (wrapped ||
+        (pose.animationFrame >= pair.previous.animationFrame &&
+         pose.priorAnimationFrame >= pair.previous.priorAnimationFrame))) {
+        const float currentFrame = wrapped ? pose.animationFrame + loopLength
+                                           : pose.animationFrame;
+        float blended = Blend(pair.previous.animationFrame, currentFrame, alpha);
         // IDA: BMD__PlayAnimation (0x00440AA0) cambia PriorFrame al cruzar
         // una clave entera; BMD_Animation lo trunca para indexar esa clave.
         // DESVIACION: elegir el índice de la pareja correspondiente al frame
         // visual, sin interpolarlo como un contador continuo.
-        pose.priorAnimationFrame = (int)pose.animationFrame == (int)pair.previous.animationFrame ?
+        pose.priorAnimationFrame = (int)blended == (int)pair.previous.animationFrame ?
             pair.previous.priorAnimationFrame : pair.current.priorAnimationFrame;
+        if (wrapped && blended >= loopLength) blended -= loopLength;
+        pose.animationFrame = blended;
     }
     pose.scale = Blend(pair.previous.scale, pose.scale, alpha);
     pose.alpha = Blend(pair.previous.alpha, pose.alpha, alpha);
