@@ -17,9 +17,18 @@ void Gamepad_Tick();
 // on-screen indicator (Gamepad_RenderIndicator, called from the HUD render).
 bool Gamepad_IsActive();
 
-// True while the pad is actively steering/clicking this frame (left stick
-// deflected or a trigger held). NavMove (follow / arrow keys) yields to it.
+// True while the pad is steering with the left stick this frame (direct
+// move active). NavMove (follow / arrow keys) yields to it, and so does
+// KbPlay's held cast. Skill buttons never set it: they are digit mirrors
+// (PADCAST, 2026-11-16), and like a keyboard digit hold they must not
+// make a cast yield.
 bool Gamepad_IsDriving();
+
+// True while any of the ten pad skill buttons (A/X/Y/B/RB/LB/RT/LT/L3/R3)
+// is held. KbPlay's cast-streak latch reads it: a cast observed while a
+// pad skill button drives it is excluded from the AUTO latch (pad law),
+// exactly like a cast made while the physical right mouse button is held.
+bool Gamepad_PadCastHeld();
 
 // Draws the small "PAD" indicator (HUD render phase only).
 void Gamepad_RenderIndicator();
