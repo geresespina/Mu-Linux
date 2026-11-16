@@ -28,7 +28,7 @@
 // * While a cast key is held the cursor belongs to the cast: arrow-key
 //   movement keeps its left button held, so the hero homes to the target
 //   (click-move semantics). Release the cast key to steer freely again.
-// * The gamepad keeps priority: while the pad is driving (LT cast / stick),
+// * The gamepad keeps priority: while the pad is driving (stick move),
 //   a held digit yields its right button and re-engages when the pad stops.
 // * Gates (all features): in-world scene, no chat input open, no text/IME
 //   mode, no error modal — the NavMove gate set plus the chat-mode flag
@@ -54,13 +54,14 @@
 //   same night): casting the selected skill continuously for 2.0 s --
 //   casts never more than ~0.6 s apart -- latches AUTO on through the
 //   same AutoSet path as F8 (same banner + indicator). The trigger is
-//   the cast itself, not any one input: held digit keys, gamepad
-//   hold-cast and repeated clicks all count equally, because every
+//   the cast itself, not any one input: held digit keys and repeated
+//   clicks count, because every
 //   source funnels into Combat_DispatchHeroSkillAttack, whose
 //   branches stamp SkillStage = 1 at the cast-commit point; the
-//   tick polls that stamp for rising edges. ONE source is excluded
-//   since 2026-11-16 (RMB law, below): casts made while the physical
-//   right mouse button is held. The streak builds only
+//   tick polls that stamp for rising edges. TWO sources are excluded
+//   since 2026-11-16 (RMB law + pad law, below): casts made while the
+//   physical right mouse button is held, and casts driven by a held
+//   gamepad skill button. The streak builds only
 //   while AUTO is off, chat is closed and the world gates pass — the
 //   keyboard master switch does NOT gate it (decouple, 2026-11-15:
 //   a gamepad/click streak is not keyboard input); chat, a scene
@@ -74,7 +75,14 @@
 //   stamps the beat clock but kills the span, so holding RMB can
 //   never latch AUTO. Stock hold-to-attack (the Combat gate on the
 //   shared MouseRButton flag) is a different path and is untouched;
-//   digit holds, gamepad casts and clicks streak exactly as before.
+//   digit holds and clicks streak exactly as before.
+//   Pad law (MEAMU 2026-11-16, G's order): gamepad skill-button casts
+//   are OUT of the streak too — a cast observed while any pad skill
+//   button is held (Gamepad_PadCastHeld: A/X/Y/B/RB/LB/RT/LT/L3/R3,
+//   all digit mirrors since PADCAST) stamps the beat clock but kills
+//   the span, so holding a pad button to repeat-cast can never latch
+//   AUTO, and casting still stops the moment the button is released.
+//   Real-keyboard digit holds are untouched and latch as before.
 //
 // * Master toggle (MEAMU kb-toggle, 2026-11-13): Config.ini [Keyboard]
 //   Enable (default 1 when missing) decides the boot state; F9 flips it
@@ -94,7 +102,7 @@
 #include "stdafx.h"
 #include "Input/KbPlay.h"
 #include "Config/UserSettings.h" // gUserSettings ([Keyboard] Enable)
-#include "Input/Gamepad.h"       // Gamepad_IsDriving (cast yield)
+#include "Input/Gamepad.h"       // Gamepad_IsDriving (cast yield), Gamepad_PadCastHeld (pad law)
 #include "Input/NavMove.h"       // NavMove_ArrowsHeld (NPC click guard)
 #include "Platform/IInput.h"     // Platform::InputEvent, GetInput
 #include "Core/Window.h"         // gWindow
@@ -499,7 +507,10 @@ Uint64 LatchNow()
 // One observed cast of the player's selected skill. In the real path
 // this is fed by the SkillStage rising edge in LatchFrame; the
 // self-test feeds synthetic stamps through the same entry. mouseHeld
-// marks a cast made while the physical right mouse button is held.
+// marks a cast excluded from the streak: made while the physical
+// right mouse button is held (RMB law), or while a gamepad skill
+// button drives the cast (pad law — the caller ORs Gamepad_PadCastHeld()
+// in; the parameter keeps its original name for the self-test's sake).
 void LatchNoteCast(Uint64 now, bool mouseHeld = false)
 {
     const Uint64 prev = gLastCastT;
@@ -538,7 +549,14 @@ void LatchFrame(bool chat)
     // as the press-edge cancel in the tick samples it. Casts observed
     // while it is held are mouse casts: the RMB law excludes them
     // from the streak (see LatchNoteCast).
-    if (stage == 1 && gSkillStagePrev != 1) LatchNoteCast(now, KeyHeld(2));
+    // Gamepad_PadCastHeld() is the pad twin of that sample: it reports
+    // the gamepad module's own mirror state (any of the ten skill
+    // buttons held), which the key table cannot distinguish from a
+    // physical digit hold. Casts observed while it is set are pad
+    // casts: the pad law excludes them the same way. A real-keyboard
+    // digit hold sets neither flag and streaks exactly as before.
+    if (stage == 1 && gSkillStagePrev != 1)
+        LatchNoteCast(now, KeyHeld(2) || Gamepad_PadCastHeld());
     gSkillStagePrev = stage;
 
     const bool world = AutoGates() || (gSelfTest && gSelfWorldSim);

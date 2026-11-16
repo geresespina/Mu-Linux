@@ -12,16 +12,25 @@
 // Mapping (Xbox layout):
 //   Left stick    direct move (cursor parked ahead of hero + virtual LMB held)
 //   Right stick   virtual cursor (~CursorSpeed px/s)
-//   RT            virtual left button (down while held, up on release)
-//   LT            virtual right button (down while held = cast, up on release)
-//   LB / RB       cycle selected skill down/up through learned skills
-//   LB+RB chord   open the expanded skill list (clicks the grid toggle)
-//   Face buttons  A / X / Y / B = skill shortcut keys '1' / '2' / '3' / '4',
-//                 mirrored honestly: key down while held, key up on release
-//                 (the game's own digit path does selection + repeat-cast).
+//   Skill buttons A = '1' · X = '2' · Y = '3' · B = '4' · RB = '5' · LB = '6'
+//                 RT = '7' · LT = '8' · L3 = '9' · R3 = '0' — every one
+//                 mirrors its digit key, honestly: key down while held,
+//                 key up on release. KbPlay's digit path does the rest:
+//                 it selects the button's skill, auto-targets the closest
+//                 valid monster in that skill's range and hold-casts
+//                 until the key is released (see PADCAST below).
 //   D-pad         Up = Q (HP potion) · Right = W (MP) · Down = E (SD) · Left = C
 //   Start         Esc = main menu               Back = M move list (mirrored)
-//   R3            recenter the virtual cursor on the hero
+//
+// PADCAST (2026-11-16, G's final layout — a chain of rulings the same
+// afternoon): EVERY skill button is a digit mirror into the one shared
+// auto-target cast path (KbPlay's digit handling). A held button
+// repeat-casts its skill at the closest valid enemy in that skill's
+// range, retargeting as targets die; release stops the cast; and pad
+// casts NEVER latch the cast-streak AUTO (pad law — KbPlay reads
+// Gamepad_PadCastHeld). Retired by these rulings: the RT/LT virtual
+// mouse-button mirrors, LB/RB skill cycling, the LB+RB skill-list
+// chord, R3's cursor recenter, and L3's unmapped slot.
 //
 // PADFIX2 (2026-11-16, G's ruling): ONE button = ONE mapped action, mirrored
 // honestly — down while held, up when let go. NO tap-vs-hold duals and NO
@@ -133,39 +142,46 @@ bool           gEnabled    = true;       // Config.ini [Gamepad] Enable
 float          gDeadzone   = 0.25f;
 float          gCursorSpd  = 900.0f;
 Uint64         gLastMs     = 0;
-bool           gDriving    = false;      // stick/trigger activity this frame
+bool           gDriving    = false;      // stick-move active this frame
 
 float gCursorX = -1.0f, gCursorY = -1.0f;   // window px; <0 = center on first use
 bool  gCursorInit = false;
 
-// Virtual mouse buttons have independent owners (trigger / stick-move / UI /
-// LT) so overlapping holds never pop each other's button.
-enum LeftOwner  { kLeftRT = 1, kLeftMove = 2, kLeftUI = 4 };
-enum RightOwner { kRightLT = 1 };
-int  gLeftOwners  = 0;
-int  gRightOwners = 0;
-bool gUiClickUpPending = false;          // chord grid click: up next tick
+// The virtual left button has a single owner — stick-move — kept as an
+// owner mask so the resync/watchdog logic below keeps its shape. The
+// virtual right button has NO pad owner any more (PADCAST, 2026-11-16):
+// the triggers are digit mirrors now, and KbPlay's digit path owns the
+// synthetic right button for pad casts, exactly as for keyboard digits.
+enum LeftOwner { kLeftMove = 1 };
+int  gLeftOwners = 0;
 
 // One-frame key pulses: injected "down" on the press frame, "up" next tick.
 struct KeyPulse { int vk; bool upPending; };
 KeyPulse gPulses[8];
 int      gPulseCount = 0;
 
-// Mirrored buttons (PADFIX2): one button = one key, down while the button
-// is held, up when it is released — no tap/hold split, no long-press layer.
-// Face buttons mirror the skill shortcut digit keys; Back mirrors M.
+// Mirrored buttons (PADFIX2 + PADCAST): one button = one key, down while
+// the button is held, up when it is released — no tap/hold split, no
+// long-press layer. The ten skill buttons mirror the skill shortcut
+// digit keys (G's final layout, 2026-11-16): A=1 X=2 Y=3 B=4 RB=5 LB=6
+// RT=7 LT=8 L3=9 R3=0. Back mirrors M. The two triggers are axis-driven,
+// so they keep their own edge trackers (gPrevRT/gPrevLT) instead of a
+// gPrevButtons slot.
 struct MirrorKey { SDL_GamepadButton btn; const char* name; int vk; };
-const MirrorKey kFaceKeys[] = {
-    { SDL_GAMEPAD_BUTTON_SOUTH, "A", 0x31 },   // shortcut '1'
-    { SDL_GAMEPAD_BUTTON_WEST,  "X", 0x32 },   // shortcut '2'
-    { SDL_GAMEPAD_BUTTON_NORTH, "Y", 0x33 },   // shortcut '3'
-    { SDL_GAMEPAD_BUTTON_EAST,  "B", 0x34 },   // shortcut '4'
+const MirrorKey kSkillKeys[] = {
+    { SDL_GAMEPAD_BUTTON_SOUTH,         "A",  0x31 },   // skill 1
+    { SDL_GAMEPAD_BUTTON_WEST,          "X",  0x32 },   // skill 2
+    { SDL_GAMEPAD_BUTTON_NORTH,         "Y",  0x33 },   // skill 3
+    { SDL_GAMEPAD_BUTTON_EAST,          "B",  0x34 },   // skill 4
+    { SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, "RB", 0x35 },   // skill 5
+    { SDL_GAMEPAD_BUTTON_LEFT_SHOULDER,  "LB", 0x36 },   // skill 6
+    { SDL_GAMEPAD_BUTTON_LEFT_STICK,     "L3", 0x39 },   // skill 9
+    { SDL_GAMEPAD_BUTTON_RIGHT_STICK,    "R3", 0x30 },   // skill 0
 };
 const MirrorKey kBackKey{ SDL_GAMEPAD_BUTTON_BACK, "Back", 0x4D };   // M
 
 bool gPrevButtons[SDL_GAMEPAD_BUTTON_COUNT] = {};
 bool gPrevRT = false, gPrevLT = false;
-bool gPrevChord = false;
 
 // ── Unified pad state (padfix) ───────────────────────────────────────────────
 // Whichever backend is active (SDL gamepad or DirectInput) refills this once
@@ -239,18 +255,9 @@ void SetLeftButton(int owner, bool down)
     }
 }
 
-void SetRightButton(int owner, bool down)
-{
-    const int before = gRightOwners;
-    gRightOwners = down ? (gRightOwners | owner) : (gRightOwners & ~owner);
-    if (before == 0 && gRightOwners != 0) {
-        PadLog("PAD: RightDown (cast) @%d,%d", (int)gCursorX, (int)gCursorY);
-        SendMouse(Platform::InputEventType::RightDown, gCursorX, gCursorY);
-    } else if (before != 0 && gRightOwners == 0) {
-        PadLog("PAD: RightUp @%d,%d", (int)gCursorX, (int)gCursorY);
-        SendMouse(Platform::InputEventType::RightUp, gCursorX, gCursorY);
-    }
-}
+// (PADCAST: SetRightButton is gone — no pad path synthesizes the right
+// mouse button any more. Pad casts run through KbPlay's digit path,
+// which owns its own synthetic right button.)
 
 void PulseKey(int vk, const char* what)
 {
@@ -262,22 +269,36 @@ void PulseKey(int vk, const char* what)
 
 void ReleaseAllInputs()
 {
-    if (gLeftOwners)  { gLeftOwners = 0;  SendMouse(Platform::InputEventType::LeftUp, gCursorX, gCursorY); }
-    if (gRightOwners) { gRightOwners = 0; SendMouse(Platform::InputEventType::RightUp, gCursorX, gCursorY); }
+    if (gLeftOwners) { gLeftOwners = 0; SendMouse(Platform::InputEventType::LeftUp, gCursorX, gCursorY); }
     for (int i = 0; i < gPulseCount; ++i) Platform::InjectVirtualKey(gPulses[i].vk, false);
     gPulseCount = 0;
-    // Mirrored keys: send the balancing key-up for any still tracked as down.
-    for (const auto& mk : kFaceKeys)
+    // Mirrored keys: send the balancing key-up for any still tracked as
+    // down — every skill button (button-kind via its gPrevButtons slot,
+    // the two triggers via their own trackers) plus Back.
+    for (const auto& mk : kSkillKeys)
         if (gPrevButtons[mk.btn]) Platform::InjectVirtualKey(mk.vk, false);
+    if (gPrevRT) Platform::InjectVirtualKey(0x37, false);   // RT — skill 7
+    if (gPrevLT) Platform::InjectVirtualKey(0x38, false);   // LT — skill 8
     if (gPrevButtons[kBackKey.btn]) Platform::InjectVirtualKey(kBackKey.vk, false);
     // PADFIX2: reset every edge tracker, so a still-held trigger/button
     // re-fires its down edge next tick instead of being silently swallowed
     // (edge trackers previously survived a release-all, desyncing mirrors).
     memset(gPrevButtons, 0, sizeof(gPrevButtons));
     gPrevRT = gPrevLT = false;
-    gPrevChord = false;
-    gUiClickUpPending = false;
     gDriving = false;
+}
+
+// True while the pad holds ANY virtual input down (mouse owner, skill
+// mirror, trigger mirror, Back). The resync paths in the tick key off
+// this — not just the mouse owners — so a state loss or scene change can
+// never leave a mirrored digit key wedged down (PADCAST).
+bool AnyVirtualHeld()
+{
+    if (gLeftOwners != 0) return true;
+    for (const auto& mk : kSkillKeys)
+        if (gPrevButtons[mk.btn]) return true;
+    if (gPrevRT || gPrevLT) return true;
+    return gPrevButtons[kBackKey.btn];
 }
 
 // Radial deadzone with rescale: returns magnitude 0..1 and unit direction.
@@ -292,48 +313,11 @@ float StickVector(Sint16 ax, Sint16 ay, float& dx, float& dy)
     return scaled;
 }
 
-// ── Skill selection (mirrors the bottom-bar grid's own writes) ──────────────
-// Learned skills: CharacterAttribute[slot + 87] != 0 for slot 0..59.
-// Ctrl+N hotkey assignment: CharacterAttribute[(SelectedHero << 6) + slot + 215].
-char* SkillCA() { return (char*)CharacterAttribute; }
-
-void SelectSkillSlot(int slot, const char* why)
-{
-    if (!Hero || !CharacterAttribute || slot < 0 || slot >= 60) return;
-    ((CHARACTER*)(uintptr_t)Hero)->CurrentSkill = (BYTE)slot;
-    DAT_0055a3e4 = (DWORD)slot;                 // bottom-bar highlight mirror
-    PlayBuffer(0x19, nullptr, 0);               // the grid's selection click
-    PadLog("PAD: skill select slot %d (type %d) - %s", slot,
-           (unsigned char)SkillCA()[slot + 87], why);
-}
-
-void CycleSkill(int dir)
-{
-    if (!Hero || !CharacterAttribute) { PadLog("PAD: skill cycle ignored (no hero)"); return; }
-    char* CA = SkillCA();
-    const int cur = ((CHARACTER*)(uintptr_t)Hero)->CurrentSkill;
-    for (int step = 1; step <= 60; ++step) {
-        const int s = ((cur + dir * step) % 60 + 60) % 60;
-        if (CA[s + 87] != 0) {
-            if (s != cur) SelectSkillSlot(s, dir > 0 ? "RB cycle" : "LB cycle");
-            return;
-        }
-    }
-    PadLog("PAD: skill cycle - no learned skills");
-}
-
-// (PADFIX2: the pad-side QuickSlot selector is gone — face buttons now
-// mirror the digit keys and the game's own hotkey handling selects skills.)
-
-// LB+RB chord: open the expanded skill list by clicking the bottom-bar grid
-// toggle (UI 640x480 point 0x140,0x1CE — the hit area Chat_InputTick tests).
-void FireSkillGridClick(float winW, float winH)
-{
-    MoveCursorTo(0x140 * winW / 640.0f, 0x1CE * winH / 480.0f, true);
-    SetLeftButton(kLeftUI, true);
-    gUiClickUpPending = true;   // released next tick, like a real click
-    PadLog("PAD: LB+RB chord - skill list toggle click");
-}
+// (PADCAST, 2026-11-16: the pad-side skill selection that lived here —
+// SelectSkillSlot/CycleSkill for LB/RB cycling and the LB+RB chord's
+// skill-grid click — is retired. The bumpers are digit mirrors now;
+// skill selection for every pad skill button happens in KbPlay's digit
+// path, exactly as it does for a physical keyboard digit.)
 
 // ── Self-test harness ────────────────────────────────────────────────────────
 // Attaches a virtual Xbox-style gamepad and scripts inputs on a timeline.
@@ -410,16 +394,16 @@ void SelfTestDrive()
     else if (t < 5.5)  step = 2;   // right stick DOWN  -> cursor +Y
     else if (t < 9.0)  step = 3;   // left stick UP     -> move (virtual LMB held)
     else if (t < 10.0) step = 4;   // release sticks
-    else if (t < 11.0) step = 5;   // RT press          -> left click at cursor
-    else if (t < 13.0) step = 6;   // LT hold           -> right click (cast)
+    else if (t < 11.0) step = 5;   // RT press          -> digit '7' mirror (skill 7)
+    else if (t < 13.0) step = 6;   // LT hold           -> digit '8' mirror (skill 8 cast)
     else if (t < 14.0) step = 7;   // idle
     else if (t < 14.4) step = 8;   // A press (held)    -> Space latch (hold layer)
     else if (t < 15.5) step = 9;   // idle
     else if (t < 16.0) step = 10;  // D-pad Up          -> Q (HP potion)
     else if (t < 17.0) step = 11;  // idle
-    else if (t < 17.5) step = 12;  // RB press          -> skill cycle up
+    else if (t < 17.5) step = 12;  // RB press          -> digit '5' mirror (skill 5)
     else if (t < 18.0) step = 13;  // RB released
-    else if (t < 18.5) step = 14;  // LB press          -> skill cycle down
+    else if (t < 18.5) step = 14;  // LB press          -> digit '6' mirror (skill 6)
     else if (t < 19.0) step = 15;  // LB released
     else if (t < 19.75) step = 16; // X press (tap)     -> quick skill slot 2 on release
     else if (t < 20.0) step = 17;  // X released
@@ -638,7 +622,6 @@ bool DIPadAdopt()
     PadLog("PAD-DI: connected '%s' (DirectInput fallback)", gDIName);
     memset(gPrevButtons, 0, sizeof(gPrevButtons));
     gPrevRT = gPrevLT = false;
-    gPrevChord = false;
     return true;
 }
 
@@ -787,7 +770,6 @@ bool XInputCapture()
             gXISlot = slot;
             memset(gPrevButtons, 0, sizeof(gPrevButtons));
             gPrevRT = gPrevLT = false;
-            gPrevChord = false;
             PadLog("PAD-XI: connected slot %d (native XInput via %s)", slot, gXIDllName);
             XInputRumble(0, 6000, 90);   // connect confirmation buzz, as on the SDL path
             break;
@@ -880,7 +862,6 @@ void PollPadPresence()
                 PadLog("PAD: connected '%s' (id %u)", name ? name : "?", (unsigned)gPadId);
                 memset(gPrevButtons, 0, sizeof(gPrevButtons));
                 gPrevRT = gPrevLT = false;
-                gPrevChord = false;
                 Rumble(0, 6000, 90);   // connect confirmation buzz
             }
         }
@@ -951,11 +932,12 @@ void SelfTestEnterWorld()
     }
 }
 
-// ── Mirrored buttons (PADFIX2) ──────────────────────────────────────────────
+// ── Mirrored buttons (PADFIX2 + PADCAST) ───────────────────────────────────
 // One button = one key, mirrored honestly: the virtual key goes down on the
 // press edge and up on the release edge — exactly what the physical button
 // does. No duration is ever measured, so nothing can fire a second,
-// different action for holding a button longer.
+// different action for holding a button longer. Used for the eight
+// button-kind skill buttons (A/X/Y/B/RB/LB/L3/R3) and for Back.
 void MirrorKeyTick(const MirrorKey& mk)
 {
     const bool down = PadButton(mk.btn);
@@ -967,9 +949,37 @@ void MirrorKeyTick(const MirrorKey& mk)
     gPrevButtons[mk.btn] = down;
 }
 
+// ── Trigger mirrors (PADCAST) ──────────────────────────────────────────────
+// RT/LT are analog axes, not buttons: the mirror edge is the threshold
+// crossing, tracked by the trigger's own prev flag — the same trackers
+// ReleaseAllInputs balances and resets, so a held trigger is covered by
+// every PADFIX2 release path and re-edges cleanly after a release-all.
+void TriggerKeyTick(const char* name, int axis, int vk, bool& prev)
+{
+    const bool down = PadAxis(axis) > kTriggerOn;
+    if (down != prev) {
+        Platform::InjectVirtualKey(vk, down);
+        PadLog("PAD: trigger %s %s - key 0x%02X %s", name,
+               down ? "down" : "up", vk, down ? "held" : "released");
+    }
+    prev = down;
+}
+
 
 bool Gamepad_IsActive() { return gEnabled && (gPad != nullptr || NativePadPresent()); }
 bool Gamepad_IsDriving() { return gDriving; }
+
+// True while any of the ten skill buttons is held (button-kind via its
+// gPrevButtons slot, triggers via their own trackers). KbPlay's
+// cast-streak latch reads this: a cast observed while a pad skill button
+// drives it is excluded from the AUTO latch (pad law, 2026-11-16),
+// exactly like a cast made while the physical right mouse button is held.
+bool Gamepad_PadCastHeld()
+{
+    for (const auto& mk : kSkillKeys)
+        if (gPrevButtons[mk.btn]) return true;
+    return gPrevRT || gPrevLT;
+}
 
 void Gamepad_RenderIndicator()
 {
@@ -1002,9 +1012,6 @@ void Gamepad_Tick()
         if (gPulses[i].upPending) { Platform::InjectVirtualKey(gPulses[i].vk, false); gPulses[i].upPending = false; }
     if (gPulseCount && !gPulses[0].upPending) gPulseCount = 0;
 
-    // Finish the chord's skill-grid click (down went out last tick).
-    if (gUiClickUpPending) { gUiClickUpPending = false; SetLeftButton(kLeftUI, false); }
-
     // PADFIX2: scene transitions resync the virtual buttons. The game zeroes
     // its click flags on scene/world entry (Game_EnterWorldTick,
     // Player_ProcessInput's scene-change block) without telling this module;
@@ -1017,7 +1024,7 @@ void Gamepad_Tick()
     {
         static int s_lastScene = -1;
         const int scene = (int)SceneFlag;
-        if (s_lastScene != -1 && scene != s_lastScene && (gLeftOwners || gRightOwners)) {
+        if (s_lastScene != -1 && scene != s_lastScene && AnyVirtualHeld()) {
             PadLog("PAD: scene change %d->%d while inputs held - releasing all (resync)", s_lastScene, scene);
             ReleaseAllInputs();
         }
@@ -1028,13 +1035,16 @@ void Gamepad_Tick()
     CapturePadState();
     if (!gStateValid) {
         // PADFIX2: a backend that cannot report state must never keep a
-        // virtual button held. Previously this early return skipped every
+        // virtual input held. Previously this early return skipped every
         // owner release, so a capture failure while moving wedged the
         // virtual LMB down forever — the hero kept re-pathing to the parked
         // cursor and never stopped. Release instead; when state recovers,
-        // a still-deflected stick / still-held trigger re-fires its down
-        // edge and play resumes.
-        if (gLeftOwners || gRightOwners) {
+        // a still-deflected stick / still-held button or trigger re-fires
+        // its down edge and play resumes. PADCAST: the release condition
+        // is AnyVirtualHeld(), not just the mouse owners — a mirrored
+        // digit key held across a state loss would wedge exactly the
+        // same way the LMB did.
+        if (AnyVirtualHeld()) {
             PadLog("PAD: pad state lost while inputs held - releasing all");
             ReleaseAllInputs();
         }
@@ -1050,9 +1060,17 @@ void Gamepad_Tick()
     const float winH = (float)gWindow.GetRealHeight();
     if (!gCursorInit) { gCursorX = winW * 0.5f; gCursorY = winH * 0.5f; gCursorInit = true; }
 
-    // ── Mirrored buttons: face A/X/Y/B (shortcut keys 1-4) + Back (M) ────────
-    for (const auto& mk : kFaceKeys) MirrorKeyTick(mk);
+    // ── Skill buttons + triggers + Back: digit/M mirrors (PADCAST) ──────────
+    // Every skill button feeds KbPlay's digit path, which selects the
+    // button's skill, auto-targets the closest valid monster in that
+    // skill's range and hold-casts until the key is released — the pad
+    // adds no targeting or casting logic of its own.
+    for (const auto& mk : kSkillKeys) MirrorKeyTick(mk);
     MirrorKeyTick(kBackKey);
+    TriggerKeyTick("RT", SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, 0x37, gPrevRT);
+    const bool ltWas = gPrevLT;
+    TriggerKeyTick("LT", SDL_GAMEPAD_AXIS_LEFT_TRIGGER, 0x38, gPrevLT);
+    if (gPrevLT && !ltWas) Rumble(4000, 0, 50);   // cast-engage thump (kept from the RMB era)
 
     // ── Left stick: movement (owns the cursor while deflected) ───────────────
     // Arrow keys take movement precedence while held (either source can take
@@ -1087,44 +1105,16 @@ void Gamepad_Tick()
         }
     }
 
-    // ── Triggers ─────────────────────────────────────────────────────────────
-    const bool rt = PadAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > kTriggerOn;
-    if (rt != gPrevRT) { gPrevRT = rt; PadLog(rt ? "PAD: RT down" : "PAD: RT up"); SetLeftButton(kLeftRT, rt); }
-    const bool lt = PadAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > kTriggerOn;
-    if (lt != gPrevLT) {
-        gPrevLT = lt;
-        SetRightButton(kRightLT, lt);
-        if (lt) Rumble(4000, 0, 50);   // cast-engage thump
-    }
-    gDriving = moving || rt || lt;
-
-    // ── Bumpers: skill cycling (+ LB+RB chord = skill list) ─────────────────
-    const bool lb = PadButton(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
-    const bool rb = PadButton(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
-    if (lb && !gPrevButtons[SDL_GAMEPAD_BUTTON_LEFT_SHOULDER])  { PadLog("PAD: button LB down"); CycleSkill(-1); }
-    if (rb && !gPrevButtons[SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER]) { PadLog("PAD: button RB down"); CycleSkill(+1); }
-    gPrevButtons[SDL_GAMEPAD_BUTTON_LEFT_SHOULDER]  = lb;
-    gPrevButtons[SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER] = rb;
-    const bool chord = lb && rb;
-    if (chord && !gPrevChord) FireSkillGridClick(winW, winH);
-    gPrevChord = chord;
-
-    // ── Stick clicks: R3 cursor recenter ────────────────────────────────────
-    // PADFIX2: L3's auto-cast latch is REMOVED (G's ruling: one button, one
-    // action, mirrored honestly). The latch held the virtual right button
-    // down with nothing physically held, so casting continued after LT was
-    // released — the exact "doesn't stop" behaviour G rejected. L3 is now
-    // unmapped; LT alone owns the virtual right button.
-    const bool l3 = PadButton(SDL_GAMEPAD_BUTTON_LEFT_STICK);
-    if (l3 && !gPrevButtons[SDL_GAMEPAD_BUTTON_LEFT_STICK])
-        PadLog("PAD: L3 - unmapped (auto-cast latch removed, PADFIX2)");
-    gPrevButtons[SDL_GAMEPAD_BUTTON_LEFT_STICK] = l3;
-    const bool r3 = PadButton(SDL_GAMEPAD_BUTTON_RIGHT_STICK);
-    if (r3 && !gPrevButtons[SDL_GAMEPAD_BUTTON_RIGHT_STICK]) {
-        MoveCursorTo(winW * 0.5f, winH * 0.5f, true);
-        PadLog("PAD: R3 - cursor recentered on hero");
-    }
-    gPrevButtons[SDL_GAMEPAD_BUTTON_RIGHT_STICK] = r3;
+    // PADCAST: only stick-move "drives" now. The skill buttons are digit
+    // mirrors; like a keyboard digit hold they must NOT make KbPlay's
+    // cast yield — the yield exists for when the pad steers the cursor
+    // with the left stick and holds the left button itself. (Bumpers and
+    // stick clicks need no tick code of their own any more: LB/RB/L3/R3
+    // are rows in kSkillKeys, ticked by MirrorKeyTick above. The LB+RB
+    // chord and R3's cursor recenter are retired, and PADFIX2's L3
+    // auto-cast latch stays removed — L3 mirrors '9' like any other
+    // skill button, nothing is ever held without a physical hold.)
+    gDriving = moving;
 
     // ── Simple edge buttons ──────────────────────────────────────────────────
     // Start pulses Esc: in this client Esc is the single back key — it closes
@@ -1152,7 +1142,7 @@ void Gamepad_Tick()
     // this module's back WITHOUT a scene change — e.g. the F3/04 revival
     // handler (Net/Recv/Recv_Character.cpp) zeroes it when the hero respawns
     // in town. The owner mask only emits edges, so after such a clear a
-    // still-held stick/trigger produces no fresh LeftDown and pad movement
+    // still-held stick produces no fresh LeftDown and pad movement
     // is silently dead. If the mask says "held" while the game says "up"
     // for several consecutive ticks AND the cursor is over the world (over
     // a window the game legitimately consumes the flag — DAT_07d78094 is
