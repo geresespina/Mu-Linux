@@ -1275,6 +1275,19 @@ void __cdecl MoveCharacter(intptr_t p1)
             SetAction(AsObject(o), 0);
         }
         else if (AsObject(o)->Type < 270 || AsObject(o)->Type >= 335) {
+            // MEAMU crash-fix (2026-11-16): los monstruos de catalogo
+            // (ContentCatalog, Type >= MODEL_MAX_VANILLA = 963) caen en esta
+            // rama de "props": al terminar la accion de muerte (6) se les
+            // reseteaba la accion a 0/1, el cadaver se levantaba, y el
+            // envejecimiento (Dead >= 0xF -> mc_SetPlayerDie) volvia a forzar
+            // la muerte: bucle die/stand hasta el fade (visto en vivo en
+            // Obito). Un objeto muerto con Kind de monstruo sostiene la
+            // muerte igual que la rama 270..334: sangre una vez y return.
+            if (AsCharacter(c)->Dead && AsObject(o)->CurrentAction == 6
+                && AsObject(o)->Kind == 2) {
+                if (!AsCharacter(c)->Blood) { AsCharacter(c)->Blood = 1; CreateBlood(o); }
+                return;
+            }
             // Non-player non-monster (NPCs, props)
             v48 = AsObject(o)->Type;
             if (v48 == 170 || v48 <= 337 || v48 > 339) {
