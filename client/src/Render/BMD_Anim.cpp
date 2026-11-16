@@ -18,6 +18,7 @@
 #include "globals.h"
 #include "functions.h"
 #include "Entity/EntityView.h"
+#include "Game/NinjaRun.h"
 
 // BMD__PlayAnimation @ 0x00440AA0 — BMD::PlayAnimation (__thiscall, 7 args in original)
 // Advances animation frame counter (*AnimationFrame) by Speed each call. If the frame
@@ -121,6 +122,13 @@ extern "C" bool __cdecl CharacterAnimation(intptr_t c, intptr_t o)
         }
         // Action 63 with frame > 6.0 → half speed (anim slow-down at end)
         if (AsObject(o)->CurrentAction == 63 && AsObject(o)->AnimationFrame > 6.0f) speed *= 0.5f;
+        // MEAMU NINJA RUN: player walk/run cycles play at the same x1.9 as the
+        // ground step rate (CharacterMoveSpeed), so feet stay under the body.
+        // Attack actions (34..91) are NOT locomotion and keep stock cadence.
+        if (type == 390 && EntityView((const void*)c).Kind() == EntityView::PlayerKind &&
+            NinjaRun::IsLocomotionAction(modelAction)) {
+            speed *= NinjaRun::kSpeedFactor;
+        }
     }
 
     // IDA: AttackStage (0x00448930) default: el ataque sale cuando el frame de una

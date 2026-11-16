@@ -1966,41 +1966,58 @@ void __cdecl RenderObjectScreen(int Type, unsigned int ItemLevel, unsigned char 
     BMD_Animation(model, reinterpret_cast<float*>(&DAT_06970a9c), 0.0f, 0, 0,
                  (unsigned int*)renderAngle, headAngle, '\0', '\0');
 
-    // MEAMU ALIGN (round v20261115): un modelo propio del catalogo se dibuja
-    // con la pose, la escala y el ancla del vanilla que imita, pero su caja
-    // envolvente no es la del vanilla: el centro cae fuera de la casilla y el
-    // tamano no llena su huella (ej.: el casco de Madara quedaba 33% mas abajo
-    // y 1.55x mas alto que su caja de 2x2). Aca se centra la caja posada del
-    // modelo propio sobre la caja posada del vanilla de referencia y se
-    // escala para caber en su huella en pantalla. Los vanilla nunca entran
+    // MEAMU ALIGN (round v20261115, v2): un modelo propio del catalogo se
+    // dibuja con la pose, la escala y el ancla del vanilla que imita, pero su
+    // caja envolvente no es la del vanilla: el centro cae fuera de la casilla
+    // y el tamano no llena su huella. Aca se centra la caja posada del modelo
+    // propio sobre la caja posada del vanilla de referencia y se escala para
+    // caber en su huella en pantalla. Los vanilla nunca entran
     // (drawType < MODEL_MAX_VANILLA) y un item con pose propia del catalogo
     // manda el: si tiene CatalogItemPose, este bloque no se aplica.
+    //
+    // V2 — la caja del vanilla se mide con los huesos que el dibujo REALMENTE
+    // usa: para una pieza vanilla, RenderObjectScreen no anima la entrada
+    // propia del item sino el modelo donante 390 (remap de modelType mas
+    // arriba) y transforma los vertices del item con esos huesos. La v1
+    // animaba la entrada propia del vanilla, cuya pose (la pieza "puesta",
+    // centro ~90-160 unidades mas alto) jamas se dibuja: el centro objetivo
+    // era un fantasma y la correccion casi no movia la pieza dibujada.
     if (drawType >= MODEL_MAX_VANILLA && Type >= 0 && Type < MODEL_MAX_VANILLA &&
         Type != drawType && !pose) {
         const BMD* customModel = reinterpret_cast<const BMD*>(model);
         BMD* behModel = AsModel(DAT_05828d58 + (int)Type * BMD_STRIDE);
         float cMn[3], cMx[3], bMn[3], bMx[3];
         if (ComputePosedBBox(customModel, reinterpret_cast<const float*>(&DAT_06970a9c), cMn, cMx)) {
-            // Animar el vanilla de referencia en un scratch propio, con la
-            // misma pose, y restaurar su cabecera al salir.
+            // Animar el DONANTE que el dibujo vanilla usa (mismo remap que
+            // modelType arriba) en un scratch propio y posar con esos huesos
+            // los vertices del vanilla de referencia; restaurar la cabecera
+            // del donante al salir.
             static float s_alignBones[200 * 12];
-            const float savedAngle[3] = { behModel->BodyAngle[0], behModel->BodyAngle[1], behModel->BodyAngle[2] };
-            const float savedHeight = behModel->BodyHeight;
-            const float savedAnim = behModel->CurrentAnimation;
-            const short savedFrame = behModel->CurrentAnimationFrame;
-            const unsigned char savedAction = behModel->CurrentAction;
-            behModel->BodyHeight = inventoryPose.BodyHeight;
-            *(BYTE*)&behModel->CurrentAction = 0;
-            BMD_Animation(behModel, s_alignBones, 0.0f, 0, 0,
+            short behModelType = (short)Type;
+            if (behModelType >= MODEL_HELM && behModelType < MODEL_WING_ELF) {
+                behModelType = 390;
+            } else if (behModelType == 860) {
+                if (level == 0) behModelType = 947;
+                else if (level == 2) behModelType = 948;
+            }
+            BMD* donorModel = AsModel(DAT_05828d58 + (int)behModelType * BMD_STRIDE);
+            const float savedAngle[3] = { donorModel->BodyAngle[0], donorModel->BodyAngle[1], donorModel->BodyAngle[2] };
+            const float savedHeight = donorModel->BodyHeight;
+            const float savedAnim = donorModel->CurrentAnimation;
+            const short savedFrame = donorModel->CurrentAnimationFrame;
+            const unsigned char savedAction = donorModel->CurrentAction;
+            donorModel->BodyHeight = inventoryPose.BodyHeight;
+            *(BYTE*)&donorModel->CurrentAction = 0;
+            BMD_Animation(donorModel, s_alignBones, 0.0f, 0, 0,
                           (unsigned int*)renderAngle, headAngle, '\0', '\0');
             const bool behOk = ComputePosedBBox(behModel, s_alignBones, bMn, bMx);
-            behModel->BodyAngle[0] = savedAngle[0];
-            behModel->BodyAngle[1] = savedAngle[1];
-            behModel->BodyAngle[2] = savedAngle[2];
-            behModel->BodyHeight = savedHeight;
-            behModel->CurrentAnimation = savedAnim;
-            behModel->CurrentAnimationFrame = savedFrame;
-            *(BYTE*)&behModel->CurrentAction = savedAction;
+            donorModel->BodyAngle[0] = savedAngle[0];
+            donorModel->BodyAngle[1] = savedAngle[1];
+            donorModel->BodyAngle[2] = savedAngle[2];
+            donorModel->BodyHeight = savedHeight;
+            donorModel->CurrentAnimation = savedAnim;
+            donorModel->CurrentAnimationFrame = savedFrame;
+            *(BYTE*)&donorModel->CurrentAction = savedAction;
             if (behOk) {
                 const float cCtr[3] = { (cMn[0] + cMx[0]) * 0.5f, (cMn[1] + cMx[1]) * 0.5f, (cMn[2] + cMx[2]) * 0.5f };
                 const float bCtr[3] = { (bMn[0] + bMx[0]) * 0.5f, (bMn[1] + bMx[1]) * 0.5f, (bMn[2] + bMx[2]) * 0.5f };
