@@ -18,11 +18,14 @@
 //             input is open every key (F8 included) belongs to the chat.
 //   Cast streak  casting the selected skill continuously for 2.0 s
 //             (no gap over ~0.6 s between casts) latches AUTO on —
-//             same engage path as F8. Any input source counts (mouse
-//             hold, digit hold, gamepad, clicks): the tick polls the
-//             hero's SkillStage cast-commit stamp. After AUTO turns
-//             off, a fresh streak cannot arm until casting has fully
-//             stopped for ~0.8 s (anti-re-latch beat).
+//             same engage path as F8. Digit holds, gamepad casts and
+//             clicks count: the tick polls the hero's SkillStage
+//             cast-commit stamp. Casts made while the physical right
+//             mouse button is held NEVER count (RMB law, 2026-11-16,
+//             G's order: RMB must never latch AUTO — hold-to-attack
+//             is untouched, only the latch lost the mouse). After
+//             AUTO turns off, a fresh streak cannot arm until casting
+//             has fully stopped for ~0.8 s (anti-re-latch beat).
 //   F9        keyboard-controls master toggle (MEAMU kb-toggle,
 //             2026-11-13): flips the keyboard feature ON/OFF in-world
 //             and persists Config.ini [Keyboard] Enable. OFF silences
