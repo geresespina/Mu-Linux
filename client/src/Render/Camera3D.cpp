@@ -22,14 +22,26 @@ void CCamera3D::Toggle()
 
 void CCamera3D::Restore()
 {
-    if (!m_Enabled || SceneFlag != 5) return;
-    m_Fov = kDefaultFov;
-    m_Pitch = kDefaultPitch;
-    m_Height = kDefaultHeight;
-    m_ZoomTarget = 1.0f;
-    m_ZoomCurrent = 1.0f;
-    CameraAngle[2] = kDefaultYaw;
-    UI_AddNotice((char*)"Camara 3D restaurada", 1);
+    if (SceneFlag != 5) return;
+    // MEAMU (round v20261115-2132): F11 siempre reinicia el zoom de DISTANCIA
+    // de la cámara principal (el de la rueda sin F10), aunque la cámara 3D
+    // esté apagada; antes el return temprano con !m_Enabled lo dejaba sin
+    // reset. Con la cámara 3D activa, restaura todo como siempre. Aviso
+    // sólo si algo cambió: activa = como siempre; apagada = sólo si el
+    // zoom estaba fuera de 1.0 (sin spam en un F11 sin efecto).
+    if (m_Enabled) {
+        m_Fov = kDefaultFov;
+        m_Pitch = kDefaultPitch;
+        m_Height = kDefaultHeight;
+        m_ZoomTarget = 1.0f;
+        m_ZoomCurrent = 1.0f;
+        CameraAngle[2] = kDefaultYaw;
+        UI_AddNotice((char*)"Camara 3D restaurada", 1);
+    } else if (m_ZoomTarget != 1.0f || m_ZoomCurrent != 1.0f) {
+        m_ZoomTarget = 1.0f;
+        m_ZoomCurrent = 1.0f;
+        UI_AddNotice((char*)"Camara 3D restaurada", 1);
+    }
 }
 
 void CCamera3D::BeginDrag(int x, int y)
