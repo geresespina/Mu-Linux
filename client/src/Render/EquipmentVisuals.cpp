@@ -172,11 +172,13 @@ void Equipment_Draw(const CHARACTER* entity, int stage) {
         EquipmentModelContext savedModel(model);
         memcpy(model, mesh.context, sizeof(mesh.context));
         memcpy(g_BoneScratch, mesh.bones, sizeof(mesh.bones));
+        const Mesh *blendOld=nullptr;
         if (RenderInterpolation_Alpha()<1 && continuous && AsObject(entity)->BoneMatrices) {
             const Mesh *old=command.index<previous.meshes.size() ? &previous.meshes[command.index] : nullptr;
             const bool same=old && old->part==mesh.part && old->model==mesh.model && old->stage==mesh.stage &&
                 old->level==mesh.level && old->option==mesh.option && old->flags==mesh.flags && old->linked==mesh.linked &&
                 old->partState.Type==mesh.partState.Type && old->partState.LinkBone==mesh.partState.LinkBone;
+            if (same) blendOld=old;
             const OBJECT &owner=*AsObject(entity);
             float *ownerBone=(float *)owner.BoneMatrices+mesh.partState.LinkBone*12;
             float root[12]; memcpy(root,mesh.root,sizeof(root));
@@ -219,6 +221,30 @@ void Equipment_Draw(const CHARACTER* entity, int stage) {
         // El objeto mínimo es local: los materiales pueden escribir UV/escala.
         alignas(float) char object[sizeof(mesh.object)];
         memcpy(object, mesh.object, sizeof(object));
+        // MEAMU (flicker round, 2026-11-15): el estado de overlay del item
+        // (BlendMeshLight/TexCoordU/V, fijado por ItemObjectAttribute en
+        // RenderLinkObject) era el UNICO estado dibujado que no se mezclaba
+        // entre los dos registros del paso: para la familia de materiales
+        // aleatorios (414/565/567/606/607/608) se re-tira con _rand() en cada
+        // paso SIM, asi que el brillo dibujado saltaba hasta el rango completo
+        // (1.0) entre dos frames de render mientras cuerpo, raices y frames
+        // se deslizaban a 60 fps — el parpadeo constante en reposo que
+        // reporta G. Mezclarlo con el mismo alpha y la misma identidad
+        // ('same') que ya gobiernan la mezcla de raiz y de frame; para
+        // modelos deterministas los dos valores son iguales y la mezcla es
+        // identidad. BlendMesh (selector entero) no se mezcla.
+        if (blendOld) {
+            const auto mixField=[&](std::size_t offset) {
+                float before, after;
+                memcpy(&before, blendOld->object + offset, sizeof(float));
+                memcpy(&after, mesh.object + offset, sizeof(float));
+                const float value=before + (after - before) * alpha;
+                memcpy(object + offset, &value, sizeof(float));
+            };
+            mixField(offsetof(OBJECT, BlendMeshLight));
+            mixField(offsetof(OBJECT, BlendMeshTexCoordU));
+            mixField(offsetof(OBJECT, BlendMeshTexCoordV));
+        }
         float light[3]; memcpy(light, mesh.light, sizeof(light));
         MaterialVisualScope material(&mesh.material);
         RenderPartObjectEffect((intptr_t)object, mesh.model, light, drawAlpha,
