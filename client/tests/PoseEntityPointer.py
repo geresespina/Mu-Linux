@@ -30,7 +30,11 @@ OBJECT* subject;BYTE* activeModel;float* selectedBones;unsigned operation;char t
 std::vector<int> events;unsigned skeletonCalls;
 void Context(BYTE* output){std::memcpy(output+104,&subject->Scale,4);output[160]=subject->CurrentAction;std::memcpy(output+108,subject->Position,12);if(subject->Type==331){const float y=subject->Position[1]+_DAT_0055290c;std::memcpy(output+112,&y,4);}else if(subject->Type==330){const float y=subject->Position[1]+_DAT_00552908;std::memcpy(output+112,&y,4);}}
 void BMD_Animation(void* model,float* bones,float frame,unsigned prior,unsigned char action,unsigned* angles,float* head,char special,char translate){
- Require(model==activeModel && bones==selectedBones && frame==subject->AnimationFrame && action==subject->PriorAction && angles==reinterpret_cast<unsigned*>(subject->Angle) && head==subject->HeadAngle && !special && translate==(translation==0));unsigned expected;std::memcpy(&expected,&subject->PriorAnimationFrame,4);Require(prior==expected);BYTE context[188];std::memcpy(context,activeModel,188);Context(context);Require(std::memcmp(context+104,activeModel+104,16)==0 && activeModel[160]==subject->CurrentAction);std::memcpy(activeModel+120,angles,12);std::memcpy(activeModel+164,&frame,4);const short index=123;std::memcpy(activeModel+168,&index,2);bones[0]=77;bones[1]=-33;events.push_back(2);
+ // MEAMU NINJA RUN: PrepareBones may pass a leaned COPY of the angle triplet
+ // (render-only lean); the contract is the angle VALUES, not pointer identity.
+ // This fixture never uses a locomotion action, so values equal subject->Angle.
+ Require(std::memcmp(angles,subject->Angle,12)==0);
+ Require(model==activeModel && bones==selectedBones && frame==subject->AnimationFrame && action==subject->PriorAction && head==subject->HeadAngle && !special && translate==(translation==0));unsigned expected;std::memcpy(&expected,&subject->PriorAnimationFrame,4);Require(prior==expected);BYTE context[188];std::memcpy(context,activeModel,188);Context(context);Require(std::memcmp(context+104,activeModel+104,16)==0 && activeModel[160]==subject->CurrentAction);std::memcpy(activeModel+120,angles,12);std::memcpy(activeModel+164,&frame,4);const short index=123;std::memcpy(activeModel+168,&index,2);bones[0]=77;bones[1]=-33;events.push_back(2);
 }
 void Entity_GetLightScale(uintptr_t entity,uintptr_t model){Require(entity==reinterpret_cast<uintptr_t>(subject) && model==reinterpret_cast<uintptr_t>(activeModel));const float rgb[]={.25f,.5f,.75f};std::memcpy(activeModel+72,rgb,12);events.push_back(1);}
 void VerifyOutline(){const unsigned pass=skeletonCalls;Require(pass<2);float x,y,scale;const bool npc=subject->Kind==4;if(npc){x=pass?.16f:.02f;y=pass?.7f:.1f;scale=pass?1.08f:1.2f;}else{x=pass?.7f:.1f;y=pass?.07f:.01f;scale=subject->Type==302?(pass?1.08f:1.2f):(pass?.039999999f:.1f)/subject->Scale+1;}float rgb[3];std::memcpy(rgb,activeModel+72,12);Require(rgb[0]==x && rgb[1]==y && rgb[2]==0 && _DAT_005597c8==scale && activeModel[68]==0);}
@@ -91,14 +95,18 @@ def harness(revision=None):
  fields=opaque_cloth_fields(fields)
  view='using vec3_t=float[3];using vec34_t=float[3][4];\n#pragma pack(push,1)\n'+fields+'\n#pragma pack(pop)\nstatic_assert(sizeof(OBJECT)==444 && offsetof(OBJECT,BoneMatrices)==276 && offsetof(OBJECT,BoundingBoxMin)==280 && offsetof(OBJECT,OBB)==304);\n'
  structures=pose[pose.index('struct FrozenModel {'):pose.index('// Cada slot conserva capacidad',pose.index('struct FrozenModel {'))]
- code=''.join(bodies)+function(read_source('src/Entity/ObjectBounds.h',revision),'ObjectBounds_Build')
+ ninja_header=''
+ if revision is None:
+  # MEAMU NINJA RUN: ObjectPose_PrepareBones references NinjaRun helpers.
+  ninja_header=read_source('src/Game/NinjaRun.h',revision).replace('#pragma once','')+'\n'
+ code=ninja_header+''.join(bodies)+function(read_source('src/Entity/ObjectBounds.h',revision),'ObjectBounds_Build')
  constants=''.join(re.search(r'^float\s+'+n+r'\s*=\s*[^;]+;',read_source('src/globals.cpp',revision),re.M).group()for n in sorted(set(re.findall(r'\b_DAT_[0-9a-f]+\b',code))))
  services=SERVICES.replace('VIEW',view).replace('TRANSFORMS','#include "'+(ROOT/'src/Render/TransformMath.h').as_posix()+'"').replace('STRUCTURES',structures).replace('FORWARDS',prototypes)
  if 'AsModel(' in bodies[0]:
   from LegacyModelLayout import VIEW
   services=VIEW+"\nstruct CHARACTER{unsigned char Bytes[916];};\n"+services
  bounds=function(read_source('src/Entity/ObjectBounds.h',revision),'ObjectBounds_Build')
- body=PREAMBLE.split('char DAT_00559bb4',1)[0].replace('0x10000','0x100000')+constants+services+bounds+''.join(bodies)
+ body=PREAMBLE.split('char DAT_00559bb4',1)[0].replace('0x10000','0x100000')+constants+services+bounds+ninja_header+''.join(bodies)
  batch=re.search(r'^\s*PrepareContext\([^;\n]*p\.object\.data\(\)[^;\n]*;',pose,re.M).group()
  batch_fn='\nvoid BatchContext(PreparedBones& p){'+batch+'}\n'
  return body+batch_fn+MAIN.replace('ENTITY','subject' if 'OBJECT* entity' in bodies[2] else 'static_cast<int>(reinterpret_cast<uintptr_t>(subject))')
