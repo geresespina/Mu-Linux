@@ -327,9 +327,14 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
         // que el aura la ve todo el que ve al personaje, durante
         // exactamente la vida del buff. Mismas herramientas que el
         // aura de clan pero MAS GRANDE y en carmesi puro: sprite de
-        // suelo 4.2 (clan: 2.6), halo corporal 3.0 (clan: 1.8),
+        // suelo 8.4 (clan: 2.6), halo corporal 5.5 (clan: 1.8),
         // pulso de 1200 ms (clan: 2400 ms) y deriva de brasas
         // (particula 0x4ab) con compuerta temporal por entidad.
+        // MEAMU 2026-11-16 (pedido de G: el aura MAS GRANDE): suelo
+        // 4.2 -> 8.4 y halo 3.0 -> 5.5; las brasas nacen repartidas
+        // en un anillo alrededor del cuerpo de radio halo x 18 (la
+        // escala de la 0x4ab la fija su propio spawn, no el caller),
+        // con angulo determinista por tiempo+entidad (sin azar).
         if (bVar7 == 0xFF && AsCharacter(puVar13)->Dead == 0 &&
             !gUserSettings.GetAntilag(ANTILAG_GLOW) &&
             (*(DWORD*)((BYTE*)puVar13 + 120) & 0x0400) != 0) {
@@ -341,19 +346,25 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
                                AsObject(puVar13)->Position[1],
                                AsObject(puVar13)->Position[2] };
             float mkGround[3] = { mkLight[0] * 0.6f, mkLight[1] * 0.6f, mkLight[2] * 0.6f };
-            Equipment_AddSprite(0x47e, mkPos, 4.2f, mkGround,
+            Equipment_AddSprite(0x47e, mkPos, 8.4f, mkGround,
                                 (intptr_t)puVar13, 0.0f, 0);
             float mkOff[3] = { 0.0f, 0.0f, 0.0f };
             float mkBody[3];
             BMD_TransformPosition(pvVar23,
                 (float *)((intptr_t)AsObject(puVar13)->BoneMatrices + 0 * 0x30),
                 mkOff, mkBody, '\x01');
-            Equipment_AddSprite(0x47e, mkBody, 3.0f, mkLight,
+            Equipment_AddSprite(0x47e, mkBody, 5.5f, mkLight,
                                 (intptr_t)puVar13, 0.0f, 0);
             const int mkPhase = (int)(((intptr_t)puVar13 >> 5) & 0x3F);
             if ((((int)WorldTime + mkPhase) % 120) < 16) {
                 float emberLight[3] = { 1.0f, 0.3f, 0.15f };
-                Particle_Spawn(0x4ab, mkBody, (float *)(puVar13 + 7),
+                const float mkAng = (WorldTime + (float)mkPhase * 61.0f) *
+                                    (2.0f * 3.14159265f / 2400.0f);
+                const float mkRad = 5.5f * 18.0f;
+                float emberPos[3] = { mkBody[0] + cosf(mkAng) * mkRad,
+                                      mkBody[1] + sinf(mkAng) * mkRad,
+                                      mkBody[2] };
+                Particle_Spawn(0x4ab, emberPos, (float *)(puVar13 + 7),
                                emberLight, 0, 0.45f, 0);
             }
         }
