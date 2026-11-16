@@ -1,0 +1,47 @@
+name: Launcher
+
+# The MEAMU auto-update launcher (client/launcher/): a standalone Win32 exe,
+# built apart from the client's workflow so a launcher change never has to
+# wait for — or risk — a full client build.
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main", "release/**" ]
+    paths:
+      - 'client/launcher/**'
+      - '.github/workflows/launcher.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: launcher-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Launcher (windows-x86, Release)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Windows x86
+        working-directory: client/launcher
+        run: cmake -S . -B build -A Win32 -T v143
+
+      - name: Compilar
+        working-directory: client/launcher
+        run: cmake --build build --config Release --parallel 4
+
+      - name: Verificar que el exe existe y no pide DLLs propias
+        shell: pwsh
+        working-directory: client/launcher
+        run: |
+          if (-not (Test-Path dist/MEAMU-Launcher.exe)) { throw "Falta dist/MEAMU-Launcher.exe" }
+          Get-Item dist/MEAMU-Launcher.exe | Select-Object Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meamu-launcher-windows-x86-Release
+          path: client/launcher/dist/MEAMU-Launcher.exe
+          if-no-files-found: error
