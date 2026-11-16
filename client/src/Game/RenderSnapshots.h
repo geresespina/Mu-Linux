@@ -6,6 +6,11 @@ struct RenderPose {
     float angle[3] = {};
     float headAngle[3] = {};
     float animationFrame = 0, priorAnimationFrame = 0;
+    // MEAMU (round v20261115-2132): longitud del ciclo de la acción actual si
+    // es en bucle (fórmula de BMD__PlayAnimation); 0 = sin wrap posible. La
+    // captura la rellena desde la tabla del modelo; Interpolate la usa para
+    // desenvolver el frame al cruzar el fin del ciclo.
+    float loopLength = 0;
     float scale = 1, alpha = 1;
     unsigned char action = 0, priorAction = 0;
 };
