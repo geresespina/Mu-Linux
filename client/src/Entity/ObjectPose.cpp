@@ -7,6 +7,7 @@
 #include "Render/TransformWorkers.h"
 #include "Render/TransformMath.h"
 #include "Render/ResourceTables.h"
+#include "Game/NinjaRun.h"
 #include "Physics/ClothTypes.h"
 #include <array>
 #include <vector>
@@ -37,8 +38,18 @@ void ObjectPose_PrepareBones(OBJECT* entity, void* model, float* bones, char tra
     if (ReuseBones(entity,model,bones,translate)) return;
     DWORD priorFrame;
     memcpy(&priorFrame, &AsObject(entity)->PriorAnimationFrame, sizeof(priorFrame));
+    // MEAMU NINJA RUN: forward lean, render-only. A leaned COPY of the angle
+    // feeds the pose; entity->Angle itself is never written (combat/effect
+    // code reads Angle[0] as an effect-pitch base). Positive Angle[0] tips
+    // the model's up axis toward its facing-forward (Matrix_BuildFromEuler:
+    // up -> sin(a0)*forward + cos(a0)*up), so +kLeanDegrees leans INTO the run.
+    float angleBuf[3] = { entity->Angle[0], entity->Angle[1], entity->Angle[2] };
+    if (AsObject(entity)->Type == 390 && AsObject(entity)->Kind == 1 &&
+        NinjaRun::IsLocomotionAction(AsObject(entity)->CurrentAction)) {
+        angleBuf[0] += NinjaRun::kLeanDegrees;
+    }
     BMD_Animation(model, bones, AsObject(entity)->AnimationFrame, priorFrame,
-                  AsObject(entity)->PriorAction, reinterpret_cast<unsigned int*>(entity->Angle),
+                  AsObject(entity)->PriorAction, reinterpret_cast<unsigned int*>(angleBuf),
                   entity->HeadAngle, '\0', translate == '\0');
 }
 
@@ -308,9 +319,18 @@ void PrepareRange(void*,std::size_t begin,std::size_t end) {
         auto& p=*jobs[slot];
         auto* o=AsObject(p.object.data());
         DWORD priorFrame; memcpy(&priorFrame,&o->PriorAnimationFrame,4);
+        // MEAMU NINJA RUN: same render-only lean as ObjectPose_PrepareBones,
+        // applied to the scratch copy's Angle[0] for the pose call only and
+        // restored right after, so the ReuseBones memcmp against the live
+        // entity Angle keeps matching (the cached model BodyAngle retains
+        // the lean, which is what the replay consumes).
+        const float savedAngle0=o->Angle[0];
+        if (o->Type == 390 && NinjaRun::IsLocomotionAction(o->CurrentAction))
+            o->Angle[0] += NinjaRun::kLeanDegrees;
         AnimateWithScratch(p.model.data(),p.bones.data(),o->AnimationFrame,priorFrame,
             o->PriorAction,(unsigned int*)o->Angle,o->HeadAngle,0,0,
             p.quaternions.data(),p.parent.data());
+        o->Angle[0]=savedAngle0;
         if(p.geometry) {
             BMD* model=AsModel(p.model.data());
             p.direction={0,0,0};
