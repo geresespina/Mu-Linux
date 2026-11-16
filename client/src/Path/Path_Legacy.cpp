@@ -451,28 +451,56 @@ static unsigned int MovePath_IDA_0043EA20(char *ent, char turn)
         AsCharacter(ent)->PositionY = *(byte *)(ent + offsetof(CHARACTER, PathY) + next);
     }
 
-    float x[4], y[4];
-    for (int i = 0; i < 4; ++i) {
-        int point = (int)current - 1 + i;
-        if (point < 0) point = 0;
-        if (point > count - 1) point = count - 1;
-        x[i] = ((float)*(byte *)(ent + offsetof(CHARACTER, PathX) + point) + 0.5f) * 100.0f;
-        y[i] = ((float)*(byte *)(ent + offsetof(CHARACTER, PathY) + point) + 0.5f) * 100.0f;
-    }
+    // MEAMU (facing round, 2026-11-15): the Catmull-Rom substep target is a
+    // pure function of the path cursor (PathCurrent/PathSubstep).  It used to
+    // be computed ONCE, before the arrival check below advanced the cursor —
+    // so on the advance tick the turn aimed at the point the hero had JUST
+    // PASSED.  At stock speed (15/tick < the 20-unit arrival radius) that
+    // point is still ahead when the turn runs, but at Ninja Run speed
+    // (28.5/tick) the hero overshoots it: CreateAngle pointed backwards, the
+    // >=45-degree rule snapped the facing 180 degrees, and the hero stepped
+    // backwards — a facing flip-flop every few steps (G: "every step it
+    // looks at different directions").  Recompute the target whenever the
+    // cursor moved during this call so the turn always aims at the point
+    // actually being travelled to.  Non-advance ticks are unchanged, and the
+    // arrival branch below still uses the original target.
+    auto computeTarget = [&](float& outX, float& outY) {
+        float x[4], y[4];
+        const byte cur = AsCharacter(ent)->PathCurrent;
+        for (int i = 0; i < 4; ++i) {
+            int point = (int)cur - 1 + i;
+            if (point < 0) point = 0;
+            if (point > count - 1) point = count - 1;
+            x[i] = ((float)*(byte *)(ent + offsetof(CHARACTER, PathX) + point) + 0.5f) * 100.0f;
+            y[i] = ((float)*(byte *)(ent + offsetof(CHARACTER, PathY) + point) + 0.5f) * 100.0f;
+        }
+        outX = x[1]; outY = y[1];
+        switch (AsCharacter(ent)->PathSubstep) {
+        case 0: outX=x[2]*.2265625f-x[3]*.0234375f+x[1]*.8671875f-x[0]*.0703125f;
+                outY=y[2]*.2265625f-y[3]*.0234375f+y[1]*.8671875f-y[0]*.0703125f; break;
+        case 1: outX=x[2]*.5625f-x[3]*.0625f+x[1]*.5625f-x[0]*.0625f;
+                outY=y[2]*.5625f-y[3]*.0625f+y[1]*.5625f-y[0]*.0625f; break;
+        case 2: outX=x[2]*.8671875f-x[3]*.0703125f+x[1]*.2265625f-x[0]*.0234375f;
+                outY=y[2]*.8671875f-y[3]*.0703125f+y[1]*.2265625f-y[0]*.0234375f; break;
+        case 3: outX=x[2]; outY=y[2]; break;
+        }
+    };
 
-    float targetX = x[1], targetY = y[1];
-    switch (AsCharacter(ent)->PathSubstep) {
-    case 0: targetX=x[2]*.2265625f-x[3]*.0234375f+x[1]*.8671875f-x[0]*.0703125f;
-            targetY=y[2]*.2265625f-y[3]*.0234375f+y[1]*.8671875f-y[0]*.0703125f; break;
-    case 1: targetX=x[2]*.5625f-x[3]*.0625f+x[1]*.5625f-x[0]*.0625f;
-            targetY=y[2]*.5625f-y[3]*.0625f+y[1]*.5625f-y[0]*.0625f; break;
-    case 2: targetX=x[2]*.8671875f-x[3]*.0703125f+x[1]*.2265625f-x[0]*.0234375f;
-            targetY=y[2]*.8671875f-y[3]*.0703125f+y[1]*.2265625f-y[0]*.0234375f; break;
-    case 3: targetX=x[2]; targetY=y[2]; break;
-    }
+    float targetX, targetY;
+    computeTarget(targetX, targetY);
 
     const float dx = AsCharacter(ent)->Object.Position[0] - targetX;
     const float dy = AsCharacter(ent)->Object.Position[1] - targetY;
+    const byte entryCurrent = AsCharacter(ent)->PathCurrent;
+    const byte entrySubstep = AsCharacter(ent)->PathSubstep;
+    auto arrive = [&]() -> unsigned int {
+        AsCharacter(ent)->PathCurrent = count - 1;
+        AsCharacter(ent)->PositionX = *(byte *)(ent + offsetof(CHARACTER, PathX) + count - 1);
+        AsCharacter(ent)->PositionY = *(byte *)(ent + offsetof(CHARACTER, PathY) + count - 1);
+        AsCharacter(ent)->Object.Position[0] = targetX;
+        AsCharacter(ent)->Object.Position[1] = targetY;
+        return 1;
+    };
     // IDA L150-166: las tres condiciones (lejos del punto, subpaso <= 3, o
     // waypoint siguiente sin llegar al final) comparten el mismo cuerpo, que
     // gira al personaje.  El port no giraba en la tercera.
@@ -484,6 +512,45 @@ static unsigned int MovePath_IDA_0043EA20(char *ent, char turn)
         stillMoving = current < count - 1;
     }
     if (stillMoving) {
+        if (AsCharacter(ent)->PathCurrent != entryCurrent ||
+            AsCharacter(ent)->PathSubstep != entrySubstep)
+            computeTarget(targetX, targetY);
+        // MEAMU (facing round, cont.): a step longer than the 20-unit
+        // arrival radius can also land PAST the freshly retargeted point by
+        // more than the radius (28.5 step, point 8 ahead -> 20.5 past), so
+        // no advance triggers and the turn would still aim backwards.  And
+        // when the hero lands ON TOP of the current point (a couple of
+        // units away), the direction to it is numerical noise that the
+        // >=45-degree snap rule turns into an instant junk facing.  While
+        // the current target is unusable as a heading — in the rear
+        // half-plane of the hero's facing, or inside the arrival radius
+        // yet far off-axis — consume path points until it is a real
+        // forward target again (or the path's final point is reached,
+        // which the arrival branch below owns).  At stock speed neither
+        // condition occurs, so this never fires there.
+        for (int guard = 0; guard < 8; ++guard) {
+            const float want = CreateAngle(AsCharacter(ent)->Object.Position[0], AsCharacter(ent)->Object.Position[1], targetX, targetY);
+            const float delta = FarAngle(AsCharacter(ent)->Object.Angle[2], want, 1);
+            const float tdx = AsCharacter(ent)->Object.Position[0] - targetX;
+            const float tdy = AsCharacter(ent)->Object.Position[1] - targetY;
+            const bool behind = delta > 90.0f;
+            const bool onTop = (tdx*tdx + tdy*tdy <= 400.0f) && delta > 45.0f;
+            if (!behind && !onTop) break;
+            if (AsCharacter(ent)->PathSubstep < 3) {
+                ++AsCharacter(ent)->PathSubstep;
+            } else if (AsCharacter(ent)->PathCurrent < count - 1) {
+                ++AsCharacter(ent)->PathCurrent;
+                AsCharacter(ent)->PathSubstep = 0;
+            } else {
+                // Final point, overshot at speed: it is behind the hero
+                // but within one step — arrive in place (the arrival code
+                // snaps the position onto the point anyway) instead of
+                // turning 180 degrees and walking back to it.
+                if (behind && tdx*tdx + tdy*tdy <= 1600.0f) return arrive();
+                break;
+            }
+            computeTarget(targetX, targetY);
+        }
         if (turn) {
             const float angle = CreateAngle(AsCharacter(ent)->Object.Position[0], AsCharacter(ent)->Object.Position[1], targetX, targetY);
             const float delta = FarAngle(AsCharacter(ent)->Object.Angle[2], angle, 1);
@@ -492,12 +559,7 @@ static unsigned int MovePath_IDA_0043EA20(char *ent, char turn)
         return 0;
     }
 
-    AsCharacter(ent)->PathCurrent = count - 1;
-    AsCharacter(ent)->PositionX = *(byte *)(ent + offsetof(CHARACTER, PathX) + count - 1);
-    AsCharacter(ent)->PositionY = *(byte *)(ent + offsetof(CHARACTER, PathY) + count - 1);
-    AsCharacter(ent)->Object.Position[0] = targetX;
-    AsCharacter(ent)->Object.Position[1] = targetY;
-    return 1;
+    return arrive();
 }
 
 unsigned int __cdecl Entity_AdvancePath(void *entity, char flag)
