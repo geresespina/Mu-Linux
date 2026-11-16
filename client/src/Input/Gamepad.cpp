@@ -12,24 +12,25 @@
 // Mapping (Xbox layout):
 //   Left stick    direct move (cursor parked ahead of hero + virtual LMB held)
 //   Right stick   virtual cursor (~CursorSpeed px/s)
-//   RT            virtual left click (hold mirrors the trigger)
-//   LT            virtual right click hold = cast selected skill, sustained
+//   RT            virtual left button (down while held, up on release)
+//   LT            virtual right button (down while held = cast, up on release)
 //   LB / RB       cycle selected skill down/up through learned skills
 //   LB+RB chord   open the expanded skill list (clicks the grid toggle)
-//   Face buttons (G's remap, 2026-11-14): taps select skill shortcuts 1-4;
-//   the displaced utility functions live on the hold layer (>= 350 ms):
-//   A (tap)       quick skill slot 1            A (hold)  Space held = pick up / interact
-//   X (tap)       quick skill slot 2            X (hold)  hold-cast slot 2 (virtual digit '2' held)
-//   Y (tap)       quick skill slot 3            Y (hold)  Inventory (I)
-//   B (tap)       quick skill slot 4            B (hold)  Esc (the client's own back/close key)
+//   Face buttons  A / X / Y / B = skill shortcut keys '1' / '2' / '3' / '4',
+//                 mirrored honestly: key down while held, key up on release
+//                 (the game's own digit path does selection + repeat-cast).
 //   D-pad         Up = Q (HP potion) · Right = W (MP) · Down = E (SD) · Left = C
-//   Start         Esc = main menu               Back (tap) = M move list
-//   Back (hold)   Tab held = minimap
-//   L3            toggle auto-cast latch on the hover target (RMB latch)
+//   Start         Esc = main menu               Back = M move list (mirrored)
 //   R3            recenter the virtual cursor on the hero
 //
-// Quick slot N = the skill whose Ctrl+N hotkey assignment is N (the game's
-// own hotkey table), falling back to the Nth learned skill when unassigned.
+// PADFIX2 (2026-11-16, G's ruling): ONE button = ONE mapped action, mirrored
+// honestly — down while held, up when let go. NO tap-vs-hold duals and NO
+// long-press alternates anywhere. Removed: the 2026-11-14 tap/hold layer
+// (A tap slot / hold Space latch, X hold digit-cast, Y hold Inventory,
+// B hold Esc), the Back tap-M vs hold-Tab dual, and the L3 auto-cast latch
+// (a sustained virtual RMB not tied to a physical hold). Quick-slot skill
+// selection now happens through the game's own digit-key handling, exactly
+// as a held keyboard '1'..'4' behaves.
 //
 // Config.ini [Gamepad]: Enable (default 1), Deadzone (percent, default 25),
 // CursorSpeed (px/s, default 900) — Config/UserSettings.
@@ -123,8 +124,6 @@ namespace {
 // ── Tuning (MAPPING.md; deadzone + cursor speed come from Config.ini) ───────
 constexpr int   kTriggerOn   = 16000;    // of 32767
 constexpr float kMoveRadius  = 0.22f;    // of min(winW, winH)
-constexpr Uint64 kLongPressMs = 350;     // face-button tap-vs-hold split
-constexpr Uint64 kTabHoldMs   = 400;     // Back tap (M) vs hold (Tab minimap)
 
 // ── State ────────────────────────────────────────────────────────────────────
 SDL_Gamepad*   gPad        = nullptr;
@@ -140,58 +139,29 @@ float gCursorX = -1.0f, gCursorY = -1.0f;   // window px; <0 = center on first u
 bool  gCursorInit = false;
 
 // Virtual mouse buttons have independent owners (trigger / stick-move / UI /
-// LT / auto-cast latch) so overlapping holds never pop each other's button.
+// LT) so overlapping holds never pop each other's button.
 enum LeftOwner  { kLeftRT = 1, kLeftMove = 2, kLeftUI = 4 };
-enum RightOwner { kRightLT = 1, kRightAuto = 2 };
+enum RightOwner { kRightLT = 1 };
 int  gLeftOwners  = 0;
 int  gRightOwners = 0;
 bool gUiClickUpPending = false;          // chord grid click: up next tick
-bool gAutoCast = false;                  // L3 latch
 
 // One-frame key pulses: injected "down" on the press frame, "up" next tick.
 struct KeyPulse { int vk; bool upPending; };
 KeyPulse gPulses[8];
 int      gPulseCount = 0;
 
-// Tap/hold face buttons (G's remap, 2026-11-14): a tap (release before
-// kLongPressMs) selects a quick skill slot; crossing the threshold fires the
-// hold action instead and the later release fires nothing more. Hold kinds:
-// a one-shot key pulse (Y = Inventory, B = Esc), a key latch (A = Space held
-// until release, for pickup/interact), and a virtual digit hold (X = the
-// keyboard '2' key held, which KbPlay turns into select + repeat-cast of
-// shortcut 2 — the exact digit path, aim and gates included).
-enum class TapKind  { kPulseKey, kQuickSlot };
-enum class HoldKind { kPulseKey, kKeyLatch, kDigitCast };
-struct TapHold {
-    SDL_GamepadButton btn;
-    bool     down = false;
-    bool     longFired = false;
-    bool     holdEngaged = false;   // latch/digit key currently injected down
-    Uint64   downMs = 0;
-    TapKind  tapKind;
-    int      tapVk = 0;             // kPulseKey tap: virtual key
-    const char* tapWhat = nullptr;
-    int      tapSlot = 0;           // kQuickSlot tap: quick skill slot
-    HoldKind holdKind;
-    int      holdVk = 0;            // pulse/latch/digit virtual key
-    const char* holdWhat = nullptr;
+// Mirrored buttons (PADFIX2): one button = one key, down while the button
+// is held, up when it is released — no tap/hold split, no long-press layer.
+// Face buttons mirror the skill shortcut digit keys; Back mirrors M.
+struct MirrorKey { SDL_GamepadButton btn; const char* name; int vk; };
+const MirrorKey kFaceKeys[] = {
+    { SDL_GAMEPAD_BUTTON_SOUTH, "A", 0x31 },   // shortcut '1'
+    { SDL_GAMEPAD_BUTTON_WEST,  "X", 0x32 },   // shortcut '2'
+    { SDL_GAMEPAD_BUTTON_NORTH, "Y", 0x33 },   // shortcut '3'
+    { SDL_GAMEPAD_BUTTON_EAST,  "B", 0x34 },   // shortcut '4'
 };
-TapHold gTapA{ SDL_GAMEPAD_BUTTON_SOUTH, false, false, false, 0,
-               TapKind::kQuickSlot, 0, nullptr, 1,
-               HoldKind::kKeyLatch, 32, "Space/pickup" };
-TapHold gTapX{ SDL_GAMEPAD_BUTTON_WEST, false, false, false, 0,
-               TapKind::kQuickSlot, 0, nullptr, 2,
-               HoldKind::kDigitCast, 0x32, "cast slot 2 (digit 2)" };
-TapHold gTapY{ SDL_GAMEPAD_BUTTON_NORTH, false, false, false, 0,
-               TapKind::kQuickSlot, 0, nullptr, 3,
-               HoldKind::kPulseKey, 0x49, "I/inventory" };
-TapHold gTapB{ SDL_GAMEPAD_BUTTON_EAST, false, false, false, 0,
-               TapKind::kQuickSlot, 0, nullptr, 4,
-               HoldKind::kPulseKey, 27, "Esc/back" };
-
-// Back button: tap = M, hold = Tab (minimap).
-bool   gBackDown = false, gBackTabHeld = false;
-Uint64 gBackDownMs = 0;
+const MirrorKey kBackKey{ SDL_GAMEPAD_BUTTON_BACK, "Back", 0x4D };   // M
 
 bool gPrevButtons[SDL_GAMEPAD_BUTTON_COUNT] = {};
 bool gPrevRT = false, gPrevLT = false;
@@ -296,14 +266,16 @@ void ReleaseAllInputs()
     if (gRightOwners) { gRightOwners = 0; SendMouse(Platform::InputEventType::RightUp, gCursorX, gCursorY); }
     for (int i = 0; i < gPulseCount; ++i) Platform::InjectVirtualKey(gPulses[i].vk, false);
     gPulseCount = 0;
-    if (gBackTabHeld) { Platform::InjectVirtualKey(9, false); gBackTabHeld = false; }
-    gBackDown = false;
-    gAutoCast = false;
-    TapHold* ths[4] = { &gTapA, &gTapX, &gTapY, &gTapB };
-    for (int i = 0; i < 4; ++i) {
-        if (ths[i]->holdEngaged) { Platform::InjectVirtualKey(ths[i]->holdVk, false); ths[i]->holdEngaged = false; }
-        ths[i]->down = false;
-    }
+    // Mirrored keys: send the balancing key-up for any still tracked as down.
+    for (const auto& mk : kFaceKeys)
+        if (gPrevButtons[mk.btn]) Platform::InjectVirtualKey(mk.vk, false);
+    if (gPrevButtons[kBackKey.btn]) Platform::InjectVirtualKey(kBackKey.vk, false);
+    // PADFIX2: reset every edge tracker, so a still-held trigger/button
+    // re-fires its down edge next tick instead of being silently swallowed
+    // (edge trackers previously survived a release-all, desyncing mirrors).
+    memset(gPrevButtons, 0, sizeof(gPrevButtons));
+    gPrevRT = gPrevLT = false;
+    gPrevChord = false;
     gUiClickUpPending = false;
     gDriving = false;
 }
@@ -350,24 +322,8 @@ void CycleSkill(int dir)
     PadLog("PAD: skill cycle - no learned skills");
 }
 
-void QuickSlot(int n)
-{
-    if (!Hero || !CharacterAttribute) { PadLog("PAD: quick slot %d ignored (no hero)", n); return; }
-    char* CA = SkillCA();
-    const int row = (int)SelectedHero;
-    for (int i = 0; i < 60; ++i)
-        if (CA[i + 87] != 0 && (unsigned char)CA[(row << 6) + i + 215] == (unsigned char)n) {
-            SelectSkillSlot(i, "quick slot (hotkey assignment)");
-            return;
-        }
-    int seen = 0;
-    for (int i = 0; i < 60; ++i)
-        if (CA[i + 87] != 0 && ++seen == n) {
-            SelectSkillSlot(i, "quick slot (nth learned)");
-            return;
-        }
-    PadLog("PAD: quick slot %d - nothing assigned", n);
-}
+// (PADFIX2: the pad-side QuickSlot selector is gone — face buttons now
+// mirror the digit keys and the game's own hotkey handling selects skills.)
 
 // LB+RB chord: open the expanded skill list by clicking the bottom-bar grid
 // toggle (UI 640x480 point 0x140,0x1CE — the hit area Chat_InputTick tests).
@@ -711,6 +667,16 @@ bool DIPadCapture()
     hr = gDIDev->GetDeviceState(sizeof(js), &js);
     if (FAILED(hr)) {
         gDIDev->Acquire();   // input lost mid-frame; retry next frame
+        // PADFIX2: this path previously never counted toward the release
+        // streak, so a device whose state reads kept failing wedged the
+        // module with gStateValid=false forever — and any virtual button
+        // held at that moment was NEVER released (hero walked forever).
+        if (++gDIFailStreak >= 30) {
+            PadLog("PAD-DI: state reads keep failing ('%s') - releasing held inputs", gDIName);
+            ReleaseAllInputs();
+            DIPadRelease();
+            gDINextScanMs = SDL_GetTicks() + 2000;
+        }
         return false;
     }
     gDIFailStreak = 0;
@@ -985,46 +951,20 @@ void SelfTestEnterWorld()
     }
 }
 
-// ── Tap/hold face buttons (G's remap, 2026-11-14) ───────────────────────────
-// Tap (release before kLongPressMs) fires the tap action; crossing the
-// threshold fires the hold action instead — a hold that fired never also
-// fires the tap on release, and vice versa. Latch/digit holds stay engaged
-// until the button is released.
-void TapHoldTick(TapHold& th, Uint64 now)
+// ── Mirrored buttons (PADFIX2) ──────────────────────────────────────────────
+// One button = one key, mirrored honestly: the virtual key goes down on the
+// press edge and up on the release edge — exactly what the physical button
+// does. No duration is ever measured, so nothing can fire a second,
+// different action for holding a button longer.
+void MirrorKeyTick(const MirrorKey& mk)
 {
-    const bool down = PadButton(th.btn);
-    if (down && !th.down) {
-        th.down = true; th.longFired = false; th.downMs = now;
-    } else if (down && th.down && !th.longFired && now - th.downMs >= kLongPressMs) {
-        th.longFired = true;
-        switch (th.holdKind) {
-        case HoldKind::kPulseKey:
-            PadLog("PAD: button hold - %s", th.holdWhat);
-            PulseKey(th.holdVk, th.holdWhat);
-            break;
-        case HoldKind::kKeyLatch:
-        case HoldKind::kDigitCast:
-            th.holdEngaged = true;
-            Platform::InjectVirtualKey(th.holdVk, true);
-            PadLog("PAD: button hold - %s (key held)", th.holdWhat);
-            break;
-        }
-    } else if (!down && th.down) {
-        th.down = false;
-        if (th.holdEngaged) {
-            th.holdEngaged = false;
-            Platform::InjectVirtualKey(th.holdVk, false);
-            PadLog("PAD: button released - %s (key up)", th.holdWhat);
-        } else if (!th.longFired) {
-            if (th.tapKind == TapKind::kQuickSlot) {
-                PadLog("PAD: button tap - quick skill slot %d", th.tapSlot);
-                QuickSlot(th.tapSlot);
-            } else {
-                PulseKey(th.tapVk, th.tapWhat);
-            }
-        }
+    const bool down = PadButton(mk.btn);
+    if (down != gPrevButtons[mk.btn]) {
+        Platform::InjectVirtualKey(mk.vk, down);
+        PadLog("PAD: button %s %s - key 0x%02X %s", mk.name,
+               down ? "down" : "up", mk.vk, down ? "held" : "released");
     }
-    gPrevButtons[th.btn] = down;
+    gPrevButtons[mk.btn] = down;
 }
 
 
@@ -1065,9 +1005,41 @@ void Gamepad_Tick()
     // Finish the chord's skill-grid click (down went out last tick).
     if (gUiClickUpPending) { gUiClickUpPending = false; SetLeftButton(kLeftUI, false); }
 
+    // PADFIX2: scene transitions resync the virtual buttons. The game zeroes
+    // its click flags on scene/world entry (Game_EnterWorldTick,
+    // Player_ProcessInput's scene-change block) without telling this module;
+    // a hold carried across the transition would diverge from the game
+    // permanently — the owner mask only emits edges, so a mask that never
+    // returns to zero never produces a fresh LeftDown again (dead stick on
+    // the new scene), and a game-side hold the pad already dropped would
+    // never be balanced. Drop our holds at the same moment the game drops
+    // its flags; the player's next press is a clean edge on both sides.
+    {
+        static int s_lastScene = -1;
+        const int scene = (int)SceneFlag;
+        if (s_lastScene != -1 && scene != s_lastScene && (gLeftOwners || gRightOwners)) {
+            PadLog("PAD: scene change %d->%d while inputs held - releasing all (resync)", s_lastScene, scene);
+            ReleaseAllInputs();
+        }
+        s_lastScene = scene;
+    }
+
     PollPadPresence();
     CapturePadState();
-    if (!gStateValid) { gLastMs = SDL_GetTicks(); gDriving = false; return; }
+    if (!gStateValid) {
+        // PADFIX2: a backend that cannot report state must never keep a
+        // virtual button held. Previously this early return skipped every
+        // owner release, so a capture failure while moving wedged the
+        // virtual LMB down forever — the hero kept re-pathing to the parked
+        // cursor and never stopped. Release instead; when state recovers,
+        // a still-deflected stick / still-held trigger re-fires its down
+        // edge and play resumes.
+        if (gLeftOwners || gRightOwners) {
+            PadLog("PAD: pad state lost while inputs held - releasing all");
+            ReleaseAllInputs();
+        }
+        gLastMs = SDL_GetTicks(); gDriving = false; return;
+    }
 
     const Uint64 now = SDL_GetTicks();
     float dt = (now - gLastMs) / 1000.0f;
@@ -1078,32 +1050,9 @@ void Gamepad_Tick()
     const float winH = (float)gWindow.GetRealHeight();
     if (!gCursorInit) { gCursorX = winW * 0.5f; gCursorY = winH * 0.5f; gCursorInit = true; }
 
-    // ── Tap/hold face buttons (A / X / Y / B) ────────────────────────────────
-    TapHoldTick(gTapA, now);
-    TapHoldTick(gTapX, now);
-    TapHoldTick(gTapY, now);
-    TapHoldTick(gTapB, now);
-
-    // ── Back: tap = M (move list), hold = Tab (minimap) ─────────────────────
-    {
-        const bool down = PadButton(SDL_GAMEPAD_BUTTON_BACK);
-        if (down && !gBackDown) { gBackDown = true; gBackDownMs = now; }
-        else if (down && gBackDown && !gBackTabHeld && now - gBackDownMs >= kTabHoldMs) {
-            gBackTabHeld = true;
-            Platform::InjectVirtualKey(9, true);
-            PadLog("PAD: Back hold - Tab/minimap on");
-        } else if (!down && gBackDown) {
-            gBackDown = false;
-            if (gBackTabHeld) {
-                gBackTabHeld = false;
-                Platform::InjectVirtualKey(9, false);
-                PadLog("PAD: Back released - Tab/minimap off");
-            } else {
-                PulseKey(0x4D, "M/move-list");
-            }
-        }
-        gPrevButtons[SDL_GAMEPAD_BUTTON_BACK] = down;
-    }
+    // ── Mirrored buttons: face A/X/Y/B (shortcut keys 1-4) + Back (M) ────────
+    for (const auto& mk : kFaceKeys) MirrorKeyTick(mk);
+    MirrorKeyTick(kBackKey);
 
     // ── Left stick: movement (owns the cursor while deflected) ───────────────
     // Arrow keys take movement precedence while held (either source can take
@@ -1160,14 +1109,15 @@ void Gamepad_Tick()
     if (chord && !gPrevChord) FireSkillGridClick(winW, winH);
     gPrevChord = chord;
 
-    // ── Stick clicks: L3 auto-cast latch, R3 cursor recenter ────────────────
+    // ── Stick clicks: R3 cursor recenter ────────────────────────────────────
+    // PADFIX2: L3's auto-cast latch is REMOVED (G's ruling: one button, one
+    // action, mirrored honestly). The latch held the virtual right button
+    // down with nothing physically held, so casting continued after LT was
+    // released — the exact "doesn't stop" behaviour G rejected. L3 is now
+    // unmapped; LT alone owns the virtual right button.
     const bool l3 = PadButton(SDL_GAMEPAD_BUTTON_LEFT_STICK);
-    if (l3 && !gPrevButtons[SDL_GAMEPAD_BUTTON_LEFT_STICK]) {
-        gAutoCast = !gAutoCast;
-        SetRightButton(kRightAuto, gAutoCast);
-        PadLog(gAutoCast ? "PAD: L3 - auto-cast latch ON" : "PAD: L3 - auto-cast latch OFF");
-        Rumble(0, 5000, 60);
-    }
+    if (l3 && !gPrevButtons[SDL_GAMEPAD_BUTTON_LEFT_STICK])
+        PadLog("PAD: L3 - unmapped (auto-cast latch removed, PADFIX2)");
     gPrevButtons[SDL_GAMEPAD_BUTTON_LEFT_STICK] = l3;
     const bool r3 = PadButton(SDL_GAMEPAD_BUTTON_RIGHT_STICK);
     if (r3 && !gPrevButtons[SDL_GAMEPAD_BUTTON_RIGHT_STICK]) {
@@ -1178,9 +1128,9 @@ void Gamepad_Tick()
 
     // ── Simple edge buttons ──────────────────────────────────────────────────
     // Start pulses Esc: in this client Esc is the single back key — it closes
-    // the D-menu/chat log, closes the system menu, or opens it. (B carried
-    // the same Esc pulse until the 2026-11-14 remap made it a tap/hold face
-    // button: tap = quick slot 4, hold = Esc, via TapHoldTick above.)
+    // the D-menu/chat log, closes the system menu, or opens it. These are
+    // one-shot pulses (not duals): their consumers are edge-triggered, so a
+    // pulse and a held key are indistinguishable to them.
     static const struct { SDL_GamepadButton b; const char* name; int vk; const char* what; } kBtns[] = {
         { SDL_GAMEPAD_BUTTON_START,      "Start",  27,   "Esc/menu"     },
         { SDL_GAMEPAD_BUTTON_DPAD_UP,    "DUp",    0x51, "Q/HP-potion"  },
@@ -1197,7 +1147,30 @@ void Gamepad_Tick()
         gPrevButtons[kb.b] = down;
     }
 
-    // X and B are tap/hold face buttons — handled by TapHoldTick above
-    // (X: tap = quick slot 2, hold = digit-2 cast; B: tap = quick slot 4,
-    // hold = Esc).
+    // ── PADFIX2: divergence watchdog (left button) ──────────────────────────
+    // The game can drop its held flag (MouseLButton, DAT_083a42c4) behind
+    // this module's back WITHOUT a scene change — e.g. the F3/04 revival
+    // handler (Net/Recv/Recv_Character.cpp) zeroes it when the hero respawns
+    // in town. The owner mask only emits edges, so after such a clear a
+    // still-held stick/trigger produces no fresh LeftDown and pad movement
+    // is silently dead. If the mask says "held" while the game says "up"
+    // for several consecutive ticks AND the cursor is over the world (over
+    // a window the game legitimately consumes the flag — DAT_07d78094 is
+    // MouseOnWindow), re-assert the button once so both sides agree again.
+    // Rate-limited so a game path that keeps clearing cannot be spammed.
+    {
+        static int    s_divergeTicks = 0;
+        static Uint64 s_lastHealMs = 0;
+        if (gLeftOwners != 0 && DAT_083a42c4 == 0 && DAT_07d78094 == 0) {
+            ++s_divergeTicks;
+            if (s_divergeTicks >= 5 && now - s_lastHealMs >= 500) {
+                PadLog("PAD: resync - game dropped virtual LMB while pad holds (owners=0x%X); re-asserting", gLeftOwners);
+                SendMouse(Platform::InputEventType::LeftDown, gCursorX, gCursorY);
+                s_lastHealMs = now;
+                s_divergeTicks = 0;
+            }
+        } else {
+            s_divergeTicks = 0;
+        }
+    }
 }
