@@ -9,11 +9,15 @@
 //
 // Incluye además el port de `CWeaponView::RenderCharacterBackItem`
 // (DLL, `WeaponView.cpp`) que decide
-// si el arma se renderiza en la ESPALDA (LinkBone 47) o en la mano. Conditions:
-//   - safe-zone (entity+0x34E set por terrain bit 0)
-//   - greeting anim (93..124)
-//   - Atlans swim (World 7, anim 21/29)
-//   - NOT Blood Castle (World 11..16)
+// si el arma se renderiza en la ESPALDA (LinkBone 47) o en la mano.
+// MEAMU (2026-11-16, builds/weapon-back-2026-11-16): la decisión ya NO es por
+// zona/mapa ni por acción — el dueño pidió el look de pueblo/zona segura de
+// forma PERMANENTE: las armas van SIEMPRE a la espalda (parado, caminando,
+// corriendo, volando, montado, ATACANDO y CASTEANDO), en todo mapa. Las
+// animaciones de ataque/casteo no cambian: el personaje pega con las manos
+// vacías y las armas quedan colgadas. Es el mismo mecanismo que el cliente
+// ya usaba en safe-zone (SafeZone=+0x34E, bit 0 del terreno), extendido a
+// Bind=1 incondicional para jugadores en partida (SceneFlag==5).
 // Cuando bBindBack=true: weapon → bone 47 (espalda), Render_PlayerWeaponLoop
 // se SALTA. Cuando false: Render_PlayerWeaponLoop renderiza en mano (default).
 //
@@ -600,12 +604,16 @@ extern "C" int g_BackItemHand = 0;
 
 extern "C" int RenderCharacterBackItem(intptr_t c, intptr_t o)
 {
-    // Bind -- IDA RenderCharacter 0x456770, LABEL_265 .. LABEL_308.
-    // Decide si las armas se cuelgan de la espalda (hueso 47) en vez de ir en
-    // la mano.  Esta parte es 1:1 con el binario; lo que SI se tomo del DLL es
-    // el bucle de los dos slots de abajo (ver el comentario ahi).
-    // El caller usa el valor de retorno para saltear Render_PlayerWeaponLoop,
-    // igual que el `if (!Bind)` de LABEL_330.
+    // Bind -- decide si las armas se cuelgan de la espalda (hueso 47) en vez
+    // de ir en la mano. El caller usa el valor de retorno para saltear
+    // Render_PlayerWeaponLoop, igual que el `if (!Bind)` de LABEL_330.
+    //
+    // MEAMU (2026-11-16, diseño final del dueño): Bind = 1 SIEMPRE para
+    // jugadores en partida — "quiero que se quede ahí todo el tiempo, ni
+    // siquiera al atacar". Es el look exacto de safe-zone/pueblo (la rama
+    // original de abajo cuelga ambos slots del hueso 47 con las poses del
+    // DLL) sin ninguna condición de lugar ni de acción. Las animaciones,
+    // skills, daño y tiempos NO se tocan: es sólo el camino de render.
     int Bind = 0;
 
     // DESVIACION DEL PORT: gate por state=5 (in-game).
@@ -618,25 +626,16 @@ extern "C" int RenderCharacterBackItem(intptr_t c, intptr_t o)
     const int iWorld = (int)gMapManager.GetCurrentMap();
     const unsigned char anim = *(unsigned char*)&((OBJECT*)(uintptr_t)(o))->CurrentAction;
 
-    // Bind = SafeZone || saludo (93..124) || (Atlans && nadando (21|29)).
-    if (AsCharacter(c)->SafeZone != 0)          // c->SafeZone
-        Bind = 1;
-    else if (anim >= 93 && anim <= 124)             // PLAYER_GREETING1..SALUTE1
-        Bind = 1;
-    // DESVIACION: los gestos de 5.2 (68..73) y los emotes propios tambien guardan el
-    // arma en la espalda fuera de zona segura, igual que los saludos.
-    else if ((anim >= 68 && anim <= 73) || CustomAnim_EmoteOfAction(anim) >= 0)
-        Bind = 1;
-    else if (gMapManager.IsSwimmable(iWorld) && (anim == 21 || anim == 29))   // IDA: World == 7
-        Bind = 1;
-
-    if (iWorld >= 11 && iWorld <= 16)               // InBloodCastle()
-        Bind = 0;
-
     // IDA LABEL_275: los no-jugadores saltan a LABEL_330 (loop de manos), que
-    // el caller resuelve con el valor de retorno.
+    // el caller resuelve con el valor de retorno. El único caller vive dentro
+    // del bloque Type==390 de RenderCharacter, así que devolver 0 acá no
+    // cambia nada observable: monstruos e invocaciones conservan el arma en
+    // la mano; sólo los personajes-jugador (incl. companions, que son
+    // personajes reales Type 390) llevan las armas a la espalda.
     if (*(short*)(o + 2) != 390)                    // o->Type != MODEL_PLAYER
-        return Bind;
+        return 0;
+
+    Bind = 1;   // MEAMU: permanente — ver el comentario de arriba.
 
     // ── Que items van a la espalda ──────────────────────────────────────────
     // PORT DEL DLL (CWeaponView::RenderCharacterBackItem, WeaponView.cpp).
