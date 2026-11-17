@@ -30,8 +30,12 @@ void DrawSkillIcon(int skill, float x, float y)
     }
     if (skill == 59) {
         // MEAMU 2026-11-17: Sage Mode -- same story as 58, its own
-        // texture (bitmap 300, the leaf mark) full-frame.
-        GL_DrawTexture(300, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        // texture (the leaf mark) full-frame.
+        // MEAMU 2026-11-17 (Train 5): bitmap 0x5F1, NOT 300 -- slot
+        // 300 is BITMAP_HIDE, the BMD texture system's sentinel, and
+        // runtime model-texture traffic can overwrite it (the icon
+        // rendered broken/grey live while 299/301/302 were fine).
+        GL_DrawTexture(0x5F1, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
         return;
     }
     if (skill == 60) {

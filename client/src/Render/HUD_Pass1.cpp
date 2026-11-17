@@ -388,31 +388,16 @@ void RenderMainFrameWindow_(void)
     GL_ResetState();
     Gfx::Color3f(1.0f, 1.0f, 1.0f);
     if (wide) {
-        // DLL CWideScreen: WDecorOld, izquierda -61 y derecha 556 espejada.
-        // El DLL las ubica respecto de la barra central, no de la ventana.
-        const float barX = (float)gWindow.PanelOrigin({Ui::Anchor::Centro, 640});
-        EnableAlphaTest(true);
-        // MEAMU 2026-11-17 (white-windows fix): on client v20261117-0120 the
-        // two plates rendered as blank white windows (the dragon-head art of
-        // bitmap 0x5F0 never reached the draw; the file on disk and the
-        // OpenTGA loader are verified unchanged/good). Never paint the
-        // plates from an empty slot, and force a real rebind first (the
-        // DAT_00561574 bind cache can otherwise skip the bind, the same
-        // hazard CMiniMap::BuildTexture guards against). With a live slot
-        // the two draws below are byte-identical to before.
-        if (ResourceTables::TextureCount() > 0x5F0 &&
-            Bitmaps[0x5F0].Buffer && Bitmaps[0x5F0].TextureNumber) {
-            DAT_00561574 = 0xFFFFFFFF;   // la cache de BindTexture ya no vale
-            GL_DrawTexture(0x5F0, barX - 61.0f, 411.0f, 144.0f, 69.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
-            GL_DrawTexture(0x5F0, barX + 556.0f, 411.0f, 144.0f, 69.0f, 1.0f, 0.0f, -1.0f, 1.0f, 1, 1);
-        } else {
-            static bool s_logged = false;
-            if (!s_logged) {
-                s_logged = true;
-                DbgLogPublic("WDecorOld: bitmap 0x5F0 slot empty at frame draw - corner plates skipped");
-            }
-        }
-        GL_ResetState();
+        // MEAMU 2026-11-17 (Train 5): WDecorOld corner plates REMOVED.
+        // The 1235 fix (draw only from a live slot + forced rebind) did
+        // not cure them: on the real widescreen desktop client the two
+        // plates still render as blank white slabs (bitmap 0x5F0; the
+        // WDecorOld.ozt asset itself is verified valid -- dark dragon
+        // art, byte-identical in the Windows and Linux packs). The
+        // plates are pure ornament and the 4:3 client never shows
+        // them, so the draws are gone entirely: with no draw call
+        // here, no white box can appear at the HUD corners at wide
+        // aspect.
     }
 }
 
