@@ -352,6 +352,7 @@ set(MU_SOURCES
     src/Render/Entity_Render_3D.cpp
     src/Render/Entity_RenderAll_3D.cpp
     src/Render/Entity_UpdateRender.cpp
+    src/Render/BijuTransform.cpp
     src/Render/Render_PlayerEquipment.cpp
     src/Render/HUD_Render.cpp
     src/Render/ItemDrop_Render.cpp
@@ -445,6 +446,7 @@ set(MU_HEADERS
     src/Render/MaterialVisuals.h
     src/Render/LooseWingVisuals.h
     src/Render/EquipmentVisuals.h
+    src/Render/BijuTransform.h
     src/Game/FramePointerSet.h
     src/Game/RenderDerivedState.h
     src/Game/RenderSnapshots.h
