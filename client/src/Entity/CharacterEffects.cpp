@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "Entity/CharacterEffects.h"
+#include "Render/BijuTransform.h"
 #include "Render/EquipmentVisuals.h"
 #include "Item/ContentCatalog.h"
 #include "Config/UserSettings.h"
@@ -410,6 +411,67 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
                                      sgBody[2] };
                 Particle_Spawn(0x4ab, motePos, (float *)(puVar13 + 7),
                                moteLight, 0, 0.45f, 0);
+            }
+        }
+
+        // ── 0d. Aura Jinchuriki Mode (DESVIACION, solo cliente;
+        // MEAMU 2026-11-17, Train 4) ─────────────────────────────
+        // G: "BIG BIG BIG AURA and GLOW", coloured by the equipped
+        // beast. El buff Jinchuriki Mode (skill 60) llega como el
+        // bit 0x1000 del estado persistente (entity+120), el mismo
+        // canal que 0x0400/0x0800, asi que el aura la ve todo el que
+        // ve al personaje. El tinte sale de la tabla lateral de
+        // BijuTransform (BeastFor/JinchurikiTint): el pet equipado
+        // (seccion 13, subs 496-505) lo alimentan TODOS los caminos
+        // de viewport (heroe y remotos, Recv_Viewport incluido);
+        // sin pet conocido cae al dorado Kurama. Escala = 3x el
+        // aura Mangekyou (suelo 8.4 -> 25.2, halo 5.5 -> 16.5) mas
+        // dos capas de GLOW: un halo exterior enorme y tenue
+        // (34.0, tinte x0.28) y un nucleo corporal brillante
+        // (8.4, tinte aclarado hacia blanco). Pulso 1200 ms y
+        // brasas 0x4ab en anillo, tintadas como la bestia.
+        if (bVar7 == 0xFF && AsCharacter(puVar13)->Dead == 0 &&
+            !gUserSettings.GetAntilag(ANTILAG_GLOW) &&
+            (*(DWORD*)((BYTE*)puVar13 + 120) & 0x1000) != 0) {
+            float jkBase[3] = { 0.961f, 0.522f, 0.122f };  // Kurama
+            BijuTransform::JinchurikiTint((const CHARACTER*)puVar13, jkBase);
+            const float jt = 0.5f - 0.5f * cosf(WorldTime * (2.0f * 3.14159265f / 1200.0f));
+            const float jkPulse = 0.82f + 0.30f * jt;
+            float jkLight[3] = { jkBase[0] * jkPulse,
+                                 jkBase[1] * jkPulse,
+                                 jkBase[2] * jkPulse };
+            float jkPos[3] = { AsObject(puVar13)->Position[0],
+                               AsObject(puVar13)->Position[1],
+                               AsObject(puVar13)->Position[2] };
+            float jkHalo[3] = { jkBase[0] * 0.28f, jkBase[1] * 0.28f, jkBase[2] * 0.28f };
+            Equipment_AddSprite(0x47e, jkPos, 34.0f, jkHalo,
+                                (intptr_t)puVar13, 0.0f, 0);
+            float jkGround[3] = { jkLight[0] * 0.6f, jkLight[1] * 0.6f, jkLight[2] * 0.6f };
+            Equipment_AddSprite(0x47e, jkPos, 25.2f, jkGround,
+                                (intptr_t)puVar13, 0.0f, 0);
+            float jkOff[3] = { 0.0f, 0.0f, 0.0f };
+            float jkBody[3];
+            BMD_TransformPosition(pvVar23,
+                (float *)((intptr_t)AsObject(puVar13)->BoneMatrices + 0 * 0x30),
+                jkOff, jkBody, '\x01');
+            Equipment_AddSprite(0x47e, jkBody, 16.5f, jkLight,
+                                (intptr_t)puVar13, 0.0f, 0);
+            float jkCore[3] = { jkBase[0] + (1.0f - jkBase[0]) * 0.35f,
+                                jkBase[1] + (1.0f - jkBase[1]) * 0.35f,
+                                jkBase[2] + (1.0f - jkBase[2]) * 0.35f };
+            Equipment_AddSprite(0x47e, jkBody, 8.4f, jkCore,
+                                (intptr_t)puVar13, 0.0f, 0);
+            const int jkPhase = (int)(((intptr_t)puVar13 >> 5) & 0x3F);
+            if ((((int)WorldTime + jkPhase) % 120) < 16) {
+                float jkEmber[3] = { jkBase[0], jkBase[1], jkBase[2] };
+                const float jkAng = (WorldTime + (float)jkPhase * 61.0f) *
+                                    (2.0f * 3.14159265f / 2400.0f);
+                const float jkRad = 16.5f * 18.0f;
+                float emberPos[3] = { jkBody[0] + cosf(jkAng) * jkRad,
+                                      jkBody[1] + sinf(jkAng) * jkRad,
+                                      jkBody[2] };
+                Particle_Spawn(0x4ab, emberPos, (float *)(puVar13 + 7),
+                               jkEmber, 0, 0.6f, 0);
             }
         }
 
