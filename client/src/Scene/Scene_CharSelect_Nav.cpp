@@ -18,6 +18,7 @@
 #include "Platform/ISocket.h"
 #include "Platform/IFileSystem.h"
 #include "Item/ContentCatalog.h"
+#include "Render/BijuTransform.h"
 #include "Net/ServerCharacterStats.h"
 #include "Game/MapManager.h"
 #include "globals.h"
@@ -1915,6 +1916,9 @@ void __cdecl ChangeCharacterExt(int Key, BYTE *Equipment) {
     // 0.97.20: el CharSet sólo lleva vanilla; el único agregado que viaja es
     // el ala custom (más abajo).
     gContentCatalog.ClearEntityParts((const void*)(uintptr_t)c);
+    // MEAMU BIJU TRANSFORM: el CharSet nunca trae un pet custom; si el
+    // personaje tiene uno, llega despues por F3:EB/F3:ED y lo registra.
+    BijuTransform::Clear((void*)(uintptr_t)c);
 
     // Helmet (slot 0)
     if (Equipment[0] == 0xFF) {
