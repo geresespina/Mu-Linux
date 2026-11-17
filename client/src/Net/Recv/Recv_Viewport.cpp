@@ -8,6 +8,7 @@
 #include "Game/RenderSnapshots.h"
 #include "Item/ContentCatalog.h"
 #include "Item/ItemDefines.h"
+#include "Render/BijuTransform.h"
 #include "Net/Recv/NetRecv.h"
 
 // ---------------------------------------------------------------------------
@@ -67,6 +68,17 @@ static void ApplyCustomEquipment(BYTE* c, const BYTE* items)
     }
     // CustomPet: el CharSet lo trajo como "sin helper"; acá se crea su bug.
     const WORD helper = *(const WORD*)(items + 8 * 2);
+    // MEAMU BIJU TRANSFORM: registrar el item crudo del slot pet del remoto
+    // — el mismo feed que recibe el héroe en Character_Motion
+    // (NotePetItem(c, *(short*)(v7 + 544))), acá con el tipo crudo del
+    // F3:EB/F3:ED.  Sin esto la tabla lateral nunca se entera del pet de
+    // un remoto y su transformación no se dibuja.  Un 0xFFFF limpia
+    // (queda -1 al pasar por short): sin pet Biju, sin transformación.
+    // Esta función es compartida: cubre el viewport (F3:EB, vía
+    // Recv_CustomEquipment) y la lista del char-select (F3:ED, vía
+    // Recv_CharacterListCustom), y llega DESPUÉS del clear que hace
+    // ChangeCharacterExt con el CharSet, así que el feed no se pisa.
+    BijuTransform::NotePetItem(c, (int)(short)helper);
     if (helper != 0xFFFF && gContentCatalog.GetPet(helper)) {
         *(WORD*)(c + EntityOffset(696)) = (WORD)ItemModel(helper);
         DeleteHelperBug((intptr_t)c);   // Pet Squad: no tocar los bugs del squad
@@ -217,8 +229,20 @@ void Recv_ChangePlayer(const BYTE* Msg, int Size)
         case 8: {  // helper / mascota
             if (empty) {
                 *(WORD *)&AsCharacter(c)->Helper.Type = (WORD)-1;
+                // MEAMU BIJU TRANSFORM: soltó el pet -> se acaba la
+                // transformación del remoto (mismo clear que deja un
+                // *(short*) == -1 en el feed del héroe).
+                BijuTransform::NotePetItem(c, -1);
                 DeleteHelperBug((intptr_t)c);  // Pet Squad: no tocar los del squad
             } else {
+                // MEAMU BIJU TRANSFORM: registrar el item crudo del slot
+                // pet del remoto.  `type` sale de ConvertItemType, que en
+                // este fork ES ItemWire_GetType (Item_TypeLegacy.cpp):
+                // trae el índice extendido completo (bits 9-12 en el
+                // byte 5 que escribe ItemByteConvert del server), que es
+                // lo que NotePetItem resuelve por (sección 13, sub
+                // 496-505) igual que con el héroe.
+                BijuTransform::NotePetItem(c, type);
                 *(WORD *)&AsCharacter(c)->Helper.Type = (WORD)ItemEntityModel(type);
                 AsCharacter(c)->Helper.Level = 0;
                 float* pos = (float*)(c + 16);

@@ -22,12 +22,14 @@
 #include "Entity/EntityName.h"
 #include "UI/ChatTypes.h"
 #include "Render/Gfx.h"
+#include "Render/ResourceTables.h"
 #include "Platform/Text.h"
 #include "UI/MiniMap.h"
 #include "globals.h"
 #include "structs.h"
 #include "functions.h"
 
+extern "C" void DbgLogPublic(const char* msg);
 extern "C" BYTE OffsetInventoryItems[];     // src/Render/HUD_Pass3.cpp
 extern "C" void __cdecl SeedQuickPotionTypesFromInventory(void);
 extern "C" int __cdecl sub_482E40(int a1);
@@ -390,8 +392,26 @@ void RenderMainFrameWindow_(void)
         // El DLL las ubica respecto de la barra central, no de la ventana.
         const float barX = (float)gWindow.PanelOrigin({Ui::Anchor::Centro, 640});
         EnableAlphaTest(true);
-        GL_DrawTexture(0x5F0, barX - 61.0f, 411.0f, 144.0f, 69.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
-        GL_DrawTexture(0x5F0, barX + 556.0f, 411.0f, 144.0f, 69.0f, 1.0f, 0.0f, -1.0f, 1.0f, 1, 1);
+        // MEAMU 2026-11-17 (white-windows fix): on client v20261117-0120 the
+        // two plates rendered as blank white windows (the dragon-head art of
+        // bitmap 0x5F0 never reached the draw; the file on disk and the
+        // OpenTGA loader are verified unchanged/good). Never paint the
+        // plates from an empty slot, and force a real rebind first (the
+        // DAT_00561574 bind cache can otherwise skip the bind, the same
+        // hazard CMiniMap::BuildTexture guards against). With a live slot
+        // the two draws below are byte-identical to before.
+        if (ResourceTables::TextureCount() > 0x5F0 &&
+            Bitmaps[0x5F0].Buffer && Bitmaps[0x5F0].TextureNumber) {
+            DAT_00561574 = 0xFFFFFFFF;   // la cache de BindTexture ya no vale
+            GL_DrawTexture(0x5F0, barX - 61.0f, 411.0f, 144.0f, 69.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+            GL_DrawTexture(0x5F0, barX + 556.0f, 411.0f, 144.0f, 69.0f, 1.0f, 0.0f, -1.0f, 1.0f, 1, 1);
+        } else {
+            static bool s_logged = false;
+            if (!s_logged) {
+                s_logged = true;
+                DbgLogPublic("WDecorOld: bitmap 0x5F0 slot empty at frame draw - corner plates skipped");
+            }
+        }
         GL_ResetState();
     }
 }

@@ -28,6 +28,12 @@ void DrawSkillIcon(int skill, float x, float y)
         GL_DrawTexture(299, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
         return;
     }
+    if (skill == 59) {
+        // MEAMU 2026-11-17: Sage Mode -- same story as 58, its own
+        // texture (bitmap 300, the leaf mark) full-frame.
+        GL_DrawTexture(300, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        return;
+    }
     const int index = skill - 1;
     const float u = (float)((index % 8) * CellW) / 256.0f;
     const float v = (float)((index / 8) * CellH) / 256.0f;

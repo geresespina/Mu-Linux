@@ -364,6 +364,15 @@ void PacketHandler_0x19(BYTE* pkt)
         goto common_tail;
     }
 
+    case 0x3B:  // 59 Sage Mode (MEAMU 2026-11-17)
+    {
+        // Remote cast pose only -- mirror of 0x3A. The green/gold
+        // aura is driven by the synced buff state (C1:07 bit
+        // 0x0800 -> entity+120 -> CharacterEffects aura block).
+        SetAction(AsObject(caster), 63);
+        goto common_tail;
+    }
+
     case 0x31:  // 49 Fire Breath
     {
         SetAction(AsObject(caster),

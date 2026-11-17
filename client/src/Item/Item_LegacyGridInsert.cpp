@@ -2,6 +2,7 @@
 #include "globals.h"
 #include "functions.h"
 #include "Net/Net.h"
+#include "Item/ItemDefines.h"   // ItemWire_GetType (decodificación extendida 0.97.20)
 
 extern void __cdecl operator_delete(void* ptr);
 
@@ -107,7 +108,18 @@ extern "C" void __cdecl InsertInventoryItem(BYTE* Inv, int Width, int Height,
     clear_slot(Index);
 
     {
-        int type = ConvertItemType(Item);
+        // 0.97.20: decodificar SIEMPRE con el mapeo extendido del fork
+        // (ItemWire_GetType: bits 0-8 de los bytes 0/3 + bits 9-12 del
+        // nibble alto del byte 5).  Un pet Biju (13,504) viaja como wire
+        // 7224; con la fórmula legacy de IDA (Item[0] + 2*(Item[3]&0x80),
+        // bits 0-8 solamente) saldría 56 y el grid ubicaría un ítem
+        // vanilla cualquiera.  Hoy ConvertItemType ya delega en
+        // ItemWire_GetType (Item_TypeLegacy.cpp), así que el resultado
+        // es idéntico byte a byte para TODO input — vanilla y extendido
+        // —; se llama directo para que la ruta de inserción (la usan
+        // F3/14, F3/10, moves, trade, warehouse...) no dependa del shim
+        // con nombre legacy.
+        int type = ItemWire_GetType(Item);
         if (type == 0xFF) return;
         if (Index < 0) return;
         int total = Width * Height + (isMainInventory ? 12 : 0);
