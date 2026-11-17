@@ -15,6 +15,7 @@ void Terrain_BeginBufferedPass();
 #include "Render/BufferedDraw.h"
 #include "Game/RenderFxSnapshots.h"
 #include "Entity/ObjectBounds.h"
+#include "Render/BijuTransform.h"
 #include "Platform/Text.h"
 #include "Platform/ISocket.h"
 #include "Platform/ITimer.h"
@@ -540,6 +541,9 @@ void Hero_ApplyCatalogEquipment(CHARACTER* character)
         DeleteHelperBug((intptr_t)c);   // Pet Squad: no tocar los bugs del squad
         CreateBug(*(short*)&((CHARACTER*)(uintptr_t)(c))->Helper.Type, (void*)(c + 16), (void*)(uintptr_t)c, 0);
     }
+    // MEAMU BIJU TRANSFORM: registrar el item crudo del slot pet del heroe
+    // (un -1 limpia: sin pet Biju, sin transformacion).
+    BijuTransform::NotePetItem(c, *(short*)(v7 + 544));
 }
 
 // SetCharacterClass @ 0x0045C130 — SetCharacterClass(entity)
@@ -582,6 +586,8 @@ void __cdecl SetCharacterClass(CHARACTER* character) {
         const short pet = *(short*)(v7 + 544);
         if (pet != -1) AsCharacter(c)->Helper.Type = (short)ItemModel(ItemBehaviorType(pet));
     }
+    // MEAMU BIJU TRANSFORM: registrar el item crudo del slot pet del heroe.
+    BijuTransform::NotePetItem(c, *(short*)(v7 + 544));
 
     // 0.97.20: modelo propio de cada pieza puesta (catálogo).
     {

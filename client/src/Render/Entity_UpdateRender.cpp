@@ -5,6 +5,7 @@
 #include "Config/UserSettings.h"
 #include "Game/MapManager.h"
 #include "Render/EquipmentVisuals.h"
+#include "Render/BijuTransform.h"
 #include "Entity/CharacterEffects.h"
 
 extern "C" const char* Guild_GetMarkName(int row);
@@ -115,6 +116,14 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
     if (*(short *)((char *)model + 0x26) == 0)
         return (void *)entity_type;
 
+    // MEAMU BIJU TRANSFORM: jugador con pet Biju equipado = el cuerpo es
+    // la bestia (lo dibuja Draw_RenderObject via BijuTransform::DrawBody y
+    // la pose ObjectPose_PrepareBones). Aca solo se APAGAN los renders del
+    // humano: partes del cuerpo, alas/armas (Equipment_Draw reproduce los
+    // meshes anclados a huesos del jugador), emblemas, capa y sparkles.
+    const int  bijuModel     = BijuTransform::ModelForCharacter((const CHARACTER*)(uintptr_t)param_1);
+    const bool bTransformed  = bijuModel >= 0;
+
     float local_60_buf[3] = {1.0f, 1.0f, 1.0f};
     #define local_60 (local_60_buf[0])
     #define local_5c (local_60_buf[1])
@@ -200,7 +209,7 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
         }
     }
 
-    Equipment_Draw(AsCharacter(param_1), CharacterEffects_EarlyStage);
+    if (!bTransformed) Equipment_Draw(AsCharacter(param_1), CharacterEffects_EarlyStage);
 
     // ── 4. Skill-state / anim-state particle effects ─────────────────────────
     BYTE bVar7 = *(BYTE *)&((CHARACTER*)(uintptr_t)(param_1))->MonsterIndex;   // tipo de monstruo
@@ -278,7 +287,7 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
                      *(float *)((int *)((char *)puVar13 + EntityOffset(0x5a * 4))), 0x48, 1.0f, 1231);
     }
 
-    Equipment_Draw(AsCharacter(param_1), 0);
+    if (!bTransformed) Equipment_Draw(AsCharacter(param_1), 0);
 
     // ── 5-bis. Sombra del jugador (RenderPartObject con el modelo 391) ───────
     // IDA RenderCharacter L750-772.  Faltaba entera: los jugadores se dibujaban
@@ -302,7 +311,10 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
                 }
                 const float shadowAlpha = *(float *)&((OBJECT*)(uintptr_t)(o))->Alpha;
                 *(BYTE *)(o + 140) = 1;              // EnableShadow
-                RenderPartObject((intptr_t)param_1, 391, 0,
+                // Transformado: la sombra es la silueta de la bestia (el
+                // mismo pase que recibe un monstruo con su propio modelo),
+                // no la mancha humana 391.
+                RenderPartObject((intptr_t)param_1, bTransformed ? bijuModel : 391, 0,
                              (float *)((char *)param_1 + EntityOffset(800)), shadowAlpha,
                              0, 0, '\0', 0, '\x01', 0, 2);
                 *(BYTE *)(o + 140) = 0;
@@ -376,7 +388,7 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
         *(float *)((int *)((char *)param_1 + EntityOffset(0xca * 4))) = L2;
     }
 
-    Equipment_Draw(AsCharacter(param_1), 1);
+    if (!bTransformed) Equipment_Draw(AsCharacter(param_1), 1);
 
     // ── Restaurar la luz base antes de las partes del cuerpo ────────────────
     //
@@ -454,7 +466,7 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
         }
     }
 
-    if (!bSubTypeNpcRendered && *(char *)&((CHARACTER*)(uintptr_t)(param_1))->Change == '\0') {
+    if (!bTransformed && !bSubTypeNpcRendered && *(char *)&((CHARACTER*)(uintptr_t)(param_1))->Change == '\0') {
         PART_t *piVar16 = AsCharacter(param_1)->BodyPart;   // int*-index: byte offset +0x1f4
         for (int nSlot = 6; nSlot > 0; nSlot--) {
             short sSlot = piVar16->Type;   // slot model_idx at -20 bytes
@@ -529,11 +541,11 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
     // MEAMU: clan emblems on arm/front/back for Senju/Uchiha members
     // (humans and guild-stamped phantoms alike). Bone matrices are final
     // here; the function gates on player model + clan guild name.
-    ClanEmblems_Render((intptr_t)param_1);
+    if (!bTransformed) ClanEmblems_Render((intptr_t)param_1);
 
-    Equipment_Draw(AsCharacter(param_1), 2);
+    if (!bTransformed) Equipment_Draw(AsCharacter(param_1), 2);
 
-    if (sVar2 == 390) {
+    if (sVar2 == 390 && !bTransformed) {
         // ── Capa del Magic Gladiator (IDA RenderCharacter L667-743) ───────────
         // La capa NO es una malla del modelo: es un objeto de **tela**
         // (cloth/verlet) construido con `sub_408130`, texturizado con
@@ -584,8 +596,8 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
                 FUN_00408ff0((void *)AsObject(param_1)->Cloth);
         }
     }
-    RenderAttackBuffSparkles((BYTE*)param_1);
-    Equipment_Draw(AsCharacter(param_1), CharacterEffects_LateStage);
+    if (!bTransformed) RenderAttackBuffSparkles((BYTE*)param_1);
+    if (!bTransformed) Equipment_Draw(AsCharacter(param_1), CharacterEffects_LateStage);
     return puVar13;
 }
 

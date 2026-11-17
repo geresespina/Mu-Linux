@@ -11,6 +11,7 @@
 #include "Scene/ObjectRegistry.h"
 #include "Item/ContentCatalog.h"
 #include "Entity/EntityName.h"
+#include "Render/BijuTransform.h"
 #include "globals.h"
 #include "functions.h"
 #include "Platform/PlatformHeaders.h"
@@ -25,6 +26,8 @@ void __cdecl CreateCharacterPointer(unsigned char *param_1, int Type,
 
     // 0.97.20: la entidad nueva no hereda los modelos propios del slot.
     gContentCatalog.ClearEntityParts(param_1);
+    // MEAMU BIJU TRANSFORM: tampoco hereda la transformacion del slot.
+    BijuTransform::Clear(param_1);
     // 0.97.40: el nombre completo del slot anterior no se hereda.
     EntityName::Clear(param_1);
 
@@ -199,6 +202,13 @@ void __cdecl CreateCharacterPointer(unsigned char *param_1, int Type,
         short etype     = o->Type;
         short boneCount = *(short *)(DAT_05828d58 + etype * BMD_STRIDE + 0x22);
         if (boneCount < 0) boneCount = 0;   // defense: short garbage → signed neg
+        // MEAMU BIJU TRANSFORM: el buffer de huesos de un jugador se
+        // dimensiona para el techo del motor (200, el mismo tope que usan
+        // el batch de poses y la tabla de quaternions): un jugador
+        // transformado posa con el esqueleto de la bestia (hasta 185
+        // huesos en Oozaru) y BMD_Animation escribe NumBones matrices —
+        // con los 60 del esqueleto del jugador desbordaria el buffer.
+        if (etype == 390 && boneCount < 200) boneCount = 200;
         void *boneBuf = operator_new((unsigned int)boneCount * 0x30);
         // DESVIACION: IDA 0045ADC0 L710 hace `operator_new` sin inicializar y el buffer
         // se LEE antes de escribirse (el tick del spawn, MoveCharacterVisual 0x4520C0,

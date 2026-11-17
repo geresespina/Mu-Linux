@@ -6,6 +6,7 @@
 #include "globals.h"
 #include "Render/TransformWorkers.h"
 #include "Render/TransformMath.h"
+#include "Render/BijuTransform.h"
 #include "Render/ResourceTables.h"
 #include "Game/NinjaRun.h"
 #include "Physics/ClothTypes.h"
@@ -34,6 +35,13 @@ static void PrepareContext(OBJECT* entity, void* model)
 static bool ReuseBones(OBJECT* entity, void* model, float* bones, char translate);
 void ObjectPose_PrepareBones(OBJECT* entity, void* model, float* bones, char translate)
 {
+    // MEAMU BIJU TRANSFORM: un jugador con pet Biju equipado posa con el
+    // modelo de la bestia (mapeo de acciones/frames en BijuTransform.cpp).
+    // Va ANTES de PrepareContext/ReuseBones: el cache del batch guarda
+    // poses del modelo del jugador y no debe reproducirlas para un
+    // transformado (el batch tampoco prepara geometria suya: el modelo
+    // del jugador no tiene mallas).
+    if (BijuTransform::PreparePose(entity, bones, translate)) return;
     PrepareContext(entity,model);
     if (ReuseBones(entity,model,bones,translate)) return;
     DWORD priorFrame;
