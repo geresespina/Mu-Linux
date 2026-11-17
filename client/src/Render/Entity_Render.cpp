@@ -154,6 +154,7 @@
 #include "Model/ModelTypes.h"
 #include "Item/ContentCatalog.h"
 #include "Render/Entity_Render.h"
+#include "Render/BijuTransform.h"
 #include <math.h>
 
 
@@ -304,6 +305,14 @@ uint RenderBugs(void)
             short ownerType = *(short*)(ownerPtr + 2);
             ownerIsPlayer = (ownerType == 390);
         }
+
+        // MEAMU BIJU TRANSFORM: el bug del helper (SubType 0, o 0x40 cuando
+        // el colector es del squad) de un jugador transformado no se dibuja:
+        // el pet equipado ES el cuerpo. Los bugs del squad (SubType != 0)
+        // siguen — son otros pets, no el del slot equipado.
+        if (ownerPtr && ownerIsPlayer && ((int)AsObject(slot)->SubType & ~0x40) == 0 &&
+            BijuTransform::ModelForCharacter((const CHARACTER*)(uintptr_t)ownerPtr) >= 0)
+            continue;
 
         if (ownerIsPlayer || typeCode == 0x330) {
             // 0.97.20: el pet o la montura se dibuja con el modelo propio del
