@@ -758,7 +758,13 @@ endif()
 else()
     find_package(OpenGL REQUIRED)
     target_link_libraries(mu97k PRIVATE OpenGL::GL)
-    target_link_options(mu97k PRIVATE "-Wl,-Map,$<TARGET_FILE_DIR:mu97k>/main.map")
+    if(APPLE)
+        # ld64 (macOS) escribe el mapa con -map en minúscula; -Map es sintaxis
+        # de GNU ld y el enlazador de Apple lo rechaza como opción desconocida.
+        target_link_options(mu97k PRIVATE "-Wl,-map,$<TARGET_FILE_DIR:mu97k>/main.map")
+    else()
+        target_link_options(mu97k PRIVATE "-Wl,-Map,$<TARGET_FILE_DIR:mu97k>/main.map")
+    endif()
 endif()
 
 set_property(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" PROPERTY VS_STARTUP_PROJECT mu97k)
