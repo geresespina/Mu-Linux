@@ -231,8 +231,12 @@ extern "C" void __cdecl sub_4BB940(float HeightArg, float xArg, float yArg,
         GL_DrawTexture(299, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
     } else if (v10 == 59) {
         // MEAMU 2026-11-17: Sage Mode -- dedicated texture
-        // (bitmap 300, the leaf mark) full-frame, same as 58.
-        GL_DrawTexture(300, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        // (the leaf mark) full-frame, same as 58.
+        // MEAMU 2026-11-17 (Train 5): bitmap 0x5F1, NOT 300 -- slot
+        // 300 is BITMAP_HIDE, the BMD texture system's sentinel, and
+        // runtime model-texture traffic can overwrite it (the icon
+        // rendered broken/grey live while 299/301/302 were fine).
+        GL_DrawTexture(0x5F1, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
     } else if (v10 == 60) {
         // MEAMU 2026-11-17 (Train 4): Jinchuriki Mode -- dedicated
         // texture (bitmap 301, the chakra-cloak flame) full-frame.

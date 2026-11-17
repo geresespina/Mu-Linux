@@ -99,6 +99,21 @@ void __cdecl RenderSkillIcon(int iIndex, float x, float y, float width, float he
     const float atlasU = (float)((atlasIndex % 8) * (int)width);
     const float atlasV = (float)((atlasIndex / 8) * (int)height);
 
+    // MEAMU 2026-11-17 (Train 5): skills 58-61 have no cell in the
+    // Skill.jpg atlas (row 7 falls off the 256px texture); they draw
+    // their dedicated textures full-frame, exactly as sub_4BB940 in
+    // HUD_Pass5.cpp and BuffBar::DrawSkillIcon do. This implementation
+    // never got those branches, so any caller of RenderSkillIcon
+    // showed all four modes as off-atlas garbage. Sage Mode uses
+    // bitmap 0x5F1 (not 300: that slot is BITMAP_HIDE, the BMD
+    // texture system's sentinel -- see Model_SkillEffects.cpp).
+    if (skillId == 58 || skillId == 59 || skillId == 60 || skillId == 61) {
+        const int dedicated = (skillId == 58) ? 299 :
+                              (skillId == 59) ? 0x5F1 :
+                              (skillId == 60) ? 301 : 302;
+        GL_DrawTexture(dedicated, fX, fY, fWidth, fHeight,
+                       0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+    } else {
     // RenderBitmap(298, x, y, width, height, u, v, uWidth, vHeight, 1, 1)
     GL_DrawTexture(0x12a, fX, fY, fWidth, fHeight,
                  atlasU * _DAT_00552b7c,
@@ -106,6 +121,7 @@ void __cdecl RenderSkillIcon(int iIndex, float x, float y, float width, float he
                  fWidth * _DAT_00552b7c,
                  (fHeight - _DAT_0055256c) * _DAT_00552b7c,
                  1, 1);
+    }
 
     // anti-tamper hash table — skipped (encrypt CharacterMachine before read)
 
