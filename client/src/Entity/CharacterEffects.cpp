@@ -369,6 +369,50 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
             }
         }
 
+        // ── 0c. Aura Sage Mode (DESVIACION, solo cliente; MEAMU
+        // 2026-11-17) ────────────────────────────────────────────
+        // El espejo Senju del aura Mangekyou (0b): el buff Sage
+        // Mode (efecto GS 66) llega como el bit 0x0800 del estado
+        // persistente (entity+120). Mismo tamano GRANDE que el
+        // carmesi (suelo 8.4, halo 5.5, pulso 1200 ms, motas en
+        // anillo con la particula 0x4ab) pero en verde naturaleza
+        // Senju (#78dc3c) que respira hacia el dorado (#d8a93b):
+        // energia natural, inconfundible frente al carmesi a
+        // simple vista.
+        if (bVar7 == 0xFF && AsCharacter(puVar13)->Dead == 0 &&
+            !gUserSettings.GetAntilag(ANTILAG_GLOW) &&
+            (*(DWORD*)((BYTE*)puVar13 + 120) & 0x0800) != 0) {
+            const float st = 0.5f - 0.5f * cosf(WorldTime * (2.0f * 3.14159265f / 1200.0f));
+            float sgLight[3] = { 0.47f + (0.85f - 0.47f) * st,
+                                 0.86f + (0.66f - 0.86f) * st,
+                                 0.24f + (0.23f - 0.24f) * st };
+            float sgPos[3] = { AsObject(puVar13)->Position[0],
+                               AsObject(puVar13)->Position[1],
+                               AsObject(puVar13)->Position[2] };
+            float sgGround[3] = { sgLight[0] * 0.6f, sgLight[1] * 0.6f, sgLight[2] * 0.6f };
+            Equipment_AddSprite(0x47e, sgPos, 8.4f, sgGround,
+                                (intptr_t)puVar13, 0.0f, 0);
+            float sgOff[3] = { 0.0f, 0.0f, 0.0f };
+            float sgBody[3];
+            BMD_TransformPosition(pvVar23,
+                (float *)((intptr_t)AsObject(puVar13)->BoneMatrices + 0 * 0x30),
+                sgOff, sgBody, '\x01');
+            Equipment_AddSprite(0x47e, sgBody, 5.5f, sgLight,
+                                (intptr_t)puVar13, 0.0f, 0);
+            const int sgPhase = (int)(((intptr_t)puVar13 >> 5) & 0x3F);
+            if ((((int)WorldTime + sgPhase) % 120) < 16) {
+                float moteLight[3] = { 0.6f, 1.0f, 0.4f };
+                const float sgAng = (WorldTime + (float)sgPhase * 61.0f) *
+                                    (2.0f * 3.14159265f / 2400.0f);
+                const float sgRad = 5.5f * 18.0f;
+                float motePos[3] = { sgBody[0] + cosf(sgAng) * sgRad,
+                                     sgBody[1] + sinf(sgAng) * sgRad,
+                                     sgBody[2] };
+                Particle_Spawn(0x4ab, motePos, (float *)(puVar13 + 7),
+                               moteLight, 0, 0.45f, 0);
+            }
+        }
+
 
         // ── 1. Glove sparkle: class byte (cls&7)==0 + (cls_skin&0xF8)==8 ───
         // (DK 2nd-tier with specific skin range): sprite + sin halo at bone 19
