@@ -13,6 +13,8 @@ void __cdecl UI_LoadInterfaceTextures(void)
     OpenJPG("Interface\\Skill.jpg",          0x12a, 0x2600, 0x2900, 0, '\x01');
     OpenJPG("Interface\\Mangekyou.jpg",      0x12b, 0x2600, 0x2900, 0, '\x01');  // MEAMU 2026-11-15: Mangekyou Sharingan icon (skill 58) -- the 256px Skill.jpg atlas has no cell for row 7, so skill 58 draws this dedicated texture full-frame (BuffBar + HUD_Pass5)
     OpenJPG("Interface\\SageMode.jpg",        0x12c, 0x2600, 0x2900, 0, '\x01');  // MEAMU 2026-11-17: Sage Mode icon (skill 59) -- leaf mark, same dedicated-texture pattern as 0x12b (bitmap 300)
+    OpenJPG("Interface\\JinchurikiMode.jpg",  0x12d, 0x2600, 0x2900, 0, '\x01');  // MEAMU 2026-11-17 (Train 4): Jinchuriki Mode icon (skill 60) -- chakra-cloak flame mark, same dedicated-texture pattern (bitmap 301)
+    OpenJPG("Interface\\BijuMode.jpg",        0x12e, 0x2600, 0x2900, 0, '\x01');  // MEAMU 2026-11-17 (Train 4): Biju Mode icon (skill 61) -- tailed-beast eye mark, same dedicated-texture pattern (bitmap 302)
     OpenJPG("Interface\\Item_Back01.jpg",    0x104, 0x2600, 0x2900, 0, '\x01');
     OpenJPG("Interface\\Item_Back02.jpg",    0x105, 0x2600, 0x2900, 0, '\x01');
     OpenJPG("Interface\\Item_Cap.jpg",       0x107, 0x2600, 0x2900, 0, '\x01');
