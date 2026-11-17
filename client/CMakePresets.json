@@ -111,6 +111,20 @@
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchains/mingw-x64.cmake",
         "VCPKG_APPLOCAL_DEPS": "OFF"
       }
+    },
+    {
+      "name": "macos-x64-release",
+      "binaryDir": "${sourceDir}/build/macos-x64-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "MU_PLATFORM_BACKEND": "SDL3",
+        "MU_PLATFORM_ONLY": "OFF",
+        "MU_RENDER_WEBGPU": "OFF",
+        "CMAKE_OSX_ARCHITECTURES": "x86_64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "11.0"
+      },
+      "generator": "Ninja",
+      "description": "Cliente completo para macOS Intel (x86_64) con SDL3 y OpenGL 3.3 core, sin WebGPU (spike 2026-11-17). Sin toolchain file: usa el Apple Clang nativo del runner macos-13. Todas las dependencias base llegan por FetchContent; no requiere vcpkg."
     }
   ],
   "buildPresets": [
@@ -152,6 +166,11 @@
     {
       "name": "mingw-x64-webgpu-release",
       "configurePreset": "mingw-x64-webgpu-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "macos-x64-release",
+      "configurePreset": "macos-x64-release",
       "configuration": "Release"
     }
   ]

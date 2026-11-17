@@ -326,6 +326,45 @@ jobs:
   # Resultado del workflow: OK si compiló bien o si no hacía falta compilar.
   # Es el check que exige la regla de main (una matriz salteada no reporta sus
   # checks con nombre propio).
+  macos-x64:
+    needs: changes
+    if: needs.changes.outputs.client == 'true'
+    name: macOS x64 (SDL3, Intel, Release)
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+      - name: Herramientas de compilación
+        run: |
+          # cmake ya viene en la imagen; ninja también, pero se asegura.
+          command -v ninja >/dev/null 2>&1 || brew install ninja
+          cmake --version
+          ninja --version
+      - name: Configurar
+        run: cmake --preset macos-x64-release
+      - name: Compilar
+        run: cmake --build --preset macos-x64-release --parallel 4
+      - name: Verificar arquitectura del binario
+        run: |
+          file build/macos-x64-release/bin/main
+          lipo -info build/macos-x64-release/bin/main
+      - name: Empaquetar (zip plano)
+        run: |
+          mkdir -p dist/meamu-mac
+          cp build/macos-x64-release/bin/main dist/meamu-mac/main
+          cat > dist/meamu-mac/LEEME.txt <<'EOF'
+          MEAMU — cliente macOS Intel (spike, sin firmar)
+          1. Descomprimir y copiar la carpeta Data/ del paquete Windows/Linux
+             junto al ejecutable `main` (el cliente la busca a su lado).
+          2. Primera apertura: clic derecho sobre `main` > Abrir (Gatekeeper:
+             el binario no está firmado ni notarizado).
+          EOF
+          cd dist && zip -r mu97k-macos-x64-release.zip meamu-mac
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mu97k-macos-x64-release
+          path: client/dist/mu97k-macos-x64-release.zip
+          if-no-files-found: error
+
   result:
     name: Client
     if: always()
