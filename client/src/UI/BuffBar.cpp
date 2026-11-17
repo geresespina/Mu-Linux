@@ -34,6 +34,18 @@ void DrawSkillIcon(int skill, float x, float y)
         GL_DrawTexture(300, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
         return;
     }
+    if (skill == 60) {
+        // MEAMU 2026-11-17 (Train 4): Jinchuriki Mode -- same story
+        // as 58/59, its own texture (bitmap 301) full-frame.
+        GL_DrawTexture(301, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        return;
+    }
+    if (skill == 61) {
+        // MEAMU 2026-11-17 (Train 4): Biju Mode -- same story as
+        // 58/59, its own texture (bitmap 302) full-frame.
+        GL_DrawTexture(302, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        return;
+    }
     const int index = skill - 1;
     const float u = (float)((index % 8) * CellW) / 256.0f;
     const float v = (float)((index / 8) * CellH) / 256.0f;
