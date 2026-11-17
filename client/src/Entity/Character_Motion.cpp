@@ -138,8 +138,20 @@ void __cdecl SetPlayerStop(CHARACTER* c) {
 
         short v5 = AsCharacter(c)->Weapon[0].Type;  // Helm
         // Sin helm/armor o cambiando clase fuera de mapas 11-16 → idle estándar
+        // MEAMU (2026-11-16, builds/safe-stance-2026-11-16): el dueño pidió la
+        // postura idle de zona segura EN TODAS LAS ZONAS — en partida
+        // (SceneFlag==5) el término SafeZone de esta condición se trata como
+        // siempre verdadero, así un jugador con armas en el campo toma el idle
+        // relajado 1/2 (el mismo de pueblo) en vez de caer a las posturas de
+        // combate 3-8 de abajo. Es el complemento de weapon-back: las armas
+        // ya van siempre a la espalda; ahora el cuerpo también descansa.
+        // Sólo cambia QUÉ idle elige SetPlayerStop en esta rama: caminar/
+        // correr (SetPlayerWalk), ataque, casteo, skills, montura y vuelo
+        // (ramas Fly 9/10 y pendant 11/12 de arriba) no se tocan, y fuera de
+        // partida (char-select, SceneFlag!=5) la condición queda byte-idéntica
+        // a la original.
         if ((v5 == -1 && *(unsigned short *)&AsCharacter(c)->Weapon[1].Type == 0xFFFF)
-            || (AsCharacter(c)->SafeZone
+            || ((AsCharacter(c)->SafeZone || SceneFlag == 5)
                 && (gMapManager.GetCurrentMap() < 11 || gMapManager.GetCurrentMap() > 16))) {
             bool isElf = ((AsCharacter(c)->Class & 7) == 2);
             SetAction_local(isElf ? 2 : 1);
@@ -315,7 +327,20 @@ void __cdecl SetPlayerWalk(CHARACTER* param_1) {
         }
         // No weapons equipped (or dead in non-event-map world):
         bool noWeapons = ((unsigned short)LH == 0xFFFF) && ((unsigned short)RH == 0xFFFF);
-        bool bSafeZoneNonEvent = bSafeZone && (gMapManager.GetCurrentMap() < 11 || gMapManager.GetCurrentMap() > 16);
+        // MEAMU (2026-11-16, builds/safe-stance-2026-11-16, PARTE 2): el dueño
+        // aclaró el pedido — "como si no tuviera armas equipadas" también al
+        // caminar/correr, no sólo en el idle. Mismo tratamiento que en
+        // SetPlayerStop: en partida (SceneFlag==5) el término SafeZone de
+        // esta condición se trata como siempre verdadero, así un jugador con
+        // armas toma la rama de locomoción SIN armas (13/14 fresco, 22
+        // exhausto) en vez de la tabla armada 15-20/23-28/79/80 de abajo.
+        // La tabla armada queda alcanzable sólo en mapas 11-16 en partida
+        // (el mismo recorte de eventos que el idle) y fuera de partida
+        // (char-select, SceneFlag!=5) la condición queda byte-idéntica a la
+        // original. NO se toca el tick de stamina de arriba, ni velocidades,
+        // ni los pre-empts de pendant (818/819), alas (30/31) o nado (21/29):
+        // sólo cambia QUÉ acción de caminar/correr elige esta función.
+        bool bSafeZoneNonEvent = (bSafeZone || SceneFlag == 5) && (gMapManager.GetCurrentMap() < 11 || gMapManager.GetCurrentMap() > 16);
         if (noWeapons || bSafeZoneNonEvent) {
             if (stamina >= 0x28) {
                 // Exhausted: action 22.
