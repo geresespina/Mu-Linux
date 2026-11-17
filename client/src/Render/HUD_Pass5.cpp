@@ -233,6 +233,14 @@ extern "C" void __cdecl sub_4BB940(float HeightArg, float xArg, float yArg,
         // MEAMU 2026-11-17: Sage Mode -- dedicated texture
         // (bitmap 300, the leaf mark) full-frame, same as 58.
         GL_DrawTexture(300, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+    } else if (v10 == 60) {
+        // MEAMU 2026-11-17 (Train 4): Jinchuriki Mode -- dedicated
+        // texture (bitmap 301, the chakra-cloak flame) full-frame.
+        GL_DrawTexture(301, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+    } else if (v10 == 61) {
+        // MEAMU 2026-11-17 (Train 4): Biju Mode -- dedicated texture
+        // (bitmap 302, the tailed-beast eye) full-frame.
+        GL_DrawTexture(302, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
     } else {
     float v_uv = (float)((double)(a5 * ((v10 - 1) / 8)) * 0.00390625);
     float u_uv = (float)((double)(a4 * ((v10 - 1) % 8)) * 0.00390625);
