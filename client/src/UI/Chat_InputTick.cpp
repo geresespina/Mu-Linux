@@ -198,6 +198,73 @@ static bool Chat_TrySendGuildRequest(const char* text)
     return Chat_TrySendTargetRequest(text, "/guild", 0x50, /*plainC1=*/true);
 }
 
+// ---------------------------------------------------------------------------
+// MEAMU tame hover targeting (2026-11-16): a bare "/tame" tames whatever
+// the mouse is hovering, mirroring how /party resolves SelectedCharacter.
+// Unlike /party this is NOT a binary packet: the client only rewrites the
+// outgoing chat text to "/tame @<key>" and lets it flow to SendChat, whose
+// GS CommandManager parses the @key form and re-validates type / tier /
+// range server-side.  With nothing tameable hovered the plain "/tame"
+// goes out unchanged and the GS keeps its nearest-candidate scan.
+// ---------------------------------------------------------------------------
+
+// Hover candidates for /tame, in priority order.  SelectedCharacter holds
+// monsters (Kind 2 family) and player-shaped entities (Kind 1: real
+// players AND phantom villagers -- indistinguishable client-side by
+// design), SelectedNpc holds NPCs (Kind 4); both index the same
+// CharactersClient array (DAT_07abf5d0, CHARACTER_STRIDE).  Real players
+// are passed through on purpose: the GS fails them on its type test,
+// while the phantoms -- genuine tame candidates -- share their shape and
+// must not be filtered out here.
+static char* Chat_FindTameHoverTarget()
+{
+    char* const hero = DAT_07abf5d8;
+    char* const entities = (char*)(uintptr_t)DAT_07abf5d0;
+    if (!hero || !entities)
+        return nullptr;
+
+    const int hovered[2] = { SelectedCharacter, SelectedNpc };
+    for (int i = 0; i < 2; ++i) {
+        const int index = hovered[i];
+        if (index < 0 || index >= 400)
+            continue;
+        char* entity = entities + index * CHARACTER_STRIDE;
+        if (entity == hero || entity[0] == '\0')
+            continue;
+        if (((CHARACTER*)(uintptr_t)entity)->Dead != '\0')
+            continue;
+        return entity;
+    }
+    return nullptr;
+}
+
+// Returns `text` unchanged, or `buffer` holding "/tame @<key>" when the
+// bare command was typed with a tame candidate under the cursor.
+static const char* Chat_ApplyTameHoverTarget(const char* text, char* buffer)
+{
+    if (!text || Platform::TextCompareIgnoreCaseN(text, "/tame", 5) != 0)
+        return text;
+
+    // Bare command only: "/tame" followed by nothing but spaces.  Any
+    // typed argument (name / class / @key) passes through 100% unchanged;
+    // the boundary check also keeps /tames, /untame & friends out.
+    const char* rest = text + 5;
+    if (*rest != '\0' && *rest != ' ')
+        return text;
+    while (*rest == ' ')
+        ++rest;
+    if (*rest != '\0')
+        return text;
+
+    char* entity = Chat_FindTameHoverTarget();
+    if (!entity)
+        return text;
+
+    const WORD key = *(WORD*)&((CHARACTER*)(uintptr_t)(entity))->Key;
+    sprintf(buffer, "/tame @%u", (unsigned)key);
+    return buffer;
+}
+
 // Public helper: send a chat line typed into InputText[0]
 // (DAT_07db8710 slot 0) by the WM_CHAR handler. Mirrors the inline
 // build/send logic of the IDA Chat_InputTick (channel-0 path)
@@ -230,6 +297,10 @@ extern "C" void Chat_SendChatLine(const char* text)
     // nombre, o con los susurros apagados (F3, m_bBlockWhisper = 0x559BF0),
     // la linea sale como chat normal aunque el campo de nombre tenga texto.
     if (((const char*)&DAT_07db8810)[0] == '\0' || !DAT_00559bf0) {
+        // MEAMU tame hover: a bare "/tame" picks up the hovered
+        // entity's key; anything else flows through untouched.
+        char tameBuffer[64];
+        text = Chat_ApplyTameHoverTarget(text, tameBuffer);
         SendChat((char*)text);
         return;
     }
