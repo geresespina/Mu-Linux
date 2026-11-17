@@ -48,6 +48,7 @@
 #include <unordered_map>
 #include <vector>
 #include "Render/Entity_Render_3D.h"
+#include "Render/BijuTransform.h"
 #include "Scene/ObjectRegistry.h"
 
 
@@ -245,6 +246,13 @@ void __cdecl Draw_RenderObject(void *param_1_v, int param_2, int param_3, char p
     // editor, así que este return SÍ dispara.
     if (DAT_07e11d30 == 0 && AsObject(param_1)->HiddenMesh == -2)
         return;
+
+    // MEAMU BIJU TRANSFORM: el cuerpo de un jugador transformado es la
+    // bestia (la pose ya la calculo ObjectPose_PrepareBones con el modelo
+    // del biju). DrawBody hace la misma llamada de cuerpo completo que
+    // recibe un monstruo salvaje y corta el dispatch (el modelo del
+    // jugador no tiene mallas: en stock este paso no dibuja nada suyo).
+    if (BijuTransform::DrawBody(param_1_v, param_2)) return;
 
     // ── Tint overrides based on game sub-state / type ──────────────────────────
 
