@@ -99,6 +99,17 @@ def harness(revision=None):
  if revision is None:
   # MEAMU NINJA RUN: ObjectPose_PrepareBones references NinjaRun helpers.
   ninja_header=read_source('src/Game/NinjaRun.h',revision).replace('#pragma once','')+'\n'
+ biju_stub=''
+ if revision is None:
+  # MEAMU BIJU TRANSFORM: ObjectPose_PrepareBones calls BijuTransform::PreparePose,
+  # a compiled-module function (BijuTransform.cpp), so inlining the header alone
+  # would leave the link unresolved. The real module resolves through the pet
+  # side table + catalog, which this fixture never feeds (NotePetItem is never
+  # called and the subjects are raw OBJECTs), so its answer here is always
+  # "not transformed": inline the real header (same treatment as NinjaRun) and
+  # stub the one called function to false -- the stock pose path is what this
+  # fixture certifies.
+  biju_stub=read_source('src/Render/BijuTransform.h',revision).replace('#pragma once','')+'\nnamespace BijuTransform\n{\n    bool PreparePose(OBJECT* entity, float* bones, char translate)\n    {\n        (void)entity; (void)bones; (void)translate;\n        return false;\n    }\n}\n'
  code=ninja_header+''.join(bodies)+function(read_source('src/Entity/ObjectBounds.h',revision),'ObjectBounds_Build')
  constants=''.join(re.search(r'^float\s+'+n+r'\s*=\s*[^;]+;',read_source('src/globals.cpp',revision),re.M).group()for n in sorted(set(re.findall(r'\b_DAT_[0-9a-f]+\b',code))))
  services=SERVICES.replace('VIEW',view).replace('TRANSFORMS','#include "'+(ROOT/'src/Render/TransformMath.h').as_posix()+'"').replace('STRUCTURES',structures).replace('FORWARDS',prototypes)
@@ -106,7 +117,7 @@ def harness(revision=None):
   from LegacyModelLayout import VIEW
   services=VIEW+"\nstruct CHARACTER{unsigned char Bytes[916];};\n"+services
  bounds=function(read_source('src/Entity/ObjectBounds.h',revision),'ObjectBounds_Build')
- body=PREAMBLE.split('char DAT_00559bb4',1)[0].replace('0x10000','0x100000')+constants+services+bounds+ninja_header+''.join(bodies)
+ body=PREAMBLE.split('char DAT_00559bb4',1)[0].replace('0x10000','0x100000')+constants+services+bounds+ninja_header+biju_stub+''.join(bodies)
  batch=re.search(r'^\s*PrepareContext\([^;\n]*p\.object\.data\(\)[^;\n]*;',pose,re.M).group()
  batch_fn='\nvoid BatchContext(PreparedBones& p){'+batch+'}\n'
  return body+batch_fn+MAIN.replace('ENTITY','subject' if 'OBJECT* entity' in bodies[2] else 'static_cast<int>(reinterpret_cast<uintptr_t>(subject))')
