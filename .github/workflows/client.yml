@@ -330,7 +330,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.client == 'true'
     name: macOS x64 (SDL3, Intel, Release)
-    runs-on: macos-14  # ARM runner cross-building the Intel (x86_64) binary — macos-13 Intel runners queue for hours
+    runs-on: macos-15  # ARM runner cross-building the Intel (x86_64) binary — macos-13 queues for hours, macos-14 config unsupported on this repo
     steps:
       - uses: actions/checkout@v4
       - name: Herramientas de compilación
