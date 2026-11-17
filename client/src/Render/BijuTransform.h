@@ -3,7 +3,9 @@
 // ── MEAMU BIJU PET TRANSFORM (2026-11-16, owner's GO: all 10 at once) ────────
 //
 // When a player character has one of the 10 Biju pet items EQUIPPED (item
-// section 13, subs 496-505 → item types 7152-7161), the character RENDERS AS
+// section 13, subs 496-505 — raw types arrive in the fork's EXTENDED index
+// space, wire 7216-7225; resolved via GetItemSection/GetItemSub), the
+// character RENDERS AS
 // THE BIJU: the body becomes the wild beast's monster BMD (monster classes
 // 155-164, resolved live through the ContentCatalog, so the transform always
 // matches whatever model/scale the server gives the wild beast), and all
