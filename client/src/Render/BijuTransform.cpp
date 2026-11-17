@@ -41,6 +41,7 @@
 
 #include "stdafx.h"
 #include "Render/BijuTransform.h"
+#include "Item/ItemDefines.h"   // GetItemSection / GetItemSub (espacio extendido)
 #include "Model/ModelTypes.h"
 #include "Entity/EntityTypes.h"
 #include "Item/ContentCatalog.h"
@@ -53,12 +54,19 @@ namespace BijuTransform
 {
 namespace
 {
-    // Ítems pet Biju: sección 13, subs 496-505, en el espacio de tipos del
-    // catálogo (sección × 512 + sub) — continuación directa de los pets
-    // custom ya vivos (Anivia 492, PuppyNivi 493, Bulbasaur 494,
-    // Chopper 495).
-    constexpr int kFirstBeastItem = 13 * 512 + 496;   // 7152
-    constexpr int kBeastCount     = 10;
+    // Ítems pet Biju: sección 13, subs 496-505 — continuación directa de
+    // los pets custom ya vivos (Anivia 492, PuppyNivi 493, Bulbasaur 494,
+    // Chopper 495).  OJO: el tipo CRUDO que llega a NotePetItem vive en el
+    // espacio de índices EXTENDIDO del fork (ItemDefines.h: vanilla =
+    // sección*32+sub; agregados = 512 + sección*480 + (sub-32)), así que
+    // (13,496) llega como 512+13*480+464 = 7216 y (13,504) "Kurama
+    // (Biju Pet)" como 7224.  La comparación anterior
+    // contra 13*512+496 = 7152..7161 (espacio vanilla inexistente en este
+    // fork) no matcheaba NUNCA: la transformación no disparaba jamás.
+    // Se resuelve por (sección, sub) con el mapeo propio del cliente.
+    constexpr int kBeastPetSection = 13;
+    constexpr int kFirstBeastSub   = 496;
+    constexpr int kBeastCount      = 10;
     constexpr int kFirstBeastClass = 155;             // Shukaku .. Ten-Tails
 
     signed char s_beastBySlot[400];
@@ -165,9 +173,16 @@ void NotePetItem(void* character, int itemType)
     EnsureInit();
     const int slot = SlotOf(character);
     if (slot < 0) return;
-    s_beastBySlot[slot] = (itemType >= kFirstBeastItem &&
-                           itemType < kFirstBeastItem + kBeastCount)
-        ? (signed char)(itemType - kFirstBeastItem) : (signed char)-1;
+    // Resolver por (sección, sub) con el mapeo del propio cliente: el tipo
+    // crudo viene en el espacio extendido (ver ItemDefines.h), el mismo
+    // con el que el catálogo indexa el ítem (por eso su icono sí dibuja).
+    int beast = -1;
+    if (itemType >= 0 && GetItemSection(itemType) == kBeastPetSection) {
+        const int sub = GetItemSub(itemType);
+        if (sub >= kFirstBeastSub && sub < kFirstBeastSub + kBeastCount)
+            beast = sub - kFirstBeastSub;
+    }
+    s_beastBySlot[slot] = (signed char)beast;
 }
 
 void Clear(void* character)
