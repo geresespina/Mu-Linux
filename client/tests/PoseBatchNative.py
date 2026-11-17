@@ -114,7 +114,18 @@ def harness(revision=None):
  if revision is None:
   # MEAMU NINJA RUN: ObjectPose.cpp references NinjaRun helpers.
   ninja_header=read_source('src/Game/NinjaRun.h',revision).replace('#pragma once','')+'\n'
- return prefix+SERVICES+ninja_header+constants+function(read_source('src/Math/Math_3D.cpp'),'Vector_InverseRotate')+function(read_source('src/Entity/ObjectBounds.h'),'ObjectBounds_Build')+source+MAIN
+ biju_stub=''
+ if revision is None:
+  # MEAMU BIJU TRANSFORM: ObjectPose.cpp (pasted whole below, includes stripped)
+  # calls BijuTransform::PreparePose, a compiled-module function
+  # (BijuTransform.cpp), so inlining the header alone would leave the link
+  # unresolved. The real module resolves through the pet side table + catalog,
+  # which this fixture never feeds (NotePetItem is never called), so its answer
+  # here is always "not transformed": inline the real header (same treatment
+  # as NinjaRun) and stub the one called function to false -- the stock pose
+  # path is what this fixture certifies.
+  biju_stub=read_source('src/Render/BijuTransform.h',revision).replace('#pragma once','')+'\nnamespace BijuTransform\n{\n    bool PreparePose(OBJECT* entity, float* bones, char translate)\n    {\n        (void)entity; (void)bones; (void)translate;\n        return false;\n    }\n}\n'
+ return prefix+SERVICES+ninja_header+biju_stub+constants+function(read_source('src/Math/Math_3D.cpp'),'Vector_InverseRotate')+function(read_source('src/Entity/ObjectBounds.h'),'ObjectBounds_Build')+source+MAIN
 
 def main():
  p=argparse.ArgumentParser(description=__doc__);p.add_argument('--architecture',choices=('Win32','x64'),default='x64');p.add_argument('--generator');p.add_argument('--reference-ref');a=p.parse_args()
