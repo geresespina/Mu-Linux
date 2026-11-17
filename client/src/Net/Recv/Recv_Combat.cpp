@@ -83,6 +83,22 @@ void ApplyPersistentSkillEffect97k(BYTE* entity, WORD effect, BYTE state)
                 Particle_Spawn(1231, ppos, pangle, burstLight, 0, 0.8f, (intptr_t)entity);
             }
         }
+        // MEAMU 2026-11-17: Sage Mode activation burst -- mirror of
+        // the Mangekyou burst above in Senju green/gold, fired when
+        // the 0x0800 state bit newly lands.
+        if ((effect & 0x800) != 0 && (physicalEffects & 0x800) == 0) {
+            float burstLight[3] = { 0.55f, 1.0f, 0.35f };
+            const float* epos = (const float*)(entity + 16);
+            for (int i = 0; i < 12; ++i) {
+                const float yaw = (float)i * 30.0f;
+                const float rad = yaw * 3.14159265f / 180.0f;
+                float ppos[3] = { epos[0] + cosf(rad) * 60.0f,
+                                  epos[1] + sinf(rad) * 60.0f,
+                                  epos[2] + 10.0f };
+                float pangle[3] = { 0.0f, 0.0f, yaw };
+                Particle_Spawn(1231, ppos, pangle, burstLight, 0, 0.8f, (intptr_t)entity);
+            }
+        }
         physicalEffects |= effect;
         return;
     }
@@ -94,6 +110,7 @@ void ApplyPersistentSkillEffect97k(BYTE* entity, WORD effect, BYTE state)
     case 0x80:  DeleteEffect(1274, (intptr_t)entity, 3); break;
     case 0x100: DeleteJoint(266, (intptr_t)entity, 0); break;
     case 0x400: break;  // MEAMU 2026-11-15: Mangekyou -- nothing persistent to delete; the aura reads the bit the AND below clears
+    case 0x800: break;  // MEAMU 2026-11-17: Sage Mode -- same as 0x400, nothing persistent to delete
     default: break;
     }
     physicalEffects &= ~((DWORD)effect);
