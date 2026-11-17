@@ -1181,6 +1181,7 @@ static void Attack_WarriorBranch97k(char* entity)
         SetPlayerMagic(AsCharacter(entity));
         return;
     }
+    case 59:                                                  // MEAMU (2026-11-17) -- Sage Mode: self-cast, comparte el cuerpo del 48
     case 58:                                                  // MEAMU (2026-11-15) -- Mangekyou Sharingan: self-cast, comparte el cuerpo del 48
     case 57:                                                  // MEAMU (2026-11-14) -- Omni Buff: self-cast, comparte el cuerpo del 48
     case 48: {                                                // IDA L4177 — Greater Life
@@ -1530,6 +1531,7 @@ static void Attack_WizardBranch97k(char* entity)
         Attack_SendSkill19_97k(iType, (WORD)HeroKey);
         SetPlayerMagic(AsCharacter(entity));                 // IDA LABEL_1430
         return;
+    case 59:                                                  // MEAMU (2026-11-17) -- Sage Mode: auto-cast 0x19 sobre el heroe
     case 58:                                                  // MEAMU (2026-11-15) -- Mangekyou Sharingan: auto-cast 0x19 sobre el heroe
     case 57:                                                  // MEAMU (2026-11-14) -- Omni Buff: auto-cast 0x19 sobre el heroe
         Attack_SendSkill19_97k(iType, (WORD)HeroKey);
@@ -1590,7 +1592,8 @@ static bool Combat_IsAllyTargetSkill97k(int iType)
            iType == 26 || iType == 27 || iType == 28 ||   // Elf heal/buff line
            iType == 48 ||   // Greater Life
            iType == 57 ||   // Omni Buff (self)
-           iType == 58;     // Mangekyou Sharingan (self)
+           iType == 58 ||   // Mangekyou Sharingan (self)
+           iType == 59;     // Sage Mode (self) (MEAMU 2026-11-17)
 }
 
 // C2 snap-targeting (STUDY §4a): when a cast starts with nothing selected,
