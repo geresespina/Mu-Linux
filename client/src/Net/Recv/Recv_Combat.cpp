@@ -6,6 +6,7 @@
 #include "Game/HeroVitals.h"
 #include "Net/Recv/NetRecv.h"
 #include "Model/Model_CustomAnim.h"
+#include "Render/BijuTransform.h"
 #include "Sound/EmoteSound.h"
 
 void ApplyPersistentSkillEffect97k(BYTE* entity, WORD effect, BYTE state)
@@ -99,6 +100,41 @@ void ApplyPersistentSkillEffect97k(BYTE* entity, WORD effect, BYTE state)
                 Particle_Spawn(1231, ppos, pangle, burstLight, 0, 0.8f, (intptr_t)entity);
             }
         }
+        // MEAMU 2026-11-17 (Train 4): Jinchuriki Mode activation
+        // burst -- mirror of the bursts above, tinted by the caster's
+        // equipped beast (BijuTransform side table; Kurama gold when
+        // the pet identity is not known yet), fired when the 0x1000
+        // state bit newly lands. Bigger ring for the bigger mode.
+        if ((effect & 0x1000) != 0 && (physicalEffects & 0x1000) == 0) {
+            float burstLight[3] = { 0.961f, 0.522f, 0.122f };
+            BijuTransform::JinchurikiTint((const CHARACTER*)entity, burstLight);
+            const float* epos = (const float*)(entity + 16);
+            for (int i = 0; i < 18; ++i) {
+                const float yaw = (float)i * 20.0f;
+                const float rad = yaw * 3.14159265f / 180.0f;
+                float ppos[3] = { epos[0] + cosf(rad) * 90.0f,
+                                  epos[1] + sinf(rad) * 90.0f,
+                                  epos[2] + 10.0f };
+                float pangle[3] = { 0.0f, 0.0f, yaw };
+                Particle_Spawn(1231, ppos, pangle, burstLight, 0, 1.1f, (intptr_t)entity);
+            }
+        }
+        // MEAMU 2026-11-17 (Train 4): Biju Mode activation burst --
+        // deep orange-red ring, fired when the 0x2000 state bit
+        // newly lands (the form render itself is BijuTransform).
+        if ((effect & 0x2000) != 0 && (physicalEffects & 0x2000) == 0) {
+            float burstLight[3] = { 0.95f, 0.25f, 0.08f };
+            const float* epos = (const float*)(entity + 16);
+            for (int i = 0; i < 18; ++i) {
+                const float yaw = (float)i * 20.0f;
+                const float rad = yaw * 3.14159265f / 180.0f;
+                float ppos[3] = { epos[0] + cosf(rad) * 90.0f,
+                                  epos[1] + sinf(rad) * 90.0f,
+                                  epos[2] + 10.0f };
+                float pangle[3] = { 0.0f, 0.0f, yaw };
+                Particle_Spawn(1231, ppos, pangle, burstLight, 0, 1.1f, (intptr_t)entity);
+            }
+        }
         physicalEffects |= effect;
         return;
     }
@@ -111,6 +147,8 @@ void ApplyPersistentSkillEffect97k(BYTE* entity, WORD effect, BYTE state)
     case 0x100: DeleteJoint(266, (intptr_t)entity, 0); break;
     case 0x400: break;  // MEAMU 2026-11-15: Mangekyou -- nothing persistent to delete; the aura reads the bit the AND below clears
     case 0x800: break;  // MEAMU 2026-11-17: Sage Mode -- same as 0x400, nothing persistent to delete
+    case 0x1000: break; // MEAMU 2026-11-17 (Train 4): Jinchuriki Mode -- same, nothing persistent to delete
+    case 0x2000: break; // MEAMU 2026-11-17 (Train 4): Biju Mode -- same, nothing persistent to delete
     default: break;
     }
     physicalEffects &= ~((DWORD)effect);
