@@ -940,7 +940,11 @@ void NetRecv_20(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         // Model overrides (CreateItem switch L58-126): arrows/fruit/etc
         // cuyo modelo NO es type+400.
         {
-            int lvl = gi->Item.Level >> 3;
+            // El nivel canonico del cliente es (Level >> 3) & 0xF (ItemConvert,
+            // ItemMaterials_ResolvePreviewModel, tooltip): sin la mascara, un bit
+            // de skill/opcion en el byte crudo corre el nivel 16+ y el override
+            // de modelo de las cajas (14,11) no dispara nunca.
+            int lvl = (gi->Item.Level >> 3) & 0xF;
             if (itemType == 459) {                     // arrows
                 switch (lvl) {
                     case 1: *(WORD*)(ip + 74) = 951; break;
