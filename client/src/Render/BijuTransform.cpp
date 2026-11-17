@@ -100,6 +100,21 @@ namespace
         if (!character) return false;
         const OBJECT* o = AsObject(character);
         if (o->Type != 390 || o->Kind != 1) return false;   // sólo jugadores
+        // MEAMU TRAIN 4 (2026-11-17, follow-up): la FORMA ya no se dispara
+        // por el pet equipado solo (comportamiento v1). El cuerpo-bestia se
+        // renderiza SOLO con el modo Biju activo: bit 0x2000 del DWORD de
+        // estado persistente en entity+120 — el mismo canal que el aura
+        // Jinchuriki (0x1000), Mangekyou (0x0400) y Sage (0x0800), que
+        // InsertBuffPhysicalEffect llena por F3:F1/F3:F2 al entrar en el
+        // viewport y por C1:07 al castear, para el héroe y para los
+        // remotos por igual. Resolve es el único cuello de botella de
+        // ModelForCharacter / PreparePose / DrawBody, así que esta puerta
+        // apaga a la vez el cuerpo bestia, la pose bestia, el apagado de
+        // los renders humanos (RenderCharacter) y el ocultado del bug del
+        // pet equipado (Entity_Render): pet equipado sin modo = humano
+        // normal con su pet visible, como antes del sistema transform.
+        if ((*(const DWORD*)((const BYTE*)character + 120) & 0x2000) == 0)
+            return false;
         EnsureInit();
         const int slot = SlotOf(character);
         if (slot < 0) return false;
@@ -197,6 +212,32 @@ int BeastFor(const CHARACTER* character)
     EnsureInit();
     const int slot = SlotOf(character);
     return (slot >= 0) ? (int)s_beastBySlot[slot] : -1;
+}
+
+bool JinchurikiTint(const CHARACTER* character, float out[3])
+{
+    // G's colour table (2026-11-17), tails 1-10 = beast index 0-9:
+    // Shukaku sand-gold, Matatabi blue, Isobu teal, Son Goku lava red,
+    // Kokuo steam white, Saiken pink, Chomei green, Gyuki violet,
+    // Kurama orange-gold, Ten-Tails pale grey-green.
+    static const float kTint[10][3] = {
+        { 0.851f, 0.643f, 0.255f },  // 1 Shukaku  #D9A441
+        { 0.243f, 0.482f, 0.980f },  // 2 Matatabi #3E7BFA
+        { 0.184f, 0.702f, 0.651f },  // 3 Isobu    #2FB3A6
+        { 0.886f, 0.282f, 0.239f },  // 4 Son Goku #E2483D
+        { 0.929f, 0.937f, 0.949f },  // 5 Kokuo    #EDEFF2
+        { 0.949f, 0.655f, 0.765f },  // 6 Saiken   #F2A7C3
+        { 0.478f, 0.780f, 0.310f },  // 7 Chomei   #7AC74F
+        { 0.557f, 0.424f, 0.784f },  // 8 Gyuki    #8E6CC8
+        { 0.961f, 0.522f, 0.122f },  // 9 Kurama   #F5851F
+        { 0.725f, 0.769f, 0.694f },  // 10 Ten-Tails #B9C4B1
+    };
+    const int beast = BeastFor(character);
+    if (beast < 0 || beast >= kBeastCount || !out) return false;
+    out[0] = kTint[beast][0];
+    out[1] = kTint[beast][1];
+    out[2] = kTint[beast][2];
+    return true;
 }
 
 int ModelForCharacter(const CHARACTER* character)

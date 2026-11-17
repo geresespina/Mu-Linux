@@ -21,6 +21,14 @@
 //   cleared: ChangeCharacterExt (CharSet never carries a custom pet) and
 //            CreateCharacterPointer (fresh entity in the slot)
 //
+// TRAIN 4 FOLLOW-UP (2026-11-17): equipping the pet alone no longer
+// transforms. Resolve() additionally requires the Biju Mode state bit
+// 0x2000 in the persistent-state DWORD at entity+120 (same channel as
+// Jinchuriki 0x1000 / Mangekyou 0x0400 / Sage 0x0800, local + remote).
+// Pet equipped with no mode active = normal human render with the pet
+// visible beside them; BeastFor()/JinchurikiTint() stay pet-keyed (the
+// Jinchuriki aura needs the beast identity without the form).
+//
 // Render hooks:
 //   PreparePose  — called from ObjectPose_PrepareBones: computes the entity's
 //                  bone pose from the BEAST model instead of the player
@@ -46,6 +54,12 @@ namespace BijuTransform
 
     // Beast index 0-9 (Shukaku..Ten-Tails) for the character, or -1.
     int BeastFor(const CHARACTER* character);
+
+    // MEAMU Train 4 (2026-11-17): Jinchuriki Mode aura tint for the
+    // character's equipped beast (tails 1-10 -> beast index 0-9).
+    // Writes RGB floats 0..1 and returns true; false when no soul pet
+    // is known for the character (caller falls back to Kurama gold).
+    bool JinchurikiTint(const CHARACTER* character, float out[3]);
 
     // Resolved beast BMD model slot for the character, or -1 when not
     // transformed (also -1 when the catalog model is missing/unloaded, so
