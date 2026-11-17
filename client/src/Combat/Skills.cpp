@@ -373,6 +373,23 @@ void PacketHandler_0x19(BYTE* pkt)
         goto common_tail;
     }
 
+    case 0x3C:  // 60 Jinchuriki Mode (MEAMU 2026-11-17, Train 4)
+    {
+        // Remote cast pose only -- mirror of 0x3A/0x3B. The BIG
+        // beast-tinted aura is driven by the synced buff state
+        // (C1:07 bit 0x1000 -> entity+120 -> CharacterEffects).
+        SetAction(AsObject(caster), 63);
+        goto common_tail;
+    }
+
+    case 0x3D:  // 61 Biju Mode (MEAMU 2026-11-17, Train 4)
+    {
+        // Remote cast pose only -- mirror of 0x3A/0x3B. The form
+        // itself is the BijuTransform render (bit 0x2000 state).
+        SetAction(AsObject(caster), 63);
+        goto common_tail;
+    }
+
     case 0x31:  // 49 Fire Breath
     {
         SetAction(AsObject(caster),
