@@ -48,7 +48,7 @@ public:
         stack_t stack{}; stack.ss_sp = alternateStack; stack.ss_size = sizeof(alternateStack);
         if (::sigaltstack(&stack, nullptr) != 0) { ::close(fd); return false; }
         struct sigaction action{}; action.sa_handler = Handle;
-        ::sigemptyset(&action.sa_mask); action.sa_flags = SA_ONSTACK | SA_RESETHAND;
+        sigemptyset(&action.sa_mask); action.sa_flags = SA_ONSTACK | SA_RESETHAND;
         constexpr int signals[] = {SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT};
         struct sigaction previous[5]{};
         descriptor = fd;
