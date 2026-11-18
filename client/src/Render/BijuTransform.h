@@ -87,6 +87,19 @@ namespace BijuTransform
     // Beast index 0-9 (Shukaku..Ten-Tails) for the character, or -1.
     int BeastFor(const CHARACTER* character);
 
+    // MEAMU TRAIN 3 (2026-11-18): form-class tie-break for the shared
+    // Biju form bit 0x2000. The protocol state WORD is full (0x8000 was
+    // the last free bit), so Perfect Susanoo (GS skill 74, effect 71)
+    // rides the SAME form bit as Biju Mode. The forms are told apart by
+    // the pet slot: a Biju form always has its beast's soul pet known
+    // (beastIndex 0-9 -> monster class 155+beastIndex); the form bit
+    // with NO soul pet known can only be Susanoo -> class 228.
+    // Pure decision (no catalog/model access) so the headless rig in
+    // tests/SkinBodyFix.cpp can pin it: formBit off -> -1 (no form);
+    // formBit on + beast 0-9 -> 155+beast; formBit on + beast <0 or
+    // >=10 -> 228 (Susanoo).
+    int FormClassFor(bool formBit, int beastIndex);
+
     // MEAMU Train 4 (2026-11-17): Jinchuriki Mode aura tint for the
     // character's equipped beast (tails 1-10 -> beast index 0-9).
     // Writes RGB floats 0..1 and returns true; false when no soul pet
