@@ -244,6 +244,12 @@ def build_and_run(directory, source, args):
         "cmake_minimum_required(VERSION 3.25)\n"
         "project(SceneObjectPointer LANGUAGES CXX)\n"
         "add_executable(pointer_test main.cpp)\n"
+        # El main.cpp generado pega cabeceras de producción (p. ej.
+        # BijuTransform.h), cuyas inclusiones relativas a src/ deben
+        # resolverse contra el árbol real; mismo patrón que
+        # ModelReservationNative.py. Es aditivo: el directorio temporal
+        # sólo contiene main.cpp, así que ninguna resolución previa cambia.
+        "target_include_directories(pointer_test PRIVATE \"" + (ROOT / "src").as_posix() + "\")\n"
         "target_compile_features(pointer_test PRIVATE cxx_std_17)\n"
         "if(MSVC)\n target_compile_options(pointer_test PRIVATE /fp:precise /utf-8)\n"
         "else()\n target_compile_options(pointer_test PRIVATE -fno-strict-aliasing)\n"
