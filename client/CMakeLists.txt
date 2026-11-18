@@ -801,7 +801,12 @@ add_test(NAME frame_pointer_set COMMAND mu_frame_pointer_set_test)
 
 # MEAMU SKIN BODY FIX (2026-11-18): rig del predicado de skin de cuerpo
 # entero (BijuTransform::IsFullBodySkinItem, header-inline).
-add_executable(mu_skin_body_fix_test EXCLUDE_FROM_ALL tests/SkinBodyFix.cpp)
+# El predicado IsFullBodySkinItem vive en BijuTransform.cpp (CI round 2: el
+# header ya no lo define inline, para no arrastrar ItemDefines/PlatformHeaders
+# a los harnesses Pose), así que el rig compila el .cpp real de producción;
+# los dobles de enlace de sus dependencias de juego viven en el propio test
+# (precedente: TerrainDrawFlow).
+add_executable(mu_skin_body_fix_test EXCLUDE_FROM_ALL tests/SkinBodyFix.cpp src/Render/BijuTransform.cpp)
 target_include_directories(mu_skin_body_fix_test PRIVATE src)
 target_compile_features(mu_skin_body_fix_test PRIVATE cxx_std_17)
 add_test(NAME skin_body_fix COMMAND mu_skin_body_fix_test)

@@ -1,6 +1,12 @@
 #pragma once
 
-#include "Item/ItemDefines.h"   // GetItemSection / GetItemSub (test de skin)
+// NOTA (CI round 2, 2026-11-18): este header NO incluye Item/ItemDefines.h.
+// Ese include arrastraba Platform/PlatformHeaders.h (headers de red de
+// Windows) a todo TU que incluye BijuTransform.h — en particular a los
+// harnesses PoseBatchNative/PoseEntityPointer, que inlinean este header en
+// un main.cpp generado con otro orden de includes y chocaban con la guerra
+// winsock v1/v2 (C2011 sockaddr/fd_set/timeval). La decodificación
+// (sección, sub) vive en la definición, en BijuTransform.cpp.
 
 // ── MEAMU BIJU PET TRANSFORM (2026-11-16, owner's GO: all 10 at once) ────────
 //
@@ -65,11 +71,10 @@ namespace BijuTransform
     // body-part loop and are untouched. Stock + custom set armors all sit
     // below sub 50, so normal armor never trips the test. The decode is
     // the client's own (section, sub) mapping, same as NotePetItem.
-    inline bool IsFullBodySkinItem(int itemType)
-    {
-        return itemType >= 0 && GetItemSection(itemType) == 8 &&
-               GetItemSub(itemType) >= 50;
-    }
+    // Sólo la declaración: la definición vive en BijuTransform.cpp (que
+    // sí incluye Item/ItemDefines.h), para que este header no arrastre la
+    // decodificación — ni los headers de plataforma — a sus includers.
+    bool IsFullBodySkinItem(int itemType);
 
     // Feed / query the armor side table (same feed points as the pet
     // table: hero SetCharacterClass + Hero_ApplyCatalogEquipment,

@@ -1,7 +1,8 @@
 // MEAMU SKIN BODY FIX (2026-11-18) — rig del test de skin de cuerpo entero.
 //
 // Verifica el predicado REAL de producción (BijuTransform::IsFullBodySkinItem,
-// inline en Render/BijuTransform.h, el mismo que alimenta NoteArmorItem)
+// definido en src/Render/BijuTransform.cpp — el target compila ese .cpp —,
+// el mismo que alimenta NoteArmorItem)
 // contra la tabla de casos que importa:
 //
 //   - las 4 skins vivas (8,50..53) y las futuras (54+) → true
@@ -85,3 +86,28 @@ int main()
     std::printf("SKIN BODY FIX RIG: ALL PASS\n");
     return EXIT_SUCCESS;
 }
+
+// ── Dobles de enlace (CI round 2, 2026-11-18) ─────────────────────────────
+// El target compila src/Render/BijuTransform.cpp, donde vive la definición
+// del predicado. Ese .cpp referencia servicios del juego que este rig no
+// ejerce (sólo llama a IsFullBodySkinItem): dobles mínimos con las firmas
+// exactas de globals.h / functions.h / Item/ContentCatalog.h. Precedente:
+// TerrainDrawFlow define sus dobles en el propio archivo del test.
+#include "Item/ContentCatalog.h"
+#include <cstdint>
+
+std::uintptr_t CharactersClient = 0;   // globals.h: base del pool de personajes
+std::uintptr_t DAT_05828d58 = 0;       // globals.h: base de la tabla de modelos
+char g_BoneScratch[200 * 0x30] = {};   // globals.h: scratch de huesos
+
+CContentCatalog gContentCatalog;
+
+const CatalogMonster* CContentCatalog::GetMonster(int) const { return nullptr; }
+int CContentCatalog::GetItemModel(int) const { return -1; }
+
+void BMD_Animation(void*, float*, float, unsigned int, unsigned char,
+                   unsigned int*, float*, char, char) {}
+void BMD__RenderBody(void*, int, float, int, float, float, float, int, int) {}
+void Skeleton_Transform(void*, float*, float*, float*, float*, char) {}
+void Entity_GetLightScale(std::uintptr_t, std::uintptr_t) {}
+void operator_delete(void* ptr) { std::free(ptr); }

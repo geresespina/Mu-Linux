@@ -216,6 +216,15 @@ void Clear(void* character)
     }
 }
 
+bool IsFullBodySkinItem(int itemType)
+{
+    // Definición (declarada en BijuTransform.h): la decodificación
+    // (sección, sub) del cliente vive acá porque ItemDefines.h incluye
+    // PlatformHeaders.h y el header no debe arrastrarlo (CI round 2).
+    return itemType >= 0 && GetItemSection(itemType) == 8 &&
+           GetItemSub(itemType) >= 50;
+}
+
 void NoteArmorItem(void* character, int itemType)
 {
     EnsureInit();
