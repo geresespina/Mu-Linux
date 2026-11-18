@@ -168,6 +168,7 @@ set(MU_SOURCES
     src/Game/FrameLimiter.cpp
     src/Sound/Music.cpp
     src/Sound/EmoteSound.cpp
+    src/Sound/ModeSound.cpp
     src/Terrain/Terrain_Tile.cpp
     src/Render/GL_2D.cpp
     src/Render/Effect_Tick.cpp
