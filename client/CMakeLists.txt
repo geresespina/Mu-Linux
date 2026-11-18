@@ -116,6 +116,7 @@ set(MU_SOURCES
     src/Game/MapManager.cpp
     src/Platform/Win32/ClientWndProc.cpp
     src/Net/MapTrack.cpp
+    src/Net/BloodGore.cpp
     src/Net/Network.cpp
     src/Net/Reconnect.cpp
     src/Net/Ping.cpp
