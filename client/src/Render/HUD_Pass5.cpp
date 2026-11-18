@@ -232,19 +232,26 @@ extern "C" void __cdecl sub_4BB940(float HeightArg, float xArg, float yArg,
     } else if (v10 == 59) {
         // MEAMU 2026-11-17: Sage Mode -- dedicated texture
         // (the leaf mark) full-frame, same as 58.
-        // MEAMU 2026-11-17 (Train 5): bitmap 0x5F1, NOT 300 -- slot
-        // 300 is BITMAP_HIDE, the BMD texture system's sentinel, and
-        // runtime model-texture traffic can overwrite it (the icon
-        // rendered broken/grey live while 299/301/302 were fine).
-        GL_DrawTexture(0x5F1, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        // MEAMU 2026-11-17 (Train 6): bitmap 0x134 (308). Train 5's
+        // 0x5F1 sat inside the ContentCatalog texture region (the
+        // catalog allocator marches upward from 1450), so a catalog
+        // texture overwrote it in-game; bitmap 300 is BITMAP_HIDE.
+        // 0x134 is a verified-free gap below the catalog region and
+        // below the equipment allocator base 0x136 -- see the loader
+        // in Model_SkillEffects.cpp.
+        GL_DrawTexture(0x134, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
     } else if (v10 == 60) {
         // MEAMU 2026-11-17 (Train 4): Jinchuriki Mode -- dedicated
-        // texture (bitmap 301, the chakra-cloak flame) full-frame.
-        GL_DrawTexture(301, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        // texture (the chakra-cloak flame) full-frame.
+        // MEAMU 2026-11-17 (Train 6): bitmap 0x135 (309), NOT 301 --
+        // 301 (0x12d) is BITMAP_SKIN (player skin variant 0).
+        GL_DrawTexture(0x135, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
     } else if (v10 == 61) {
         // MEAMU 2026-11-17 (Train 4): Biju Mode -- dedicated texture
-        // (bitmap 302, the tailed-beast eye) full-frame.
-        GL_DrawTexture(302, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        // (the tailed-beast eye) full-frame.
+        // MEAMU 2026-11-17 (Train 6): bitmap 0x106 (262), NOT 302 --
+        // 302 (0x12e) is the player skin variant 1 texture.
+        GL_DrawTexture(0x106, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
     } else {
     float v_uv = (float)((double)(a5 * ((v10 - 1) / 8)) * 0.00390625);
     float u_uv = (float)((double)(a4 * ((v10 - 1) % 8)) * 0.00390625);

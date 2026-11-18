@@ -467,7 +467,17 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
     }
 
     if (!bTransformed && !bSubTypeNpcRendered && *(char *)&((CHARACTER*)(uintptr_t)(param_1))->Change == '\0') {
+        // MEAMU TRAIN 7 (2026-11-17): override de skin Jinchuriki -- con el
+        // modo activo (bit 0x1000), la pieza de ARMADURA (BodyPart[2]) se
+        // dibuja con el modelo de la skin Kyubi (8,50) y pantalones /
+        // guantes / botas (BodyPart[3..5]) NO se dibujan: el cuerpo de la
+        // skin es de cuerpo entero y los encierra (sin esto, las piezas
+        // reales asoman a traves de la skin). El CASCO (BodyPart[1]) no se
+        // toca nunca: casco real o cabeza pelada, como siempre.
+        const int  jinSkinModel = BijuTransform::JinchurikiSkinModel((const CHARACTER*)(uintptr_t)param_1);
+        const bool bJinSkin     = jinSkinModel >= 0;
         PART_t *piVar16 = AsCharacter(param_1)->BodyPart;   // int*-index: byte offset +0x1f4
+        int nPart = 0;   // indice BodyPart de la iteracion: 1 casco, 2 armadura, 3 pantalon, 4 guantes, 5 botas
         for (int nSlot = 6; nSlot > 0; nSlot--) {
             short sSlot = piVar16->Type;   // slot model_idx at -20 bytes
             if (sSlot != (short)-1) {
@@ -479,6 +489,10 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
                 // login demo characters render as DW (class=0). Fixed to 0x1bc.
                 // 0.97.20: modelo propio de la pieza (catálogo).
                 iVar9 = gContentCatalog.EntityDrawModel(param_1, iVar9);
+                // TRAIN 7: pieza cubierta por la skin (pantalon/guantes/botas)
+                // o la armadura misma, que pasa a dibujarse como la skin.
+                const bool bCoveredBySkin = bJinSkin && nPart >= 3 && nPart <= 5;
+                if (bJinSkin && nPart == 2) iVar9 = jinSkinModel;
                 BYTE bClassByte = *(BYTE *)&((CHARACTER*)(uintptr_t)(param_1))->Class;
                 *(BYTE *)(DAT_05828d58 + iVar9 * BMD_STRIDE + 0x98 + BMD_FIELD_SHIFT) =
                     (BYTE)(((bClassByte & 7) << 1) | (bClassByte >> 3));
@@ -497,7 +511,7 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
                         }
                     }
                 }
-                {
+                if (!bCoveredBySkin) {
                     BYTE rawLvl = piVar16->Level;
                     BYTE rawOpt = piVar16->Option1;
                     // c+482 es el nivel RAW (0-15) del equipo; el shift <<3 lo
@@ -520,11 +534,29 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
                 // El port lo salteaba con la etiqueta "guild-mark related",
                 // que era incorrecta: la capita de atras se movia pegada al
                 // cuerpo en vez de simularse.
-                if (iVar9 == 706 && piVar16->Cloth && *(float *)((int *)((char *)puVar13 + EntityOffset(0x5a * 4))) > 0.01f)
+                if (!bCoveredBySkin && iVar9 == 706 && piVar16->Cloth && *(float *)((int *)((char *)puVar13 + EntityOffset(0x5a * 4))) > 0.01f)
                     FUN_00408ff0(piVar16->Cloth);
 
             }
             ++piVar16;   // advance to next slot (+0x18 bytes)
+            ++nPart;
+        }
+        // TRAIN 7: sin armadura equipada el loop no visita la pieza 2; la
+        // skin se dibuja igual, con la PART de la armadura (nivel/opcion 0
+        // efectivos: sus bytes valen lo que traiga el slot vacio, -1/0).
+        if (bJinSkin && AsCharacter(param_1)->BodyPart[2].Type == (short)-1) {
+            BYTE bClassByte = *(BYTE *)&((CHARACTER*)(uintptr_t)(param_1))->Class;
+            *(BYTE *)(DAT_05828d58 + jinSkinModel * BMD_STRIDE + 0x98 + BMD_FIELD_SHIFT) =
+                (BYTE)(((bClassByte & 7) << 1) | (bClassByte >> 3));
+            RenderPartObject((intptr_t)param_1,
+                         jinSkinModel,
+                         &AsCharacter(param_1)->BodyPart[2],
+                         (float *)((int *)((char *)param_1 + EntityOffset(200 * 4))),
+                         *(float *)((int *)((char *)puVar13 + EntityOffset(0x5a * 4))),
+                         0,
+                         0,
+                         '\0', 0, '\x01',
+                         (int)(size_t)param_3, 2);
         }
         // IDA: RenderCharacter llama CreateGuildMark/RenderGuildMarkOnShield después de
         // renderizar las seis piezas, sólo para modelos de jugador visibles.
