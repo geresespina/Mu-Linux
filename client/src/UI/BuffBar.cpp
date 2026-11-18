@@ -31,23 +31,28 @@ void DrawSkillIcon(int skill, float x, float y)
     if (skill == 59) {
         // MEAMU 2026-11-17: Sage Mode -- same story as 58, its own
         // texture (the leaf mark) full-frame.
-        // MEAMU 2026-11-17 (Train 5): bitmap 0x5F1, NOT 300 -- slot
-        // 300 is BITMAP_HIDE, the BMD texture system's sentinel, and
-        // runtime model-texture traffic can overwrite it (the icon
-        // rendered broken/grey live while 299/301/302 were fine).
-        GL_DrawTexture(0x5F1, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        // MEAMU 2026-11-17 (Train 6): bitmap 0x134 (308). Train 5's
+        // 0x5F1 sat inside the ContentCatalog texture region (the
+        // catalog allocator marches upward from 1450) and was
+        // overwritten in-game; bitmap 300 is BITMAP_HIDE. See the
+        // loader in Model_SkillEffects.cpp.
+        GL_DrawTexture(0x134, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
         return;
     }
     if (skill == 60) {
         // MEAMU 2026-11-17 (Train 4): Jinchuriki Mode -- same story
-        // as 58/59, its own texture (bitmap 301) full-frame.
-        GL_DrawTexture(301, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        // as 58/59, its own texture full-frame.
+        // MEAMU 2026-11-17 (Train 6): bitmap 0x135 (309), NOT 301 --
+        // 301 (0x12d) is BITMAP_SKIN (player skin variant 0).
+        GL_DrawTexture(0x135, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
         return;
     }
     if (skill == 61) {
         // MEAMU 2026-11-17 (Train 4): Biju Mode -- same story as
-        // 58/59, its own texture (bitmap 302) full-frame.
-        GL_DrawTexture(302, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        // 58/59, its own texture full-frame.
+        // MEAMU 2026-11-17 (Train 6): bitmap 0x106 (262), NOT 302 --
+        // 302 (0x12e) is the player skin variant 1 texture.
+        GL_DrawTexture(0x106, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
         return;
     }
     const int index = skill - 1;

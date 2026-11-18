@@ -104,13 +104,18 @@ void __cdecl RenderSkillIcon(int iIndex, float x, float y, float width, float he
     // their dedicated textures full-frame, exactly as sub_4BB940 in
     // HUD_Pass5.cpp and BuffBar::DrawSkillIcon do. This implementation
     // never got those branches, so any caller of RenderSkillIcon
-    // showed all four modes as off-atlas garbage. Sage Mode uses
-    // bitmap 0x5F1 (not 300: that slot is BITMAP_HIDE, the BMD
-    // texture system's sentinel -- see Model_SkillEffects.cpp).
+    // showed all four modes as off-atlas garbage.
+    // MEAMU 2026-11-17 (Train 6): Sage = bitmap 0x134 (Train 5's
+    // 0x5F1 sat inside the ContentCatalog texture region -- the
+    // catalog allocator marches upward from 1450 -- and was
+    // overwritten in-game; 300 is BITMAP_HIDE). Jinchuriki = 0x135
+    // and Biju = 0x106 (Train 4's 301/302 were the player skin
+    // slots 0x12d/0x12e -- BITMAP_SKIN variants 0/1). See the
+    // loader in Model_SkillEffects.cpp.
     if (skillId == 58 || skillId == 59 || skillId == 60 || skillId == 61) {
         const int dedicated = (skillId == 58) ? 299 :
-                              (skillId == 59) ? 0x5F1 :
-                              (skillId == 60) ? 301 : 302;
+                              (skillId == 59) ? 0x134 :
+                              (skillId == 60) ? 0x135 : 0x106;
         GL_DrawTexture(dedicated, fX, fY, fWidth, fHeight,
                        0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
     } else {

@@ -67,6 +67,20 @@ namespace BijuTransform
     // invisible character).
     int ModelForCharacter(const CHARACTER* character);
 
+    // MEAMU TRAIN 7 (2026-11-17, G's idea): Jinchuriki Mode skin override.
+    // While the Jinchuriki Mode state bit (0x1000, entity+120) is set, the
+    // character VISUALLY wears the Naruto Kyubi skin — item (8,50), the
+    // single full-body BMD at Data/Player/Custom/50/SkinNarutoKyubi.bmd —
+    // in place of the armour part, with pants/gloves/boots suppressed
+    // (the skin body encloses those regions). The HELM part is never
+    // touched: the player's real helm (or bare head) renders as normal.
+    // Pure client visual: no server, item or stat involvement. Returns
+    // the catalog model slot of the skin, or -1 when the override does
+    // not apply (mode off, Biju Mode 0x2000 set — the full transform
+    // wins —, non-player entity, or the skin model is not loaded, so
+    // every hook falls back to the normal player render).
+    int JinchurikiSkinModel(const CHARACTER* character);
+
     // ObjectPose_PrepareBones hook: if the entity is transformed, fills
     // `bones` with the beast pose and returns true (stock path skipped).
     bool PreparePose(OBJECT* entity, float* bones, char translate);

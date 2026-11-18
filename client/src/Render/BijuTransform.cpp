@@ -246,6 +246,25 @@ int ModelForCharacter(const CHARACTER* character)
     return Resolve(character, &model, nullptr) ? model : -1;
 }
 
+int JinchurikiSkinModel(const CHARACTER* character)
+{
+    if (!character) return -1;
+    const OBJECT* o = AsObject(character);
+    if (o->Type != 390 || o->Kind != 1) return -1;   // sólo jugadores
+    const DWORD state = *(const DWORD*)((const BYTE*)character + 120);
+    if ((state & 0x1000) == 0) return -1;           // Jinchuriki Mode off
+    if ((state & 0x2000) != 0) return -1;           // Biju Mode: transform wins
+    // Naruto Kyubi Skin = item (8,50). El tipo crudo vive en el espacio
+    // extendido del fork: 512 + sección*480 + (sub-32) = 512+3840+18.
+    constexpr int kKyubiSkinType = 512 + 8 * 480 + (50 - 32);   // 4370
+    const int model = gContentCatalog.GetItemModel(kKyubiSkinType);
+    if (model < 0) return -1;
+    const BMD* bm = AsModel((uintptr_t)DAT_05828d58) + model;
+    if (bm->NumActions <= 0 || bm->NumMeshs <= 0 || !bm->Actions || !bm->Bones)
+        return -1;   // modelo no cargado → render normal del jugador
+    return model;
+}
+
 bool PreparePose(OBJECT* entity, float* bones, char translate)
 {
     int modelIdx = -1;
