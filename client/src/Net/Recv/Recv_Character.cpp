@@ -4,6 +4,7 @@
 
 #include "stdafx.h"
 #include "UI/BuffBar.h"
+#include "Net/BijuProcVisuals.h"
 #include "UI/ChatListBox.h"
 #include "Net/NetText.h"
 #include "Entity/EntityName.h"
@@ -1332,6 +1333,10 @@ void NetRecv_F3(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         case 0xF6: {  // MEAMU MapTrack: whole-map Biju/player feed (F3:F6)
             void MapTrack_RecvF6(const BYTE* Msg, int Size);
             MapTrack_RecvF6((const BYTE*)Msg, Size);
+            break;
+        }
+        case 0xF9: {  // MEAMU Train 2: Biju Powers proc visuals + bearer state (F3:F9)
+            BijuProcVisuals::Receive((const BYTE*)Msg, Size);
             break;
         }
         case 0x30: {

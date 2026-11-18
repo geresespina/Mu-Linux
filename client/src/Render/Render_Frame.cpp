@@ -231,6 +231,7 @@ void Render_MacroTimer(void);
 void Render_MapLoadText(void);
 void Render_FloatingText(void);
 void Render_BloodGore(void);        // MEAMU: blood splat decals + hero hurt flash (Net/BloodGore.cpp)
+void Render_BijuProcVisuals(void);  // MEAMU Train 2: Biju proc visuals -- orbs/steam/embers (Net/BijuProcVisuals.cpp)
 void Render_MoveMarkers(void);      // MEAMU: click-to-move + teleport markers (Net/MoveMarkers.cpp)
 void Render_HumanLabels(void);   // MEAMU: always-on human player labels (Render/HumanLabels.cpp)
 void Render_QuickButtons(void);
@@ -374,6 +375,7 @@ void Render_GameFrame(void)
     Render_HumanLabels();           // MEAMU: feed name bubbles for human players (before RenderBooleans draws them)
     Render_FloatingText();          // RenderBooleans @ 0x4BD090 (was misnamed)
     Render_BloodGore();             // MEAMU: blood splats + hurt vignette (after the damage popups)
+    Render_BijuProcVisuals();       // MEAMU Train 2: Biju proc continuous visuals (orbs/steam/embers)
     Render_MoveMarkers();           // MEAMU: click-to-move + teleport markers
     Render_QuickButtons();          // sub_4F5820
 
