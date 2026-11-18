@@ -121,7 +121,8 @@
         "MU_PLATFORM_ONLY": "OFF",
         "MU_RENDER_WEBGPU": "OFF",
         "CMAKE_OSX_ARCHITECTURES": "x86_64",
-        "CMAKE_OSX_DEPLOYMENT_TARGET": "11.0"
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "11.0",
+        "CMAKE_CXX_FLAGS": "-Wno-c++11-narrowing"
       },
       "generator": "Ninja",
       "description": "Cliente completo para macOS Intel (x86_64) con SDL3 y OpenGL 3.3 core, sin WebGPU (spike 2026-11-17). Sin toolchain file: usa el Apple Clang nativo del runner macos-13. Todas las dependencias base llegan por FetchContent; no requiere vcpkg."
