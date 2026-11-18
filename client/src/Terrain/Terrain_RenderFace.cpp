@@ -167,7 +167,7 @@ void __cdecl RenderFace(int Texture)
     float (*tc)[2] = TER_TEX;
     float (*L)[3]  = TER_LIGHT;
     // DESVIACION: envío directo con los mismos atributos y orden de esquinas.
-    const int indices[4]{TER_IDX1,TER_IDX2,TER_IDX3,TER_IDX4};
+    const int indices[4]{static_cast<int>(TER_IDX1),static_cast<int>(TER_IDX2),static_cast<int>(TER_IDX3),static_cast<int>(TER_IDX4)};
     BufferedDraw::Vertex corners[4];
     for (int i=0;i<4;++i) {
         const int index=indices[i];
@@ -186,7 +186,7 @@ void __cdecl RenderFaceAlpha(int Texture)
     float (*tc)[2] = TER_TEX;
     float (*L)[3]  = TER_LIGHT;
     // DESVIACION: envío directo con los mismos atributos y orden de esquinas.
-    const int indices[4]{TER_IDX1,TER_IDX2,TER_IDX3,TER_IDX4};
+    const int indices[4]{static_cast<int>(TER_IDX1),static_cast<int>(TER_IDX2),static_cast<int>(TER_IDX3),static_cast<int>(TER_IDX4)};
     BufferedDraw::Vertex corners[4];
     for (int i=0;i<4;++i) {
         const int index=indices[i];
@@ -204,7 +204,7 @@ void __cdecl RenderFaceBlend(int Texture)
     float (*v)[3]  = TER_VERT;
     float (*tc)[2] = TER_TEX;
     // DESVIACION: envío directo con los mismos atributos y orden de esquinas.
-    const int indices[4]{TER_IDX1,TER_IDX2,TER_IDX3,TER_IDX4};
+    const int indices[4]{static_cast<int>(TER_IDX1),static_cast<int>(TER_IDX2),static_cast<int>(TER_IDX3),static_cast<int>(TER_IDX4)};
     BufferedDraw::Vertex corners[4];
     for (int i=0;i<4;++i) {
         const int index=indices[i];
@@ -251,7 +251,7 @@ void __cdecl RenderTerrainFace(float xf, float yf, int xi, int yi, float lodf)
                 v[1][1] = v[2][1] + TER_WIND[TER_IDX2];
                 float (*L)[3] = TER_LIGHT;
                 // DESVIACION: envío directo con los mismos atributos y orden de esquinas.
-                const int indices[4]{TER_IDX1,TER_IDX2,TER_IDX3,TER_IDX4};
+                const int indices[4]{static_cast<int>(TER_IDX1),static_cast<int>(TER_IDX2),static_cast<int>(TER_IDX3),static_cast<int>(TER_IDX4)};
                 BufferedDraw::Vertex corners[4];
                 for (int i=0;i<4;++i) {
                     const int index=indices[i];
