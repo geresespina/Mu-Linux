@@ -147,7 +147,7 @@ static void FUN_004c9730_old(float a1, int a2, int a3)
     if (a3 < 0 || a3 >= 60 || !CharacterAttribute) return;
 
     unsigned char skillType = *(unsigned char*)((char*)CharacterAttribute + a3 + 87);
-    if (skillType == 0 || skillType >= 64) return;  // empty slot or OOB type
+    if (skillType == 0 || skillType >= 128) return;  // empty slot or OOB type (128: MEAMU 2026-11-17, Biju Powers)
 
     char szName[256];
     szName[0] = 0;
@@ -299,7 +299,7 @@ void __cdecl RenderSkillTooltip(float a1, int a2, int a3)
         CharacterAttribute != DAT_07cf1ffc) return;
 
     unsigned char skillType = *(unsigned char*)((char*)CharacterAttribute + a3 + 87);
-    if (skillType == 0 || skillType >= 64) return;
+    if (skillType == 0 || skillType >= 128) return;  // (128: MEAMU 2026-11-17, Biju Powers)
 
     unsigned char* skillBaseTbl = DAT_07d29d20;
     unsigned char* skillStatTbl = DAT_07cf1ff8 ? DAT_07cf1ff8 : skillBaseTbl;

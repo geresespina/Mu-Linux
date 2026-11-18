@@ -280,7 +280,7 @@ static void SendSkillPacket1E_Local(BYTE skillId, BYTE gridX, BYTE gridY, BYTE d
 // 0047E7A0 uses the clear SkillAttribute table, with 0x28-byte entries.
 void __cdecl GetSkillInformation(int iType, int iLevel, char* lpszName, int* piMana, int* piDistance, int* piSkillMana) {
     (void)iLevel;
-    if (iType < 0 || iType >= 64) {
+    if (iType < 0 || iType >= 128) {  // MEAMU 2026-11-17 (Biju Powers): table is 128 wide
         if (lpszName) lpszName[0] = '\0';
         if (piMana) *piMana = 0;
         if (piDistance) *piDistance = 0;

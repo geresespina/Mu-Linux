@@ -1599,7 +1599,14 @@ static bool Combat_IsAllyTargetSkill97k(int iType)
            iType == 58 ||   // Mangekyou Sharingan (self)
            iType == 59 ||   // Sage Mode (self) (MEAMU 2026-11-17)
            iType == 60 ||   // Jinchuriki Mode (self) (MEAMU 2026-11-17, Train 4)
-           iType == 61;     // Biju Mode (self) (MEAMU 2026-11-17, Train 4)
+           iType == 61 ||   // Biju Mode (self) (MEAMU 2026-11-17, Train 4)
+           // MEAMU 2026-11-17 (Biju Powers): the self-cast beast
+           // actives target the caster, like the mode toggles.
+           iType == 66 ||   // Boiling Release (self)
+           iType == 68 ||   // Powder Blink (self)
+           iType == 69 ||   // Ink Clone (self)
+           iType == 70 ||   // Chakra Roar (self)
+           iType == 71;     // God Tree Roots (self)
 }
 
 // C2 snap-targeting (STUDY §4a): when a cast starts with nothing selected,
@@ -2080,7 +2087,7 @@ static BYTE Combat_ResolveQueuedSkillId97k()
 
 static int Combat_GetSkillRange97k(int skillType)
 {
-    if (skillType < 0 || skillType >= 64)
+    if (skillType < 0 || skillType >= 128)  // MEAMU 2026-11-17 (Biju Powers): table is 128 wide
         return 0;
 
     // GetSkillInformation @ 47E7A0 takes this from clear SkillAttribute

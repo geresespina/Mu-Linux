@@ -35,7 +35,7 @@ extern void __cdecl operator_delete(void* ptr);
 
 static BYTE* Warrior_GetSkillRecord97k(int skillType)
 {
-    if (skillType < 0 || skillType >= 64)
+    if (skillType < 0 || skillType >= 128)  // MEAMU 2026-11-17 (Biju Powers): table is 128 wide
         return nullptr;
     if (DAT_07cf1ff8 != 0)
         return DAT_07cf1ff8 + skillType * 0x28;

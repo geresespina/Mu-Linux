@@ -116,6 +116,7 @@ set(MU_SOURCES
     src/Game/MapManager.cpp
     src/Platform/Win32/ClientWndProc.cpp
     src/Net/MapTrack.cpp
+    src/Net/HpBars.cpp
     src/Net/BloodGore.cpp
     src/Net/BijuProcVisuals.cpp
     src/Net/MoveMarkers.cpp
@@ -393,6 +394,7 @@ set(MU_SOURCES
     src/UI/GoldenArcher.cpp
     src/UI/EventTimer.cpp
     src/UI/BuffBar.cpp
+    src/UI/BoostStrip.cpp
     src/UI/ChatHistory.cpp
     src/Core/DataPrefetch.cpp
     src/UI/MiniMap.cpp

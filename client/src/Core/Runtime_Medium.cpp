@@ -15,6 +15,7 @@
 #include "Input/Gamepad.h"  // MEAMU rev.5: pad indicator
 #include "Input/KbPlay.h"   // MEAMU auto-attack: AUTO indicator
 #include "UI/BuffBar.h"
+#include "UI/BoostStrip.h"
 #include "Model/SmdImport.h"
 #include "Physics/ClothTypes.h"
 #include "Text/TextCore.h"
@@ -71,6 +72,9 @@ void __cdecl RenderInformation(void) {
     // DESVIACION (Fase 4): barra de buffs. Va antes del mapa y del menú M
     // para que esas ventanas la tapen.
     gBuffBar.Render();
+    // MEAMU (2026-11-17): boost strip -- headline multiplier +
+    // factor chips above the HP orb, fed by the F3/F8 snapshot.
+    gBoostStrip.Render();
     // DESVIACION (DLL Interface.cpp, hook 0x00525CEC): mapa (Tab) y menú M.
     gMiniMap.Render();
     gMoveList.Render();

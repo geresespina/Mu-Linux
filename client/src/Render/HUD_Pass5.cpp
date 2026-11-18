@@ -223,7 +223,15 @@ extern "C" void __cdecl sub_4BB940(float HeightArg, float xArg, float yArg,
     float fw = (float)a4;
     float fh = (float)a5;
 
-    if (v10 == 58) {
+    if (v10 >= 62 && v10 <= 71) {
+        // MEAMU 2026-11-17 (Biju Powers): beast actives -- cell of
+        // the BijuPowers atlas (bitmap 0x102, 5x2 grid of glyphs),
+        // same draw as RenderSkillIcon in UI_SkillHotkeys.cpp.
+        const int cell = v10 - 62;
+        const float cellU = (float)(cell % 5) * 0.2f;
+        const float cellV = (float)(cell / 5) * 0.5f;
+        GL_DrawTexture(0x102, fx, fy, fw, fh, cellU + 0.002f, cellV + 0.002f, 0.196f, 0.496f, 1, 1);
+    } else if (v10 == 58) {
         // MEAMU 2026-11-15: Mangekyou Sharingan -- no cell exists in
         // the 256px Skill.jpg atlas for skill 58 (row 7 is off the
         // texture), so it draws its dedicated texture (bitmap 299)
