@@ -256,7 +256,21 @@ void __cdecl SetPlayerWalk(CHARACTER* param_1) {
     char bSafeZone0 = *(char *)&AsCharacter(param_1)->SafeZone;
 
     // Tick de stamina (IDA L27-56). El campo en +768 (= +0x300) es el contador de stamina.
-    if (bSafeZone0) {
+    // MEAMU INSTANT RUN (2026-11-17, G's order: "instant run, no walking"):
+    // para personajes jugador (Object.Type == 390 — el héroe local y los demás
+    // jugadores, que comparten esta selección de animación) el contador Run se
+    // fija en el umbral de carrera (0x28) en el primer tick de movimiento, sin
+    // fase de caminata y también en zona segura. CharacterMoveSpeed
+    // (Terrain.cpp) lee este mismo contador DESPUÉS de este tick dentro del
+    // walker de Player_InputTick, así que velocidad de carrera (15.0; 16.0 con
+    // alas; x1.75 Ninja Run encima, tope intacto) y animación de carrera
+    // aplican desde el primer paso — clicks de 1 tile incluidos. El movimiento
+    // por pad (PADCAST) encadena caminos por el mismo walker, así que también
+    // corre al instante. NPCs y monstruos conservan el tick original de abajo
+    // byte a byte (su animación sale por la rama etype != 390 de esta función).
+    if (AsCharacter(param_1)->Object.Type == 390) {
+        AsCharacter(param_1)->Run = 0x28;
+    } else if (bSafeZone0) {
         AsCharacter(param_1)->Run = 0;
     } else {
         unsigned char v2 = AsCharacter(param_1)->Run;
