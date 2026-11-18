@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Verifica daño mágico real con máquina y salidas altas, incluidos alias.
 
-Usa los 64 registros declarados en SkillAttribute.Raw, sin certificar
-protocolo, carga de skills ni corregir índices fuera de ese rango.
+Usa los 64 primeros registros de SkillAttribute.Raw (la tabla creció a
+128 registros con MEAMU Biju Powers), sin certificar protocolo, carga de
+skills ni corregir índices fuera de ese rango.
 """
 import argparse
 import os
@@ -64,7 +65,7 @@ int main() {
 def harness(revision=None):
     prefix = PREAMBLE.split("BYTE* reservation;", 1)[0]
     prefix += re.search(r"struct _SkillAttrEntry\s*\{.*?\};", read_source("src/globals.h", revision), re.S).group()
-    prefix += "\n_SkillAttrEntry SkillAttribute{};\nstatic_assert(sizeof(SkillAttribute.Raw) == 64 * 40);\n"
+    prefix += "\n_SkillAttrEntry SkillAttribute{};\nstatic_assert(sizeof(SkillAttribute.Raw) == 128 * 40);\n"
     damage = function(read_source("src/Scene/Scene_CharSelect_Nav.cpp", revision), "GetMagicSkillDamage")
     arg = "machine" if "const BYTE* This" in damage else "static_cast<DWORD>(reinterpret_cast<std::uintptr_t>(machine))"
     return prefix + damage + MAIN.replace("CALL_DAMAGE", f"GetMagicSkillDamage({arg}, type, low, high)")
