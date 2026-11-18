@@ -96,7 +96,10 @@ std::uint64_t RunWalk(CHARACTER* character, BYTE* models, BYTE* items, unsigned 
             }
         }
         Require(randomDraws == expectedDraws && soundEvents == expectedSounds);
-        if(before.SafeZone) Require(character->Run == 0);
+        // MEAMU Instant Run (2026-11-17): el jugador (390) fija Run en 0x28 en el
+        // primer tick, también en zona segura; el resto conserva la ley original.
+        if(before.Object.Type == 390) Require(character->Run == 40);
+        else if(before.SafeZone) Require(character->Run == 0);
         else Require(character->Run == before.Run || (before.Run < 40 && character->Run == before.Run + 1));
         const bool accepted = requestedAction < limit || requestedAction == 76 || requestedAction == 77;
         if(!accepted || requestedAction == before.Object.CurrentAction) {
@@ -128,8 +131,10 @@ std::uint64_t RunWalk(CHARACTER* character, BYTE* models, BYTE* items, unsigned 
         Hash(&randomDraws, sizeof(randomDraws)); Hash(&audio.calls, sizeof(audio.calls));
         for(int slot : soundEvents) Hash(&slot, sizeof(slot)); Hash(&bound, sizeof(bound));
     }
-    for(int action : {2, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-                      28, 29, 30, 31, 32, 33, 76, 77, 79, 80}) Require(actions[action]);
+    // MEAMU Instant Run: la familia de caminata del jugador (13-21, 25, 76, 79)
+    // queda retirada — el tick fija Run en 0x28 y esas ramas (stamina < 0x28)
+    // ya no son alcanzables para el jugador; NPC/monstruo siempre usa la 2.
+    for(int action : {2, 22, 23, 24, 26, 27, 28, 29, 30, 31, 32, 33, 77, 80}) Require(actions[action]);
     return digest;
 }
 int main() {
