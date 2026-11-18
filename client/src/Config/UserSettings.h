@@ -172,6 +172,13 @@ public:
     // [Game] BloodGore 1/0, default 1. Ver Net/BloodGore.h.
     bool GetBloodGore() const { return m_BloodGore; }
     void SetBloodGore(bool enabled) { m_BloodGore = enabled; }
+    // MEAMU (2026-11-18): hide equipped wings -- Config.ini
+    // [Game] HideWings 1/0, default 1 (hidden). Visual only: the wing
+    // item, its stats and flight are untouched; only the 3D render of
+    // the equipped wing is gated in Equipment_Tick. HideWings 0
+    // restores wing rendering exactly as before.
+    bool GetHideWings() const { return m_HideWings; }
+    void SetHideWings(bool enabled) { m_HideWings = enabled; }
     const char* GetUsername() const { return m_Username; }
     int GetLanguage() const { return m_Language; }
     // DESVIACION (Fase 4, Config.ini [Font] TextShadow / TextOutline): sombra
@@ -238,6 +245,7 @@ private:
     bool m_Antilag[MAX_ANTILAG] = {};
     bool m_PvPWithoutControl = false;
     bool m_BloodGore = true;
+    bool m_HideWings = true;
     int  m_Language = USER_LANG_DEFAULT;
     bool m_TextShadow = false;
     bool m_TextOutline = false;

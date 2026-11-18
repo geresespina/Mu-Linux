@@ -789,10 +789,14 @@ void Equipment_Tick(intptr_t entity, int highlighted)
         // DESVIACION (0.97.20): un ala con modelo del catálogo se dibuja después
         // del cuerpo, como en el 5.2 (RenderParts y después el ala): sus mallas
         // aditivas no escriben profundidad y el cuerpo la taparía siempre.
-        if (*(short *)((int *)((char *)param_1 + EntityOffset(0xa8 * 4))) != -1 && !gUserSettings.GetAntilag(ANTILAG_WINGS) &&
+        // MEAMU (2026-11-18): HideWings (Config.ini [Game], default 1)
+        // gates BOTH wing draws below -- the catalog-wing defer flag and
+        // the vanilla-wing immediate draw -- and with them the deferred
+        // stage-2 draw, which keys off bDeferWing. Visual only.
+        if (*(short *)((int *)((char *)param_1 + EntityOffset(0xa8 * 4))) != -1 && !gUserSettings.GetAntilag(ANTILAG_WINGS) && !gUserSettings.GetHideWings() &&
             gContentCatalog.EntityDrawModel(param_1, *(short *)((int *)((char *)param_1 + EntityOffset(0xa8 * 4)))) >= MODEL_MAX_VANILLA) {
             bDeferWing = true;
-        } else if (*(short *)((int *)((char *)param_1 + EntityOffset(0xa8 * 4))) != -1 && !gUserSettings.GetAntilag(ANTILAG_WINGS)) {
+        } else if (*(short *)((int *)((char *)param_1 + EntityOffset(0xa8 * 4))) != -1 && !gUserSettings.GetAntilag(ANTILAG_WINGS) && !gUserSettings.GetHideWings()) {
             *(BYTE *)((int *)((char *)param_1 + EntityOffset(0xa9 * 4))) = 0x2f;
             BYTE bAnim = *(BYTE *)&((OBJECT*)(uintptr_t)(puVar13))->CurrentAction;
             *(int*)&((CHARACTER*)(uintptr_t)param_1)->Wing.PlaySpeed = ((bAnim == 0x1e) || (bAnim == 0x1f)) ? 0x3f800000 : 0x3e800000;
