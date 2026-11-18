@@ -4,6 +4,7 @@
 
 #include "stdafx.h"
 #include "Game/HeroVitals.h"
+#include "Net/BloodGore.h"
 #include "Net/Recv/NetRecv.h"
 #include "Model/Model_CustomAnim.h"
 #include "Render/BijuTransform.h"
@@ -292,6 +293,7 @@ void NetRecv_15(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
                          *(float*)(tgtSlot + 0x18) };
         float color[3] = { 1.0f, 0.0f, 0.0f };
         CreatePoint(pos, (int)damage, color, 15.0f);
+        BloodGore::OnHit(tgtSlot, damage, (Size >= 16) ? *(const DWORD*)(Msg + 8) : 0, Size >= 16, targetId == g_HeroKey);  // MEAMU Blood & Gore: stun-branch landed hit
         if (targetId == g_HeroKey && DAT_07cf1ff4) {
             WORD* pHP = (WORD*)((BYTE*)(uintptr_t)DAT_07cf1ff4 + 28);
             if (damage < *pHP) *pHP -= damage; else *pHP = 0;
@@ -412,6 +414,7 @@ void NetRecv_15(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
             color[0] = 1.0f; color[1] = 0.6f; color[2] = 0.0f;  // orange
         }
     }
+    BloodGore::OnHit(tgtSlot, damage, (Size >= 16) ? *(const DWORD*)(Msg + 8) : 0, Size >= 16, targetId == g_HeroKey);  // MEAMU Blood & Gore: landed hit (damage 0 = MISS, module ignores)
     CreatePoint(pos, displayValue, color, scale);
 }
 
@@ -868,6 +871,7 @@ void NetRecv_17(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
     const int entitySlot = basePtr ? (int)((entity - basePtr) / CHARACTER_STRIDE) : -1;
     NetLog("NET:  → 0x17 Die id=%d slot=%d fall=%d",
            entityId, entitySlot, entity[EntityOffset(405)]);
+    BloodGore::OnDeath(entity);  // MEAMU Blood & Gore: death burst + ground splat
 }
 
 // 0x9C
@@ -928,6 +932,7 @@ void NetRecv_9C(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
                 *(WORD*) (hero + EntityOffset(784)) = (WORD)index;
             }
             CreatePoint((float*)(c + 16), dmg, color, 15.0f);
+            BloodGore::OnDeath(c);  // MEAMU Blood & Gore: monster/PvP death burst + splat
             AsCharacter(c)->Dead = 1;   // dead_flag (+0x2FD)
             AsCharacter(c)->Movement = 0;
         }

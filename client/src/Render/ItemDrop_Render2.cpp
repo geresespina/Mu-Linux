@@ -245,6 +245,12 @@ void RenderParticles(void)
                 fVar19 = 1.0f; fVar18 = 1.0f; fVar17 = 0.0f; fVar16 = 0.0f;
                 break;
 
+            // ── 259 (0x103): MEAMU BloodGore droplet cell (left half of the atlas) ──
+            case 259:
+                fVar15 = *(float *)(puVar8 - 1);
+                fVar19 = 0.5f; fVar18 = 1.0f; fVar17 = 0.0f; fVar16 = 0.0f;
+                break;
+
             // ── 0x596: 4-row × 4-col sheet (same formula as 0x4bf) ─────────
             case 0x596:
             {

@@ -168,6 +168,10 @@ public:
     // Ctrl.  Como en el DLL no se guarda: vale hasta cerrar el cliente.
     bool GetPvPWithoutControl() const { return m_PvPWithoutControl; }
     void SetPvPWithoutControl(bool enabled) { m_PvPWithoutControl = enabled; }
+    // MEAMU (2026-11-17): Blood & Gore client effects — Config.ini
+    // [Game] BloodGore 1/0, default 1. Ver Net/BloodGore.h.
+    bool GetBloodGore() const { return m_BloodGore; }
+    void SetBloodGore(bool enabled) { m_BloodGore = enabled; }
     const char* GetUsername() const { return m_Username; }
     int GetLanguage() const { return m_Language; }
     // DESVIACION (Fase 4, Config.ini [Font] TextShadow / TextOutline): sombra
@@ -233,6 +237,7 @@ private:
     int  m_GamepadCursorSpeed = 900;
     bool m_Antilag[MAX_ANTILAG] = {};
     bool m_PvPWithoutControl = false;
+    bool m_BloodGore = true;
     int  m_Language = USER_LANG_DEFAULT;
     bool m_TextShadow = false;
     bool m_TextOutline = false;

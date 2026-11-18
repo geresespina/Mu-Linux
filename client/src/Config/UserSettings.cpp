@@ -127,6 +127,8 @@ void CUserSettings::Load(const char* iniPath)
     m_GamepadEnable      = ReadRange("Gamepad", "Enable", iniPath, 0, 1, 1) != 0;
     m_GamepadDeadzone    = ReadRange("Gamepad", "Deadzone", iniPath, 5, 60, 25);
     m_GamepadCursorSpeed = ReadRange("Gamepad", "CursorSpeed", iniPath, 100, 3000, 900);
+    // MEAMU (2026-11-17): Blood & Gore — Config.ini [Game] BloodGore 1/0.
+    m_BloodGore = ReadRange("Game", "BloodGore", iniPath, 0, 1, 1) != 0;
 
     // MEAMU kb-toggle (2026-11-13): keyboard-only play master switch
     // ([Keyboard] Enable). Missing section/key reads as 1, so existing
