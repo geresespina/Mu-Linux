@@ -285,7 +285,7 @@ void __cdecl RenderTerrainFace(float xf, float yf, int xi, int yi, float lodf)
     if(capture) {
         auto& tile=captured.emplace();
         tile.x=xi;tile.y=yi;tile.base=CaptureTexture(tex);
-        const int ids[]{TER_IDX1,TER_IDX2,TER_IDX3,TER_IDX4};
+        const int ids[]{static_cast<int>(TER_IDX1),static_cast<int>(TER_IDX2),static_cast<int>(TER_IDX3),static_cast<int>(TER_IDX4)};
         for(int c=0;c<4;++c){tile.indices[c]=ids[c];for(int j=0;j<3;++j)tile.positions[c][j]=TER_VERT[c][j];}
         CaptureUV(tile,false);
     } else RenderFace(tex);                // RenderFace
