@@ -9,6 +9,7 @@
 #include "Model/Model_CustomAnim.h"
 #include "Render/BijuTransform.h"
 #include "Sound/EmoteSound.h"
+#include "Sound/ModeSound.h"
 
 void ApplyPersistentSkillEffect97k(BYTE* entity, WORD effect, BYTE state)
 {
@@ -582,9 +583,25 @@ void NetRecv_07(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         if (state == 1) {
             if ((currentEffects & effect) != effect) {
                 ApplyPersistentSkillEffect97k(entity, effect, 1);
+                // MEAMU 2026-11-18: sonido de activación de los modos
+                // (skills 58..61 = bits 0x400..0x2000 del bitmap). Este
+                // paquete C1:07 es el toggle EN VIVO del server; el
+                // resync al entrar al viewport pasa por Recv_Viewport y
+                // NO por aca, así que un modo ya encendido no re-suena
+                // al reaparecer la entidad. ModeSound además lleva el
+                // estado por personaje como segunda guarda.
+                if (effect & 0x400)  ModeSound_OnModeOn(entity, 58);
+                if (effect & 0x800)  ModeSound_OnModeOn(entity, 59);
+                if (effect & 0x1000) ModeSound_OnModeOn(entity, 60);
+                if (effect & 0x2000) ModeSound_OnModeOn(entity, 61);
             }
         } else if ((currentEffects & effect) == effect) {
             ApplyPersistentSkillEffect97k(entity, effect, 0);
+            // Apagar no suena: sólo rearma el flanco en ModeSound.
+            if (effect & 0x400)  ModeSound_OnModeOff(entity, 58);
+            if (effect & 0x800)  ModeSound_OnModeOff(entity, 59);
+            if (effect & 0x1000) ModeSound_OnModeOff(entity, 60);
+            if (effect & 0x2000) ModeSound_OnModeOff(entity, 61);
         }
         foundEntity = true;
         break;
