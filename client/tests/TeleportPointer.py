@@ -65,6 +65,15 @@ float* CreateEffect(int type, float* position, float* angle, float* light,
 void PlayBuffer(int id, std::uintptr_t owner, int flag) {
     Require(id == 88 && owner == 0 && flag == 0); Event(4);
 }
+namespace MoveMarkers {
+// MEAMU MOVE MARKERS: CreateTeleportBegin/End llaman a los marcadores al
+// final, tras los cuatro servicios reales. El marcador es un efecto visual
+// puro, no un servicio del tick: el doble valida el objeto como los demás
+// servicios, pero no cuenta eventos ni toca el digest, para conservar la
+// equivalencia con las referencias previas a los marcadores.
+void OnTeleportDeparture(const void* entity) { Require(entity == activeObject); }
+void OnTeleportArrival(const void* entity) { Require(entity == activeObject); }
+}
 '''
 
 MAIN = r'''
