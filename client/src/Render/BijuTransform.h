@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Item/ItemDefines.h"   // GetItemSection / GetItemSub (test de skin)
+
 // ── MEAMU BIJU PET TRANSFORM (2026-11-16, owner's GO: all 10 at once) ────────
 //
 // When a player character has one of the 10 Biju pet items EQUIPPED (item
@@ -51,6 +53,31 @@ namespace BijuTransform
     // type (or -1 / 0xFFFF when the slot is empty or holds something else).
     void NotePetItem(void* character, int itemType);
     void Clear(void* character);
+
+    // MEAMU SKIN BODY FIX (2026-11-18, G's live verdict on the worn Kyubi
+    // skin): a full-body SKIN worn in the armor slot (item section 8,
+    // sub >= 50 — Kyubi 50, Konan 51, Killer Bee 52, Naruto Sage 53, and
+    // every later skin at 54+) is a complete body: it carries its own head
+    // and encloses every region the base parts draw. While one is worn,
+    // RenderCharacter suppresses ALL base body parts (head/helm,
+    // pants, gloves, boots) and draws only the armor part — the skin
+    // itself. Held items (weapons/shield) and wings render outside the
+    // body-part loop and are untouched. Stock + custom set armors all sit
+    // below sub 50, so normal armor never trips the test. The decode is
+    // the client's own (section, sub) mapping, same as NotePetItem.
+    inline bool IsFullBodySkinItem(int itemType)
+    {
+        return itemType >= 0 && GetItemSection(itemType) == 8 &&
+               GetItemSub(itemType) >= 50;
+    }
+
+    // Feed / query the armor side table (same feed points as the pet
+    // table: hero SetCharacterClass + Hero_ApplyCatalogEquipment,
+    // remotes ApplyCustomEquipment + Recv_ChangePlayer slot 3; cleared
+    // by Clear()). itemType is the raw equipped ARMOR item type (or
+    // -1 / 0xFFFF when the slot is empty or holds something else).
+    void NoteArmorItem(void* character, int itemType);
+    bool WearsFullBodySkin(const CHARACTER* character);
 
     // Beast index 0-9 (Shukaku..Ten-Tails) for the character, or -1.
     int BeastFor(const CHARACTER* character);

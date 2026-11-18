@@ -799,6 +799,13 @@ target_include_directories(mu_frame_pointer_set_test PRIVATE src)
 target_compile_features(mu_frame_pointer_set_test PRIVATE cxx_std_17)
 add_test(NAME frame_pointer_set COMMAND mu_frame_pointer_set_test)
 
+# MEAMU SKIN BODY FIX (2026-11-18): rig del predicado de skin de cuerpo
+# entero (BijuTransform::IsFullBodySkinItem, header-inline).
+add_executable(mu_skin_body_fix_test EXCLUDE_FROM_ALL tests/SkinBodyFix.cpp)
+target_include_directories(mu_skin_body_fix_test PRIVATE src)
+target_compile_features(mu_skin_body_fix_test PRIVATE cxx_std_17)
+add_test(NAME skin_body_fix COMMAND mu_skin_body_fix_test)
+
 add_executable(mu_text_core_test EXCLUDE_FROM_ALL tests/TextCore.cpp src/Text/TextCore.cpp src/Text/Utf8Proc.c src/Text/UniBreak.c)
 target_include_directories(mu_text_core_test PRIVATE src)
 target_compile_features(mu_text_core_test PRIVATE cxx_std_17)
