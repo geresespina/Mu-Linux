@@ -55,6 +55,31 @@ void DrawSkillIcon(int skill, float x, float y)
         GL_DrawTexture(0x106, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
         return;
     }
+    if (skill == 72) {
+        // MEAMU 2026-11-18 (Train 3): Biju Bond -- the bond ignites
+        // Jinchuriki Mode, so it draws the Jinchuriki texture (0x135).
+        GL_DrawTexture(0x135, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        return;
+    }
+    if (skill == 73) {
+        // MEAMU 2026-11-18 (Train 3): Chakra Cloak -- dedicated
+        // texture (bitmap 0x0c8), see Model_SkillEffects.cpp.
+        GL_DrawTexture(0x0c8, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        return;
+    }
+    if (skill == 74) {
+        // MEAMU 2026-11-18 (Train 3): Perfect Susanoo shares the
+        // Biju form bit (0x2000) and draws the Biju texture (0x106);
+        // the model is its identity (no new icon, per design).
+        GL_DrawTexture(0x106, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        return;
+    }
+    if (skill == 75) {
+        // MEAMU 2026-11-18 (Train 3): Dragon Sage Mode -- dedicated
+        // texture (bitmap 0x0c9), see Model_SkillEffects.cpp.
+        GL_DrawTexture(0x0c9, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        return;
+    }
     if (skill >= 62 && skill <= 71) {
         // MEAMU 2026-11-18 (Train 2, Module A): Biju Powers glyphs ride
         // ONE atlas (Interface\BijuPowers.jpg -> bitmap 0x102, loaded in

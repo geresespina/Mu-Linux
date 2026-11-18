@@ -69,6 +69,7 @@ namespace
     constexpr int kFirstBeastSub   = 496;
     constexpr int kBeastCount      = 10;
     constexpr int kFirstBeastClass = 155;             // Shukaku .. Ten-Tails
+    constexpr int kSusanooClass    = 228;             // MEAMU TRAIN 3: Perfect Susanoo form (skill 74)
 
     signed char s_beastBySlot[400];
     // MEAMU SKIN BODY FIX (2026-11-18): skin de cuerpo entero puesta en el
@@ -119,14 +120,22 @@ namespace
         // los renders humanos (RenderCharacter) y el ocultado del bug del
         // pet equipado (Entity_Render): pet equipado sin modo = humano
         // normal con su pet visible, como antes del sistema transform.
-        if ((*(const DWORD*)((const BYTE*)character + 120) & 0x2000) == 0)
+        const bool formBit =
+            (*(const DWORD*)((const BYTE*)character + 120) & 0x2000) != 0;
+        if (!formBit)
             return false;
         EnsureInit();
         const int slot = SlotOf(character);
         if (slot < 0) return false;
-        const int beast = s_beastBySlot[slot];
-        if (beast < 0 || beast >= kBeastCount) return false;
-        const CatalogMonster* cm = gContentCatalog.GetMonster(kFirstBeastClass + beast);
+        // MEAMU TRAIN 3 (2026-11-18): tie-break on the shared form bit
+        // (see FormClassFor in the header): pet known -> that beast's
+        // class (existing behaviour, byte-identical); no pet known ->
+        // Perfect Susanoo, class 228. A missing/unloaded 228 catalog
+        // model falls back to the normal player render below, exactly
+        // like a missing beast model does today.
+        const int formClass = FormClassFor(formBit, (int)s_beastBySlot[slot]);
+        if (formClass < 0) return false;
+        const CatalogMonster* cm = gContentCatalog.GetMonster(formClass);
         if (!cm || cm->Model < 0) return false;
         const BMD* bm = AsModel((uintptr_t)DAT_05828d58) + cm->Model;
         if (bm->NumActions <= 0 || bm->NumMeshs <= 0 || !bm->Actions || !bm->Bones)
@@ -245,6 +254,17 @@ int BeastFor(const CHARACTER* character)
     EnsureInit();
     const int slot = SlotOf(character);
     return (slot >= 0) ? (int)s_beastBySlot[slot] : -1;
+}
+
+int FormClassFor(bool formBit, int beastIndex)
+{
+    // MEAMU TRAIN 3 (2026-11-18): pure tie-break for the shared form
+    // bit 0x2000 -- see the header. Kept free of catalog/model state
+    // so tests/SkinBodyFix.cpp can rig it headlessly.
+    if (!formBit) return -1;
+    if (beastIndex >= 0 && beastIndex < kBeastCount)
+        return kFirstBeastClass + beastIndex;
+    return kSusanooClass;
 }
 
 bool JinchurikiTint(const CHARACTER* character, float out[3])

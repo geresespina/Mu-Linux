@@ -79,6 +79,29 @@ int main()
     Expect(0xFFFF, false, "empty (0xFFFF as int)");
     Expect((int)(short)0xFFFF, false, "empty (0xFFFF as short)");
 
+    // ── MEAMU TRAIN 3 (2026-11-18): form-class tie-break rig ──────
+    // The REAL production decision (BijuTransform::FormClassFor,
+    // compiled from BijuTransform.cpp into this target): the shared
+    // form bit 0x2000 resolves to the equipped beast's class, or to
+    // Susanoo (228) when no soul pet is known.
+    auto ExpectForm = [](bool bit, int beast, int want, const char* label) {
+        const int got = BijuTransform::FormClassFor(bit, beast);
+        if (got != want) {
+            std::printf("FAIL form %-26s bit=%d beast=%d want=%d got=%d\n", label, (int)bit, beast, want, got);
+            ++s_failures;
+        } else {
+            std::printf("ok   form %-26s bit=%d beast=%d -> %d\n", label, (int)bit, beast, got);
+        }
+    };
+    ExpectForm(false, -1, -1,  "no bit, no pet");
+    ExpectForm(false,  0, -1,  "no bit, Shukaku pet");
+    ExpectForm(false,  9, -1,  "no bit, Ten-Tails pet");
+    ExpectForm(true,   0, 155, "bit, Shukaku");
+    ExpectForm(true,   4, 159, "bit, Kokuo");
+    ExpectForm(true,   9, 164, "bit, Ten-Tails");
+    ExpectForm(true,  -1, 228, "bit, NO pet = Susanoo");
+    ExpectForm(true,  10, 228, "bit, beast OOB = Susanoo");
+
     if (s_failures) {
         std::printf("SKIN BODY FIX RIG: %d FAILURES\n", s_failures);
         return EXIT_FAILURE;

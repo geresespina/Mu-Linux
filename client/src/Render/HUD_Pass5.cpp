@@ -254,6 +254,23 @@ extern "C" void __cdecl sub_4BB940(float HeightArg, float xArg, float yArg,
         // MEAMU 2026-11-17 (Train 6): bitmap 0x135 (309), NOT 301 --
         // 301 (0x12d) is BITMAP_SKIN (player skin variant 0).
         GL_DrawTexture(0x135, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+    } else if (v10 == 72) {
+        // MEAMU 2026-11-18 (Train 3): Biju Bond -- ignites Jinchuriki
+        // Mode, so it draws the Jinchuriki texture (0x135), as BuffBar.
+        GL_DrawTexture(0x135, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+    } else if (v10 == 73) {
+        // MEAMU 2026-11-18 (Train 3): Chakra Cloak -- dedicated
+        // texture (bitmap 0x0c8), see Model_SkillEffects.cpp.
+        GL_DrawTexture(0x0c8, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+    } else if (v10 == 74) {
+        // MEAMU 2026-11-18 (Train 3): Perfect Susanoo shares the
+        // Biju form bit and draws the Biju texture (0x106); the
+        // model is its identity (no new icon, per design).
+        GL_DrawTexture(0x106, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+    } else if (v10 == 75) {
+        // MEAMU 2026-11-18 (Train 3): Dragon Sage Mode -- dedicated
+        // texture (bitmap 0x0c9), see Model_SkillEffects.cpp.
+        GL_DrawTexture(0x0c9, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
     } else if (v10 == 61) {
         // MEAMU 2026-11-17 (Train 4): Biju Mode -- dedicated texture
         // (the tailed-beast eye) full-frame.
