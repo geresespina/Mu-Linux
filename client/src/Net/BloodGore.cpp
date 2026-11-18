@@ -118,9 +118,16 @@ Tier TierOf(float fraction, uint32_t damage)
     return Tier::Small;
 }
 
-void TuneSlot(int byteOffset, int lifeTicks)
+void TuneSlot(int slotIndex, int lifeTicks)
 {
-    char* slot = DAT_07abf5f0 + byteOffset;
+    // Particle_Spawn returns the pool slot INDEX (every exit path in
+    // Particle_Spawn.cpp returns iVar6), NOT a byte offset -- the pool
+    // stride is 0x70. Gore fix 2026-11-18: the original code treated the
+    // return value as a byte offset, so this tuning silently never landed
+    // (the type check below read slot 0's fields and bailed) and bursts
+    // kept the base-init lifetime of 2 ticks with zero velocity --
+    // a ~1-frame static flash, effectively invisible in real play.
+    char* slot = DAT_07abf5f0 + slotIndex * 0x70;
     if (!slot[0] || *(int*)(slot + kSlotType) != kBitmap) return;
     *(int*)(slot + kSlotLife) = lifeTicks;
     *(float*)(slot + kSlotRotation) = (float)(rand() % 360);
@@ -298,6 +305,28 @@ void DrawHurtFlash(uint32_t now)
     GL_ResetState();
 }
 
+// Gore fix 2026-11-18: env-gated VISUAL test (MU_BLOODGORE_VISUALTEST=1).
+// Every 2.5 s, fabricates a heavy hit + a death on a copy of the hero at
+// the hero's live position, so bursts + splats can be verified on a real
+// renderer without combat. Inert unless the env var is set.
+void VisualTestTick(uint32_t now)
+{
+    static const bool enabled = std::getenv("MU_BLOODGORE_VISUALTEST") != nullptr;
+    if (!enabled) return;
+    static uint32_t last = 0;
+    if (now - last < 2500) return;
+    const BYTE* hero = (const BYTE*)(uintptr_t)DAT_07abf5d8;
+    if (!hero || !hero[0]) return;
+    last = now;
+    static unsigned char ent[0x394];
+    std::memcpy(ent, hero, sizeof(ent));
+    ent[0x34E] = 0;  // fabricated copy: allow effects even on safe tiles
+    BloodGore::OnHit(ent, 500, 500, true, false);   // 50% = heavy burst + splat
+    BloodGore::OnDeath(ent);                        // death burst + splat
+    std::printf("BLOODGORE VISUALTEST: burst+splat at hero pos\n");
+    std::fflush(stdout);
+}
+
 } // namespace
 
 namespace BloodGore {
@@ -321,7 +350,7 @@ void OnHit(const void* entity, uint32_t damage, uint32_t viewCurHP,
     const int count = tier == Tier::Heavy  ? kBurstHeavy
                     : tier == Tier::Medium ? kBurstMedium : kBurstSmall;
     const float scaleMul = tier == Tier::Heavy ? 1.5f : tier == Tier::Medium ? 1.15f : 0.8f;
-    SpawnBurst(view.X(), view.Y(), ChestZ(view), count, scaleMul, r, g, b, 8);
+    SpawnBurst(view.X(), view.Y(), ChestZ(view), count, scaleMul, r, g, b, 12);
 
     if (tier == Tier::Heavy) {
         AddSplat(view.X(), view.Y(), 34.0f + (float)(rand() % 14), kHitSplatMs, now);
@@ -339,7 +368,7 @@ void OnDeath(const void* entity)
 
     float r, g, b;
     BurstColor(view, r, g, b);
-    SpawnBurst(view.X(), view.Y(), ChestZ(view), kBurstDeath, 2.0f, r, g, b, 12);
+    SpawnBurst(view.X(), view.Y(), ChestZ(view), kBurstDeath, 2.0f, r, g, b, 16);
     AddSplat(view.X(), view.Y(), 55.0f + (float)(rand() % 20), kDeathSplatMs, now);
 }
 
@@ -383,4 +412,5 @@ void Render_BloodGore(void)
     const uint32_t now = NowMs();
     DrawSplats(now);
     DrawHurtFlash(now);
+    VisualTestTick(now);
 }
