@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Verifica las reservas, lector/escritor y selección de registros de skills.
 
-Usa skill.bmd real y los cuerpos de producción. La conversión de nombres se
+Usa skill.bmd real y los cuerpos de producción. MEAMU (Biju Powers): la
+tabla creció a 128 registros (5120 bytes) y la muestra es el skill.bmd de
+128 registros; el banco certifica la geometría nueva. La conversión de nombres se
 sustituye por un validador de direcciones; no se prueba aquí la conversión UTF-8.
 Conserva separadas las reservas actuales y SkillAttribute.Raw.
 """
@@ -22,7 +24,7 @@ const char s__s___File_corrupted__00559bd4[] = "archivo corrupto";
 BYTE* reservations[2];
 int allocationIndex;
 void* AllocateSkills(std::size_t n) {
-    Require(n == 0xa00 && allocationIndex < 2);
+    Require(n == 0x1400 && allocationIndex < 2);
     return reservations[allocationIndex++] + 16;
 }
 '''
@@ -33,8 +35,8 @@ void NormalizeTextFileInPlace(char* p, int size) {
     const auto address = reinterpret_cast<std::uintptr_t>(p);
     const auto raw = reinterpret_cast<std::uintptr_t>(SkillAttribute.Raw);
     const auto shadow = reinterpret_cast<std::uintptr_t>(reinterpret_cast<void*>(DAT_07cf1ff8));
-    Require(size == 32 && ((address >= raw && address + size <= raw + 2560) ||
-                          (address >= shadow && address + size <= shadow + 2560)));
+    Require(size == 32 && ((address >= raw && address + size <= raw + 5120) ||
+                          (address >= shadow && address + size <= shadow + 5120)));
 }
 }
 '''
@@ -49,7 +51,7 @@ void Run(std::uintptr_t address, const std::vector<BYTE>& file) {
     for(int i = 0; i < 2; ++i) {
         reservations[i] = static_cast<BYTE*>(Reserve(address + i * 0x10000));
         Require(reservations[i] != nullptr);
-        std::memset(reservations[i], 0xa5, 2592);
+        std::memset(reservations[i], 0xa5, 5152);
     }
     InitializeSkills();
     Require(reinterpret_cast<void*>(DAT_07d29d20) == reservations[0] + 16);
@@ -58,7 +60,7 @@ void Run(std::uintptr_t address, const std::vector<BYTE>& file) {
     Skill_LoadBMD(SAMPLE_PATH);
     auto* primary = reinterpret_cast<BYTE*>(DAT_07d29d20);
     const auto* shadow = reinterpret_cast<const BYTE*>(DAT_07cf1ff8);
-    for(int i = 0; i < 2560; ++i) {
+    for(int i = 0; i < 5120; ++i) {
         const BYTE plain = BYTE(file[i] ^ BYTE(DAT_00559bb4[i % 40 % 3]));
         Require(BYTE(SkillAttribute.Raw[i]) == plain);
         Require(shadow[i] == BYTE(i % 40 == 38 ? plain * 2 : plain));
@@ -67,12 +69,12 @@ void Run(std::uintptr_t address, const std::vector<BYTE>& file) {
         primary[i] = plain;
     }
     Require(Warrior_GetSkillRecord97k(-1) == nullptr);
-    Require(Warrior_GetSkillRecord97k(64) == nullptr);
-    for(int i = 0; i < 64; ++i)
+    Require(Warrior_GetSkillRecord97k(128) == nullptr);
+    for(int i = 0; i < 128; ++i)
         Require(Warrior_GetSkillRecord97k(i) == shadow + i * 40);
     const auto savedShadow = DAT_07cf1ff8;
     DAT_07cf1ff8 = 0;
-    for(int i = 0; i < 64; ++i)
+    for(int i = 0; i < 128; ++i)
         Require(Warrior_GetSkillRecord97k(i) == primary + i * 40);
     const auto savedPrimary = DAT_07d29d20;
     DAT_07d29d20 = 0;
@@ -83,16 +85,16 @@ void Run(std::uintptr_t address, const std::vector<BYTE>& file) {
     Require(Read("skills-roundtrip.bmd") == file);
     for(int table = 0; table < 2; ++table)
         for(int i = 0; i < 16; ++i)
-            Require(reservations[table][i] == 0xa5 && reservations[table][2576 + i] == 0xa5);
+            Require(reservations[table][i] == 0xa5 && reservations[table][5136 + i] == 0xa5);
 }
 int main() {
-    const auto file = Read(SAMPLE_PATH); Require(file.size() == 2564);
+    const auto file = Read(SAMPLE_PATH); Require(file.size() == 5124);
     Run(0x50000000u, file);
     if(sizeof(void*) > 4) {
         Run(std::uint64_t(0x150000000ull), file);
         std::puts("tablas de skills sobre 4 GiB: reservas, lector/escritor y fallback correctos");
     }
-    std::puts("skill.bmd: 64 registros de 40 bytes, sombra y checksum sin cambios");
+    std::puts("skill.bmd: 128 registros de 40 bytes, sombra y checksum sin cambios");
 }
 '''
 
@@ -106,7 +108,7 @@ def harness(revision=None):
         definitions += re.search(rf"extern [^;\n]*\b{name}\s*;", header).group()
         definitions += re.search(rf"^[^/\n]*\b{name}\s*=\s*[^;]+;", globals_source, re.M).group()
         allocations += re.search(rf"^[ \t]*{name}\s*=\s*[^;]+;", entry, re.M).group().replace(
-            "malloc(0xa00)", "AllocateSkills(0xa00)")
+            "malloc(0x1400)", "AllocateSkills(0x1400)")
     raw = re.search(r"struct _SkillAttrEntry\s*\{.*?\};", header, re.S).group()
     raw += "\n_SkillAttrEntry SkillAttribute{};\n"
     scene = read_source("src/Scene/Scene_CharSelect_Nav.cpp", revision)
