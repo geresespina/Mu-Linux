@@ -51,7 +51,13 @@ public:
 #else
             timespec remaining{static_cast<time_t>(nanoseconds / 1000000000),
                                static_cast<long>(nanoseconds % 1000000000)};
+#ifdef __APPLE__
+            // MEAMU 2026-11-17: macOS has no clock_nanosleep; nanosleep with
+            // the same EINTR-resume loop is the exact relative-sleep twin.
+            while (nanosleep(&remaining, &remaining) == -1 && errno == EINTR) {}
+#else
             while (clock_nanosleep(CLOCK_MONOTONIC, 0, &remaining, &remaining) == EINTR) {}
+#endif
 #endif
         }
     }
