@@ -2,6 +2,7 @@
 #include "Render/Gfx.h"
 #include "Platform/Text.h"
 #include "UI/HealthBar.h"
+#include "Net/HpBars.h"
 #include "Config/UserSettings.h"
 #include "Entity/EntityView.h"
 
@@ -177,6 +178,11 @@ void CHealthBar::DrawViewport() const
     for (int i = 0; i < EntityView::Capacity; ++i) {
         const BYTE* entity = base + i * EntityView::Stride;
         if (!IsBijuEntity(entity)) continue;  // MEAMU: Biju-only carve-out.
+        // MEAMU (2026-11-17): while the on-hit bar (HpBars, F3/F7)
+        // is fresh for this beast, it wins — one beast, one bar.
+        // When the fight pauses past the fade, this snapshot bar
+        // returns exactly as before.
+        if (HpBars::HasFresh(entity)) continue;
         const auto* bar = FindEntity(entity);
         if (!bar) continue;
         const EntityView view(entity);

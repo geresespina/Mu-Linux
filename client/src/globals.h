@@ -2483,7 +2483,9 @@ extern unsigned char* TerrainWall;
 // de a 0x28 (40) bytes por entrada, así que la stride es 40 — no 300.  Los
 // consumidores indexan por BYTE: `&SkillAttribute[8 * (5*Level + 150)]`
 // (= entrada 30+Level), con el nombre en el offset 0 de la entrada.
-struct _SkillAttrEntry { char Raw[2560]; };
+// MEAMU 2026-11-17 (Biju Powers): 128 entries -- skills 62..71 (the beast
+// actives) live past the vanilla 64; Raw grows 2560 -> 5120 bytes.
+struct _SkillAttrEntry { char Raw[5120]; };
 extern _SkillAttrEntry SkillAttribute;  // base of table @ 0x07D29D20
 
 // ── CharactersClient extra BMD heap buffer ────────────────────────────────────

@@ -24,6 +24,8 @@ private:
     static constexpr int MaxBuffs = 16;
     unsigned long Remaining(const Buff& buff) const;
     void RenderTooltip(const Buff& buff, int x, int y) const;
+    // MEAMU 2026-11-18 (Train 2, Module A): passive icon + hover detail.
+    void RenderPassiveTooltip(int skill, int x, int y) const;
     Buff m_Buffs[MaxBuffs];
     int m_Count = 0;
 };

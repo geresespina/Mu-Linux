@@ -56,7 +56,7 @@ WORD s_GateLevel[MAX_CATALOG_GATE];
 // registro de SkillAttribute.  Se guardan los 8 bytes de skill.bmd que van
 // después del nombre para volver a ellos al desconectar (los nombres los
 // maneja F3/F0).
-constexpr int MAX_CATALOG_SKILL = 64;           // SkillAttribute: 64 x 0x28
+constexpr int MAX_CATALOG_SKILL = 128;          // SkillAttribute: 128 x 0x28 (MEAMU 2026-11-17, Biju Powers)
 constexpr int SKILL_RECORD = 0x28;
 constexpr int SKILL_DATA = 0x20;                // después del nombre
 BYTE s_VanillaSkillData[MAX_CATALOG_SKILL][SKILL_RECORD - SKILL_DATA];
@@ -67,7 +67,7 @@ PendingSection s_PendingMapMusic;
 
 // Textos traducidos del server (F3/F0).  Los nombres de items y skills se
 // escriben en sus tablas; los originales se guardan para volver a ellos.
-constexpr int MAX_SKILL_NAME = 64;            // SkillAttribute: 64 entradas x 40
+constexpr int MAX_SKILL_NAME = 128;           // SkillAttribute: 128 entradas x 40 (MEAMU 2026-11-17, Biju Powers)
 constexpr int SKILL_NAME_SIZE = 32;
 char s_VanillaSkillNames[MAX_SKILL_NAME][SKILL_NAME_SIZE];
 bool s_HasVanillaSkillNames = false;

@@ -2,6 +2,7 @@
 
 #include "stdafx.h"
 #include "UI/BuffBar.h"
+#include "UI/BoostStrip.h"
 #include "Net/NetText.h"
 #include "Platform/Text.h"
 #include "Platform/ISocket.h"
@@ -44,6 +45,7 @@ void CNetwork::ResetCharacterData()
     gCommandMenu.Close(); // DESVIACION: menú D e historial, misma conexión.
     gChatLogWindow.Close();
     gBuffBar.Clear();
+    gBoostStrip.Clear(); // MEAMU boost strip snapshot belongs to the character.
 }
 
 void CNetwork::ResetSessionData()

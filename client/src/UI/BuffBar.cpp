@@ -55,6 +55,18 @@ void DrawSkillIcon(int skill, float x, float y)
         GL_DrawTexture(0x106, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
         return;
     }
+    if (skill >= 62 && skill <= 71) {
+        // MEAMU 2026-11-18 (Train 2, Module A): Biju Powers glyphs ride
+        // ONE atlas (Interface\BijuPowers.jpg -> bitmap 0x102, loaded in
+        // Model_SkillEffects.cpp): 5 cols x 2 rows of 64px cells in a
+        // 320x128 texture, cell index = skill - 62 (tails 1..10).
+        const int cell = skill - 62;
+        const float u = (float)(cell % 5) * 0.2f;
+        const float v = (float)(cell / 5) * 0.5f;
+        GL_DrawTexture(0x102, x, y, (float)IconW, (float)IconH, u, v,
+                       0.2f, 0.5f - 1.0f / 128.0f, 1, 1);
+        return;
+    }
     const int index = skill - 1;
     const float u = (float)((index % 8) * CellW) / 256.0f;
     const float v = (float)((index / 8) * CellH) / 256.0f;
@@ -80,6 +92,66 @@ ClientTextId BonusText(int effect)
         case 8: return ClientTextId::BuffMaxLife;
         default: return ClientTextId::Count;
     }
+}
+
+// MEAMU 2026-11-18 (Train 2, Module A): the equipped soul pet's Biju
+// passive. The GS grants the beast's ACTIVE skill (62..71) on equip and
+// strips it on unequip (same hook as modes 60/61), and the passive rides
+// that grant -- so the hero's own skill list (CharacterAttribute: count
+// at +86, skill ids at +87, 60 slots; Recv_Character.cpp F3/11 incl. the
+// 0xFE/0xFF deltas) is the client-side truth for "which passive is on
+// me". At most one of 62..71 can be held at a time.
+// Names + effect lines: BIJU-POWERS-PLAN.md (G approved 2026-11-17),
+// numbers verbatim; lines pre-split to fit the 100-byte tooltip slots.
+// Two lines follow the LIVE server where it deviates from the plan
+// (flagged in the Train 2 report): Steam Pressure omits the +move speed
+// the GS cannot grant (build deviation D3), Octopus Grip's root is 2 s
+// (D5, engine whole-second effects).
+struct PassiveText {
+    const char* title;
+    const char* line1;
+    const char* line2;
+};
+const PassiveText kPassiveText[10] = {
+    { "Shukaku - Sand Shield",
+      "A shield regrows every 12 s, absorbing 10% of your MaxLife.", "" },
+    { "Matatabi - Blue Fire",
+      "Hits have a 20% chance to ignite: burn 3 s at 15% of",
+      "the igniting hit per tick." },
+    { "Isobu - Coral Armour",
+      "Melee attackers: 25% chance to be slowed 40% for 3 s",
+      "and stung back for 10% of their own hit." },
+    { "Son Goku - Lava Fists",
+      "Hits splash 30% to enemies within 1 tile of the target",
+      "and shred 10% defence for 4 s." },
+    { "Kokuo - Steam Pressure",
+      "Every hit you land adds a stack: +2% attack speed",
+      "(max 10). Stacks decay after 4 s out of combat." },
+    { "Saiken - Acid Body",
+      "Melee attackers get acid: 10% of their hit per tick x3",
+      "+ 25% slow. Your hits apply weaker acid (5% per tick x3)." },
+    { "Chomei - Scale Powder",
+      "10% chance when hit to blind the attacker (their next",
+      "3 attacks miss) + 5% evasion." },
+    { "Gyuki - Octopus Grip",
+      "Hits have a 15% chance to bind the target (root 2 s).", "" },
+    { "Kurama - Chakra Arms",
+      "Your hits also swipe the nearest other enemy within",
+      "2 tiles of your target for 50% of the hit." },
+    { "Ten-Tails - Truth-Seeker Orbs",
+      "3 orbs orbit you; each eats one incoming hit whole,",
+      "then regrows in 8 s." },
+};
+
+int ActiveBijuPassiveSkill()
+{
+    if (!CharacterAttribute) return 0;
+    const unsigned char* ca = (const unsigned char*)(uintptr_t)CharacterAttribute;
+    for (int i = 0; i < 60; ++i) {
+        const int skill = ca[87 + i];
+        if (skill >= 62 && skill <= 71) return skill;
+    }
+    return 0;
 }
 }
 
@@ -124,15 +196,21 @@ unsigned long CBuffBar::Remaining(const Buff& buff) const
 
 void CBuffBar::Render()
 {
-    if (SceneFlag != 5 || m_Count == 0) return;
+    if (SceneFlag != 5) return;
+    // MEAMU 2026-11-18 (Train 2, Module A): the Biju passive icon rides
+    // the same row, after the server-fed buffs; it shows even when no
+    // server buff is active (the passive is not an F3/F1 effect).
+    const int passive = ActiveBijuPassiveSkill();
     int visible = 0;
     for (int i = 0; i < m_Count; ++i)
         if (!m_Buffs[i].seconds || Remaining(m_Buffs[i])) ++visible;
-    if (!visible) return;
+    if (!visible && !passive) return;
 
     int x = gWindow.PanelOrigin(Ui::WindowLeft) + BarX;
     const Buff* hovered = nullptr;
     int hoveredX = 0;
+    int hoveredPassive = 0;
+    int hoveredPassiveX = 0;
     Gfx::Color4f(1.0f, 1.0f, 1.0f, 1.0f);
     for (int i = 0; i < m_Count; ++i) {
         const Buff& buff = m_Buffs[i];
@@ -153,9 +231,38 @@ void CBuffBar::Render()
         }
         x += IconW + Gap;
     }
+    if (passive) {
+        Gfx::Color4f(1.0f, 1.0f, 1.0f, 1.0f);
+        DrawSkillIcon(passive, (float)x, (float)BarY);
+        if (MouseX >= x && MouseX < x + IconW && MouseY >= BarY && MouseY < BarY + IconH) {
+            hoveredPassive = passive;
+            hoveredPassiveX = x;
+        }
+        x += IconW + Gap;
+    }
     Gfx::Color4f(1.0f, 1.0f, 1.0f, 1.0f);
     // Con el menú M abierto los íconos quedan debajo: sin tooltip.
     if (hovered && !gMoveList.IsOpen()) RenderTooltip(*hovered, hoveredX + IconW / 2, BarY + IconH + 4);
+    else if (hoveredPassive && !gMoveList.IsOpen()) RenderPassiveTooltip(hoveredPassive, hoveredPassiveX + IconW / 2, BarY + IconH + 4);
+}
+
+void CBuffBar::RenderPassiveTooltip(int skill, int x, int y) const
+{
+    if (skill < 62 || skill > 71) return;
+    const PassiveText& text = kPassiveText[skill - 62];
+    char* line = lpString_07e90798;
+    int count = 0;
+    auto add = [&](int color, int bold, const char* str) {
+        Platform::TextFormatSecure(line + count * 100, 100, "%s", str);
+        DAT_07e91708[count] = color;
+        DAT_07ea7b10[count] = bold;
+        ++count;
+    };
+    add(1, 1, text.title);
+    add(0, 0, text.line1);
+    if (text.line2[0]) add(0, 0, text.line2);
+    add(3, 0, "Biju passive - equipped soul pet");
+    CharMenu_RenderTextList(x, y, count, 0, 1, 1);
 }
 
 void CBuffBar::RenderTooltip(const Buff& buff, int x, int y) const

@@ -72,8 +72,8 @@ void __cdecl RenderSkillIcon(int iIndex, float x, float y, float width, float he
     if (!charAttr) return;
     unsigned int skillId = (unsigned char)*(charAttr + 0x57 + iIndex);
 
-    // Skip if skillId is invalid (0 = empty, >= 64 = OOB on SkillAttribute table).
-    if (skillId == 0 || skillId >= 64) {
+    // Skip if skillId is invalid (0 = empty, >= 128 = OOB on SkillAttribute table).
+    if (skillId == 0 || skillId >= 128) {
         return;
     }
 
@@ -112,7 +112,16 @@ void __cdecl RenderSkillIcon(int iIndex, float x, float y, float width, float he
     // and Biju = 0x106 (Train 4's 301/302 were the player skin
     // slots 0x12d/0x12e -- BITMAP_SKIN variants 0/1). See the
     // loader in Model_SkillEffects.cpp.
-    if (skillId == 58 || skillId == 59 || skillId == 60 || skillId == 61) {
+    if (skillId >= 62 && skillId <= 71) {
+        // MEAMU 2026-11-17 (Biju Powers): the beast actives draw
+        // their cell of the BijuPowers atlas (bitmap 0x102, 5x2
+        // grid), inset a hair to keep JPEG bleed out of the cell.
+        const int cell = (int)skillId - 62;
+        const float cellU = (float)(cell % 5) * 0.2f;
+        const float cellV = (float)(cell / 5) * 0.5f;
+        GL_DrawTexture(0x102, fX, fY, fWidth, fHeight,
+                       cellU + 0.002f, cellV + 0.002f, 0.196f, 0.496f, 1, 1);
+    } else if (skillId == 58 || skillId == 59 || skillId == 60 || skillId == 61) {
         const int dedicated = (skillId == 58) ? 299 :
                               (skillId == 59) ? 0x134 :
                               (skillId == 60) ? 0x135 : 0x106;

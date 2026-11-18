@@ -49,16 +49,16 @@ void __cdecl Skill_LoadTextData(const char *path)
 void __cdecl Skill_SaveBMD(const char *path)
 {
     FILE *fp   = (FILE *)crt_fopen(path, DAT_005597d4);  // "wb"
-    char *buf  = (char *)operator_new(0xa00);
+    char *buf  = (char *)operator_new(0x1400);
     const char *src = (const char *)DAT_07d29d20;
     char *p = buf;
-    for (const char *end = src + 0xa00; src < end; src += 0x28, p += 0x28) {
+    for (const char *end = src + 0x1400; src < end; src += 0x28, p += 0x28) {
         memcpy(p, src, 0x28);
         BuxConvert_0(p, 0x28);
     }
-    crt_fwrite(buf, 0xa00, 1, (int *)fp);
+    crt_fwrite(buf, 0x1400, 1, (int *)fp);
     DWORD cs = DAT_00b43000;
-    for (UINT i = 0; i < 0x9fd; i += 4) {
+    for (UINT i = 0; i < 0x13fd; i += 4) {
         DWORD v  = *(DWORD *)(buf + i);
         DWORD q  = (i >> 2) & 1;
         if      (q == 0) cs ^= v;
@@ -88,15 +88,15 @@ void __cdecl Skill_LoadBMD(const char *path)
         gWindow.RequestCloseApplication();
         return;
     }
-    char *buf0 = (char *)operator_new(0xa00);
+    char *buf0 = (char *)operator_new(0x1400);
     char *buf  = buf0;
-    crt_fread(buf, 0xa00, 1, (int *)fp);
+    crt_fread(buf, 0x1400, 1, (int *)fp);
     DWORD stored_cs;
     crt_fread((char *)&stored_cs, 4, 1, (int *)fp);
     crt_fclose(fp);
 
     DWORD cs = DAT_00b43000;
-    for (UINT i = 0; i < 0x9fd; i += 4) {
+    for (UINT i = 0; i < 0x13fd; i += 4) {
         DWORD v  = *(DWORD *)(buf + i);
         DWORD q  = (i >> 2) & 1;
         if      (q == 0) cs ^= v;
@@ -127,12 +127,12 @@ void __cdecl Skill_LoadBMD(const char *path)
         *((BYTE *)DAT_07cf1ff8 + off + 0x26) <<= 1;
         off += 0x28;
         buf += 0x28;
-    } while (off <= 0x9ff);
+    } while (off <= 0x13ff);
     operator_delete(buf0);
     // DESVIACION (Fase 4, texto Unicode): nombres (32 bytes) a UTF-8;
     // lo que ya es UTF-8 se deja y el resto se
     // toma como Windows-1252 (NormalizeTextFileInPlace).
-    for (off = 0; off + 0x28 <= 0xa00; off += 0x28) {
+    for (off = 0; off + 0x28 <= 0x1400; off += 0x28) {
         if (off + 0x28 <= (int)sizeof(SkillAttribute.Raw))
             TextEngine::NormalizeTextFileInPlace(SkillAttribute.Raw + off, 32);
         TextEngine::NormalizeTextFileInPlace((char *)DAT_07cf1ff8 + off, 32);

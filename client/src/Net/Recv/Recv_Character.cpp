@@ -4,6 +4,7 @@
 
 #include "stdafx.h"
 #include "UI/BuffBar.h"
+#include "Net/BijuProcVisuals.h"
 #include "UI/ChatListBox.h"
 #include "Net/NetText.h"
 #include "Entity/EntityName.h"
@@ -18,6 +19,7 @@
 #include "UI/EventTimer.h"
 #include "UI/MoveList.h"
 #include "UI/HealthBar.h"
+#include "Net/HpBars.h"
 #include "Net/Recv/NetRecv.h"
 #include "Net/ServerCharacterStats.h"
 
@@ -1332,6 +1334,19 @@ void NetRecv_F3(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         case 0xF6: {  // MEAMU MapTrack: whole-map Biju/player feed (F3:F6)
             void MapTrack_RecvF6(const BYTE* Msg, int Size);
             MapTrack_RecvF6((const BYTE*)Msg, Size);
+            break;
+        }
+        case 0xF7: {  // MEAMU HpBars: per-hit HP fraction feed (F3:F7)
+            HpBars::Receive((const BYTE*)Msg, Size);
+            break;
+        }
+        case 0xF8: {  // MEAMU Boost Strip: hero boost state snapshot (F3:F8)
+            void BoostState_RecvF8(const BYTE* Msg, int Size);
+            BoostState_RecvF8((const BYTE*)Msg, Size);
+            break;
+        }
+        case 0xF9: {  // MEAMU Train 2: Biju Powers proc visuals + bearer state (F3:F9)
+            BijuProcVisuals::Receive((const BYTE*)Msg, Size);
             break;
         }
         case 0x30: {
