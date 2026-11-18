@@ -71,7 +71,7 @@ const char* const English[] = {
     "Chat History", "No messages yet"
 };
 constexpr size_t Count = (size_t)ClientTextId::Count;
-static_assert(sizeof(English) / sizeof(English[0]) == Count, "Faltan textos en ingl\xC3\xA9s");
+static_assert(sizeof(English) / sizeof(English[0]) == Count, "Faltan textos en ingles");
 
 // Textos del server, por id.  Vacío = no hay: se usa el inglés.
 std::string s_ServerText[Count];

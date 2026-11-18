@@ -518,6 +518,11 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
                     // encoda para que RenderPartObjectEffect lo decodifique con
                     // (val>>3)&0xF. FIEL a IDA (8 * *(BYTE*)(v76-18)).
                     UINT shiftedLvl = (UINT)rawLvl << 3;
+                    // TRAIN 8: si esta pieza ES la skin (armadura con el
+                    // modo Jinchuriki), el dibujo va sin la cabeza propia
+                    // de la skin — la cabeza real del jugador queda libre.
+                    const bool bSkinDraw = bJinSkin && nPart == 2;
+                    if (bSkinDraw) BijuTransform::SkinHeadlessBegin(jinSkinModel);
                     RenderPartObject((intptr_t)param_1,
                                  iVar9,
                                  piVar16,
@@ -527,6 +532,7 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
                                  rawOpt,
                                  '\0', 0, '\x01',
                                  (int)(size_t)param_3, 2);
+                    if (bSkinDraw) BijuTransform::SkinHeadlessEnd(jinSkinModel);
                 }
                 // IDA RenderCharacter (0x456770 L1070-1104): la tela de los
                 // pants Grand Soul (modelo 706 = MODEL_PANTS + 18).  Cada pieza
@@ -548,6 +554,7 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
             BYTE bClassByte = *(BYTE *)&((CHARACTER*)(uintptr_t)(param_1))->Class;
             *(BYTE *)(DAT_05828d58 + jinSkinModel * BMD_STRIDE + 0x98 + BMD_FIELD_SHIFT) =
                 (BYTE)(((bClassByte & 7) << 1) | (bClassByte >> 3));
+            BijuTransform::SkinHeadlessBegin(jinSkinModel);   // TRAIN 8: sin cabeza propia
             RenderPartObject((intptr_t)param_1,
                          jinSkinModel,
                          &AsCharacter(param_1)->BodyPart[2],
@@ -557,6 +564,7 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
                          0,
                          '\0', 0, '\x01',
                          (int)(size_t)param_3, 2);
+            BijuTransform::SkinHeadlessEnd(jinSkinModel);   // TRAIN 8
         }
         // IDA: RenderCharacter llama CreateGuildMark/RenderGuildMarkOnShield después de
         // renderizar las seis piezas, sólo para modelos de jugador visibles.

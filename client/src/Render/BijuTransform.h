@@ -81,6 +81,24 @@ namespace BijuTransform
     // every hook falls back to the normal player render).
     int JinchurikiSkinModel(const CHARACTER* character);
 
+    // MEAMU TRAIN 8 (2026-11-17, G's live verdict on v20261117-2023): the
+    // Kyubi skin BMD carries its OWN head geometry, so with Train 7 the
+    // player's real head rendered INSIDE the skin's head ("my head is in
+    // its head"). The skin is a SINGLE mesh (10,160 verts / 18,688 tris),
+    // so there is no head mesh to hide: SkinHeadlessBegin/End bracket the
+    // skin's RenderPartObject calls in RenderCharacter and swap mesh 0's
+    // triangle list for a pre-filtered copy with every triangle whose 3
+    // vertices are ALL bound to the head bones removed (7,953 tris; the
+    // head bones — Bip01 Head / Ponytail1 / Ponytail11 — are resolved by
+    // NAME from the model's own skeleton at build time). The 41 seam
+    // triangles mixing head verts with Spine1 (neck/collar transition)
+    // are KEPT, so no hole opens between the player's neck and the
+    // skin's torso. Fail-safe: any mismatch against the shipped skin's
+    // profile (counts or bone names) leaves the draw untouched, i.e.
+    // the Train 7 look, never a corrupted draw.
+    void SkinHeadlessBegin(int modelIdx);
+    void SkinHeadlessEnd(int modelIdx);
+
     // ObjectPose_PrepareBones hook: if the entity is transformed, fills
     // `bones` with the beast pose and returns true (stock path skipped).
     bool PreparePose(OBJECT* entity, float* bones, char translate);

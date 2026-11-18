@@ -43,6 +43,7 @@
 #include "Render/BijuTransform.h"
 #include "Item/ItemDefines.h"   // GetItemSection / GetItemSub (espacio extendido)
 #include "Model/ModelTypes.h"
+#include "Physics/ClothTypes.h"   // ClothModelMesh (TRAIN 8: swap de triángulos de la skin)
 #include "Entity/EntityTypes.h"
 #include "Item/ContentCatalog.h"
 #include "globals.h"
@@ -263,6 +264,116 @@ int JinchurikiSkinModel(const CHARACTER* character)
     if (bm->NumActions <= 0 || bm->NumMeshs <= 0 || !bm->Actions || !bm->Bones)
         return -1;   // modelo no cargado → render normal del jugador
     return model;
+}
+
+namespace
+{
+    // ── TRAIN 8: filtro de cabeza de la skin Kyubi ──────────────────────
+    // Análisis del asset (SkinNarutoKyubi.bmd, sha256 995af166…, ver
+    // TRAIN8-REPORT.md): UNA malla de 10.160 vértices / 18.688 triángulos.
+    // Los vértices de la cabeza (cráneo, cara, orejas y pelo) están
+    // ligados a los huesos 20/22/23 del esqueleto Bip01 del propio
+    // modelo ('Bip01 Head' / 'Bip01 Ponytail1' / 'Bip01 Ponytail11'),
+    // con Z mundial en pose bind [160,7 .. 206,4] — sobre el cuello
+    // (hueso 19, origen Z 156,2). 7.953 triángulos tienen sus 3 vértices
+    // en huesos de cabeza: ésa es la cáscara que encerraba la cabeza
+    // real del jugador. Los 41 triángulos mixtos (vértices de cabeza +
+    // Spine1) son la costura cuello/torso y se CONSERVAN.
+    bool  s_skinHeadTried = false;    // build intentado (una sola vez)
+    bool  s_skinHeadActive = false;   // swap aplicado ahora mismo
+    int   s_skinHeadModel = -1;
+    BYTE* s_skinHeadTris = nullptr;   // copia filtrada (10.735 tris)
+    short s_skinHeadTriCount = 0;
+    BYTE* s_skinOrigTris = nullptr;   // respaldo para restaurar
+    short s_skinOrigTriCount = 0;
+
+    bool BuildSkinHeadFilter(int modelIdx)
+    {
+        BMD* bm = AsModel((uintptr_t)DAT_05828d58) + modelIdx;
+        if (bm->NumMeshs != 1 || !bm->Meshs || !bm->Bones) return false;
+        auto* mesh = reinterpret_cast<ClothModelMesh*>(bm->Meshs);
+        // Perfil exacto de la skin despachada: si el asset cambia, la
+        // verificación de abajo no cierra y no se filtra nada.
+        if (mesh->VertexCount != 10160 || mesh->TriangleCount != 18688 ||
+            !mesh->Vertices || !mesh->Triangles)
+            return false;
+        // Huesos de cabeza por NOMBRE desde el esqueleto del modelo.
+        auto* bones = reinterpret_cast<ModelAnimationBone*>(bm->Bones);
+        bool headBone[512] = {};
+        int found = 0;
+        for (int b = 0; b < bm->NumBones && b < 512; ++b) {
+            if (std::strcmp(bones[b].Name, "Bip01 Head") == 0 ||
+                std::strcmp(bones[b].Name, "Bip01 Ponytail1") == 0 ||
+                std::strcmp(bones[b].Name, "Bip01 Ponytail11") == 0) {
+                headBone[b] = true;
+                ++found;
+            }
+        }
+        if (found != 3) return false;
+        const auto* verts = reinterpret_cast<const ModelRuntimeVertex*>(mesh->Vertices);
+        const auto* tris  = reinterpret_cast<const ModelRuntimeTriangle*>(mesh->Triangles);
+        BYTE* out = static_cast<BYTE*>(
+            operator_new((std::size_t)mesh->TriangleCount * sizeof(ModelRuntimeTriangle)));
+        if (!out) return false;
+        int kept = 0, dropped = 0;
+        for (int f = 0; f < mesh->TriangleCount; ++f) {
+            const ModelRuntimeTriangle& t = tris[f];
+            const short b0 = verts[t.VertexIndex[0]].Bone;
+            const short b1 = verts[t.VertexIndex[1]].Bone;
+            const short b2 = verts[t.VertexIndex[2]].Bone;
+            const bool head =
+                b0 >= 0 && b0 < 512 && headBone[b0] &&
+                b1 >= 0 && b1 < 512 && headBone[b1] &&
+                b2 >= 0 && b2 < 512 && headBone[b2];
+            if (head) { ++dropped; continue; }
+            std::memcpy(out + (std::size_t)kept * sizeof(ModelRuntimeTriangle),
+                        &t, sizeof(ModelRuntimeTriangle));
+            ++kept;
+        }
+        // Cierre contra el análisis del asset: 7.953 fuera / 10.735 dentro.
+        // Otro número = asset distinto → no tocar el dibujo.
+        if (dropped != 7953 || kept != 10735) {
+            operator_delete(out);
+            return false;
+        }
+        s_skinHeadTris = out;
+        s_skinHeadTriCount = (short)kept;
+        s_skinHeadModel = modelIdx;
+        return true;
+    }
+}   // namespace
+
+void SkinHeadlessBegin(int modelIdx)
+{
+    if (s_skinHeadActive) return;
+    if (!s_skinHeadTried) {
+        s_skinHeadTried = true;
+        BuildSkinHeadFilter(modelIdx);   // deja s_skinHeadTris listo o null
+    }
+    if (!s_skinHeadTris || modelIdx != s_skinHeadModel) return;
+    BMD* bm = AsModel((uintptr_t)DAT_05828d58) + modelIdx;
+    if (bm->NumMeshs != 1 || !bm->Meshs) return;
+    auto* mesh = reinterpret_cast<ClothModelMesh*>(bm->Meshs);
+    // Identidad en cada swap: si el modelo se recargó, Meshs/Triangles ya
+    // no son los del perfil verificado → no tocar.
+    if (mesh->TriangleCount != 18688 || !mesh->Triangles) return;
+    s_skinOrigTris = mesh->Triangles;
+    s_skinOrigTriCount = mesh->TriangleCount;
+    mesh->Triangles = s_skinHeadTris;
+    mesh->TriangleCount = s_skinHeadTriCount;
+    s_skinHeadActive = true;
+}
+
+void SkinHeadlessEnd(int modelIdx)
+{
+    if (!s_skinHeadActive || modelIdx != s_skinHeadModel) return;
+    BMD* bm = AsModel((uintptr_t)DAT_05828d58) + modelIdx;
+    if (bm->NumMeshs == 1 && bm->Meshs) {
+        auto* mesh = reinterpret_cast<ClothModelMesh*>(bm->Meshs);
+        mesh->Triangles = s_skinOrigTris;
+        mesh->TriangleCount = s_skinOrigTriCount;
+    }
+    s_skinHeadActive = false;
 }
 
 bool PreparePose(OBJECT* entity, float* bones, char translate)
