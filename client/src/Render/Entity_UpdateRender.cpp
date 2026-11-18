@@ -476,6 +476,17 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
         // toca nunca: casco real o cabeza pelada, como siempre.
         const int  jinSkinModel = BijuTransform::JinchurikiSkinModel((const CHARACTER*)(uintptr_t)param_1);
         const bool bJinSkin     = jinSkinModel >= 0;
+        // MEAMU SKIN BODY FIX (2026-11-18): skin de cuerpo entero PUESTA
+        // en el slot de armadura (seccion 8, sub >= 50, ver
+        // BijuTransform::NoteArmorItem). La skin trae su propia cabeza y
+        // encierra torso, piernas, manos y pies: el cuerpo base entero
+        // sobra. Se apagan casco/cabeza (BodyPart[1] — la cabeza pelada
+        // vive en el mismo slot que el casco), pantalon (3), guantes (4)
+        // y botas (5); la armadura (2) se dibuja como siempre, porque ES
+        // la skin. Armas, escudo y alas se dibujan por otros caminos y
+        // no se tocan. Sin skin puesta, bWornSkin = false y el loop queda
+        // byte-identico al de Train 7.
+        const bool bWornSkin    = BijuTransform::WearsFullBodySkin((const CHARACTER*)(uintptr_t)param_1);
         PART_t *piVar16 = AsCharacter(param_1)->BodyPart;   // int*-index: byte offset +0x1f4
         int nPart = 0;   // indice BodyPart de la iteracion: 1 casco, 2 armadura, 3 pantalon, 4 guantes, 5 botas
         for (int nSlot = 6; nSlot > 0; nSlot--) {
@@ -491,7 +502,8 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
                 iVar9 = gContentCatalog.EntityDrawModel(param_1, iVar9);
                 // TRAIN 7: pieza cubierta por la skin (pantalon/guantes/botas)
                 // o la armadura misma, que pasa a dibujarse como la skin.
-                const bool bCoveredBySkin = bJinSkin && nPart >= 3 && nPart <= 5;
+                const bool bCoveredBySkin = (bJinSkin && nPart >= 3 && nPart <= 5) ||
+                                            (bWornSkin && nPart >= 1 && nPart != 2);
                 if (bJinSkin && nPart == 2) iVar9 = jinSkinModel;
                 BYTE bClassByte = *(BYTE *)&((CHARACTER*)(uintptr_t)(param_1))->Class;
                 *(BYTE *)(DAT_05828d58 + iVar9 * BMD_STRIDE + 0x98 + BMD_FIELD_SHIFT) =
@@ -789,10 +801,14 @@ void Equipment_Tick(intptr_t entity, int highlighted)
         // DESVIACION (0.97.20): un ala con modelo del catálogo se dibuja después
         // del cuerpo, como en el 5.2 (RenderParts y después el ala): sus mallas
         // aditivas no escriben profundidad y el cuerpo la taparía siempre.
-        if (*(short *)((int *)((char *)param_1 + EntityOffset(0xa8 * 4))) != -1 && !gUserSettings.GetAntilag(ANTILAG_WINGS) &&
+        // MEAMU (2026-11-18): HideWings (Config.ini [Game], default 1)
+        // gates BOTH wing draws below -- the catalog-wing defer flag and
+        // the vanilla-wing immediate draw -- and with them the deferred
+        // stage-2 draw, which keys off bDeferWing. Visual only.
+        if (*(short *)((int *)((char *)param_1 + EntityOffset(0xa8 * 4))) != -1 && !gUserSettings.GetAntilag(ANTILAG_WINGS) && !gUserSettings.GetHideWings() &&
             gContentCatalog.EntityDrawModel(param_1, *(short *)((int *)((char *)param_1 + EntityOffset(0xa8 * 4)))) >= MODEL_MAX_VANILLA) {
             bDeferWing = true;
-        } else if (*(short *)((int *)((char *)param_1 + EntityOffset(0xa8 * 4))) != -1 && !gUserSettings.GetAntilag(ANTILAG_WINGS)) {
+        } else if (*(short *)((int *)((char *)param_1 + EntityOffset(0xa8 * 4))) != -1 && !gUserSettings.GetAntilag(ANTILAG_WINGS) && !gUserSettings.GetHideWings()) {
             *(BYTE *)((int *)((char *)param_1 + EntityOffset(0xa9 * 4))) = 0x2f;
             BYTE bAnim = *(BYTE *)&((OBJECT*)(uintptr_t)(puVar13))->CurrentAction;
             *(int*)&((CHARACTER*)(uintptr_t)param_1)->Wing.PlaySpeed = ((bAnim == 0x1e) || (bAnim == 0x1f)) ? 0x3f800000 : 0x3e800000;

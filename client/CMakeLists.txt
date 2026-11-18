@@ -117,6 +117,7 @@ set(MU_SOURCES
     src/Platform/Win32/ClientWndProc.cpp
     src/Net/MapTrack.cpp
     src/Net/BloodGore.cpp
+    src/Net/MoveMarkers.cpp
     src/Net/Network.cpp
     src/Net/Reconnect.cpp
     src/Net/Ping.cpp
@@ -168,6 +169,7 @@ set(MU_SOURCES
     src/Game/FrameLimiter.cpp
     src/Sound/Music.cpp
     src/Sound/EmoteSound.cpp
+    src/Sound/ModeSound.cpp
     src/Terrain/Terrain_Tile.cpp
     src/Render/GL_2D.cpp
     src/Render/Effect_Tick.cpp
@@ -796,6 +798,13 @@ add_executable(mu_frame_pointer_set_test EXCLUDE_FROM_ALL tests/FramePointerSet.
 target_include_directories(mu_frame_pointer_set_test PRIVATE src)
 target_compile_features(mu_frame_pointer_set_test PRIVATE cxx_std_17)
 add_test(NAME frame_pointer_set COMMAND mu_frame_pointer_set_test)
+
+# MEAMU SKIN BODY FIX (2026-11-18): rig del predicado de skin de cuerpo
+# entero (BijuTransform::IsFullBodySkinItem, header-inline).
+add_executable(mu_skin_body_fix_test EXCLUDE_FROM_ALL tests/SkinBodyFix.cpp)
+target_include_directories(mu_skin_body_fix_test PRIVATE src)
+target_compile_features(mu_skin_body_fix_test PRIVATE cxx_std_17)
+add_test(NAME skin_body_fix COMMAND mu_skin_body_fix_test)
 
 add_executable(mu_text_core_test EXCLUDE_FROM_ALL tests/TextCore.cpp src/Text/TextCore.cpp src/Text/Utf8Proc.c src/Text/UniBreak.c)
 target_include_directories(mu_text_core_test PRIVATE src)

@@ -71,12 +71,17 @@ namespace
     constexpr int kFirstBeastClass = 155;             // Shukaku .. Ten-Tails
 
     signed char s_beastBySlot[400];
+    // MEAMU SKIN BODY FIX (2026-11-18): skin de cuerpo entero puesta en el
+    // slot de armadura, por slot del pool (1 = puesta). Tabla hermana de
+    // la del pet: mismos feeds, mismo Clear.
+    signed char s_skinBySlot[400];
     bool        s_init = false;
 
     void EnsureInit()
     {
         if (!s_init) {
             std::memset(s_beastBySlot, -1, sizeof(s_beastBySlot));
+            std::memset(s_skinBySlot, 0, sizeof(s_skinBySlot));
             s_init = true;
         }
     }
@@ -205,7 +210,25 @@ void Clear(void* character)
 {
     EnsureInit();
     const int slot = SlotOf(character);
-    if (slot >= 0) s_beastBySlot[slot] = -1;
+    if (slot >= 0) {
+        s_beastBySlot[slot] = -1;
+        s_skinBySlot[slot] = 0;
+    }
+}
+
+void NoteArmorItem(void* character, int itemType)
+{
+    EnsureInit();
+    const int slot = SlotOf(character);
+    if (slot < 0) return;
+    s_skinBySlot[slot] = IsFullBodySkinItem(itemType) ? 1 : 0;
+}
+
+bool WearsFullBodySkin(const CHARACTER* character)
+{
+    EnsureInit();
+    const int slot = SlotOf(character);
+    return slot >= 0 && s_skinBySlot[slot] != 0;
 }
 
 int BeastFor(const CHARACTER* character)

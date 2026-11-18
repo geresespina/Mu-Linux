@@ -129,6 +129,11 @@ void CUserSettings::Load(const char* iniPath)
     m_GamepadCursorSpeed = ReadRange("Gamepad", "CursorSpeed", iniPath, 100, 3000, 900);
     // MEAMU (2026-11-17): Blood & Gore — Config.ini [Game] BloodGore 1/0.
     m_BloodGore = ReadRange("Game", "BloodGore", iniPath, 0, 1, 1) != 0;
+    // MEAMU (2026-11-18): HideWings -- Config.ini [Game] HideWings 1/0.
+    // Missing key reads as 1: equipped wings are hidden by default.
+    m_HideWings = ReadRange("Game", "HideWings", iniPath, 0, 1, 1) != 0;
+    // MEAMU (2026-11-18): click/teleport markers — Config.ini [Game] MoveMarker 1/0.
+    m_MoveMarker = ReadRange("Game", "MoveMarker", iniPath, 0, 1, 1) != 0;
 
     // MEAMU kb-toggle (2026-11-13): keyboard-only play master switch
     // ([Keyboard] Enable). Missing section/key reads as 1, so existing

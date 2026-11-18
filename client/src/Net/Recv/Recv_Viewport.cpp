@@ -79,6 +79,13 @@ static void ApplyCustomEquipment(BYTE* c, const BYTE* items)
     // Recv_CharacterListCustom), y llega DESPUÉS del clear que hace
     // ChangeCharacterExt con el CharSet, así que el feed no se pisa.
     BijuTransform::NotePetItem(c, (int)(short)helper);
+    // MEAMU SKIN BODY FIX: el item crudo del slot armadura del remoto
+    // (slot 3 del paquete, el mismo orden que Recv_ChangePlayer). Un
+    // 0xFFFF limpia (queda -1 al pasar por short): sin skin puesta.
+    {
+        const WORD armor = *(const WORD*)(items + 3 * 2);
+        BijuTransform::NoteArmorItem(c, (int)(short)armor);
+    }
     if (helper != 0xFFFF && gContentCatalog.GetPet(helper)) {
         *(WORD*)(c + EntityOffset(696)) = (WORD)ItemModel(helper);
         DeleteHelperBug((intptr_t)c);   // Pet Squad: no tocar los bugs del squad
@@ -203,6 +210,9 @@ void Recv_ChangePlayer(const BYTE* Msg, int Size)
                          AsCharacter(c)->BodyPart[1].Level = (BYTE)Net_LevelConvert(level); AsCharacter(c)->BodyPart[1].Option1 = option; }
             break;
         case 3:   // armadura
+            // MEAMU SKIN BODY FIX: registrar el item crudo de la armadura
+            // (una skin de cuerpo entero apaga las demas piezas base).
+            BijuTransform::NoteArmorItem(c, empty ? -1 : type);
             if (empty) { *(WORD *)&AsCharacter(c)->BodyPart[2].Type = (WORD)(klass + 919); AsCharacter(c)->BodyPart[2].Level = 0; AsCharacter(c)->BodyPart[2].Option1 = 0; }
             else       { *(WORD *)&AsCharacter(c)->BodyPart[2].Type = (WORD)ItemEntityModel(type);
                          AsCharacter(c)->BodyPart[2].Level = (BYTE)Net_LevelConvert(level); AsCharacter(c)->BodyPart[2].Option1 = option; }

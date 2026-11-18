@@ -558,6 +558,9 @@ void Hero_ApplyCatalogEquipment(CHARACTER* character)
     // MEAMU BIJU TRANSFORM: registrar el item crudo del slot pet del heroe
     // (un -1 limpia: sin pet Biju, sin transformacion).
     BijuTransform::NotePetItem(c, *(short*)(v7 + 544));
+    // MEAMU SKIN BODY FIX: el item crudo del slot armadura del heroe
+    // (wear +204, el que alimenta BodyPart[2] en SetCharacterClass).
+    BijuTransform::NoteArmorItem(c, *(short*)(v7 + 204));
 }
 
 // SetCharacterClass @ 0x0045C130 — SetCharacterClass(entity)
@@ -602,6 +605,9 @@ void __cdecl SetCharacterClass(CHARACTER* character) {
     }
     // MEAMU BIJU TRANSFORM: registrar el item crudo del slot pet del heroe.
     BijuTransform::NotePetItem(c, *(short*)(v7 + 544));
+    // MEAMU SKIN BODY FIX: el item crudo del slot armadura del heroe
+    // (wear +204 = BodyPart[2]).
+    BijuTransform::NoteArmorItem(c, *(short*)(v7 + 204));
 
     // 0.97.20: modelo propio de cada pieza puesta (catálogo).
     {

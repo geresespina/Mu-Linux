@@ -8,6 +8,9 @@
 #include "Render/Camera3D.h"
 #include "UI/MiniMap.h"
 #include "Input/KbPlay.h"
+#include "Input/Gamepad.h"
+#include "Input/NavMove.h"
+#include "Net/MoveMarkers.h"
 #include "UI/EventTimer.h"
 #include "UI/MoveList.h"
 #include "UI/CommandMenu.h"
@@ -15,6 +18,7 @@
 #include "globals.h"
 #include "functions.h"
 #include "Net/Net.h"
+namespace Platform { unsigned RealInputSerial(); }  // SDLInput.cpp (rev.5 export) — gate de MoveMarkers
 #include "Net/MuEmu.h"
 #include "Platform/PlatformHeaders.h"
 #include <string.h>
@@ -1661,6 +1665,22 @@ void __cdecl Player_ProcessInput(void)
                                                             ent + EntityOffset(0x354), 0.0f);
                             if ((char)ok != '\0') {
                                 AsCharacter(ent)->MovementType = 0;
+                                // MEAMU MoveMarkers: marcador visual del destino.
+                                // Solo click fisico de mouse: bClickEdge es el pulso
+                                // one-shot y el modulo aplica el resto del gate
+                                // (serial de input real, boton fisico, drivers
+                                // virtuales). Ver Net/MoveMarkers.h.
+                                {
+                                    const SHORT lmb = Platform::GetInput().KeyState(1);
+                                    const bool physicalDown =
+                                        ((char)((unsigned short)lmb >> 8) == -0x80);
+                                    MoveMarkers::OnGroundClick(
+                                        (int)TargetX, (int)TargetY, bClickEdge,
+                                        Platform::RealInputSerial(),
+                                        Gamepad_IsDriving() || Follow_IsActive() ||
+                                            NavMove_ArrowsHeld(),
+                                        physicalDown);
+                                }
                                 Combat_SendMovePathPacket(AsCharacter(ent), AsObject(ent));
                                 goto end_tick_inc;
                             }
