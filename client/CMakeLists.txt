@@ -696,6 +696,10 @@ set_source_files_properties(${MU_PCH_USERS} PROPERTIES
 # La sonda gráfica compila el backend real sin depender del PCH del ejecutable.
 set_source_files_properties(src/Render/Materials.cpp PROPERTIES
     COMPILE_OPTIONS "$<$<STREQUAL:$<TARGET_PROPERTY:NAME>,mu97k>:/Yustdafx.h>")
+# El rig de skin (mu_skin_body_fix_test) compila el BijuTransform.cpp real sin
+# depender del PCH del ejecutable: mismo tratamiento que Materials.cpp.
+set_source_files_properties(src/Render/BijuTransform.cpp PROPERTIES
+    COMPILE_OPTIONS "$<$<STREQUAL:$<TARGET_PROPERTY:NAME>,mu97k>:/Yustdafx.h>")
 set_source_files_properties(src/stdafx.cpp PROPERTIES
     COMPILE_OPTIONS "/Ycstdafx.h")
 
