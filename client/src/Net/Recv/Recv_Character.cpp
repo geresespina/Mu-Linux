@@ -14,6 +14,7 @@
 #include "Item/ItemDefines.h"
 #include "Net/Reconnect.h"
 #include "Game/HeroVitals.h"
+#include "Net/MoveMarkers.h"
 #include "UI/EventTimer.h"
 #include "UI/MoveList.h"
 #include "UI/HealthBar.h"
@@ -1654,6 +1655,13 @@ void NetRecv_1C(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         CreateTeleportEnd(AsObject(hero));
         Teleport = 0;                 // IDA L508: Teleport = 0 (0x05826D14)
     }
+
+    // MEAMU MoveMarkers: las llegadas por gate (map move) no llaman a
+    // CreateTeleportEnd a proposito; el marcador de llegada se dispara
+    // aca, con el mundo ya cargado y la posicion final puesta. La rama
+    // gate=0 ya lo disparo dentro de CreateTeleportEnd.
+    if (gate != 0)
+        MoveMarkers::OnTeleportArrival(AsObject(hero));
 
     // Este store es común a las dos ramas en el original.
     AsCharacter(hero)->Movement = 0;

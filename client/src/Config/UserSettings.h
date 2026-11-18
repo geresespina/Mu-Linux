@@ -179,6 +179,10 @@ public:
     // restores wing rendering exactly as before.
     bool GetHideWings() const { return m_HideWings; }
     void SetHideWings(bool enabled) { m_HideWings = enabled; }
+    // MEAMU (2026-11-18): click-to-move + teleport markers — Config.ini
+    // [Game] MoveMarker 1/0, default 1. Ver Net/MoveMarkers.h.
+    bool GetMoveMarker() const { return m_MoveMarker; }
+    void SetMoveMarker(bool enabled) { m_MoveMarker = enabled; }
     const char* GetUsername() const { return m_Username; }
     int GetLanguage() const { return m_Language; }
     // DESVIACION (Fase 4, Config.ini [Font] TextShadow / TextOutline): sombra
@@ -246,6 +250,7 @@ private:
     bool m_PvPWithoutControl = false;
     bool m_BloodGore = true;
     bool m_HideWings = true;
+    bool m_MoveMarker = true;
     int  m_Language = USER_LANG_DEFAULT;
     bool m_TextShadow = false;
     bool m_TextOutline = false;
