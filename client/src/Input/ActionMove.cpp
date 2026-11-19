@@ -488,6 +488,40 @@ bool ActionMove_CameraLocked()
     return gActionCamera.PointerLocked();
 }
 
+// MEAMU Train 20: one direct route issue toward an arbitrary tile —
+// DirectDriveIssue's tail, exported for the parked-cursor drives
+// (KbPlay walk-in, NavMove /follow) that cannot steer while the
+// camera is pointer-locked. Same disciplines as the WASD drive:
+// the click-branch parity gate while a route is running, and the
+// Train 16 dash brake (no movement output while a teleport is in
+// flight). The caller owns the re-issue cadence and target choice.
+bool ActionMove_DirectRouteTo(int tileX, int tileY)
+{
+    if (SceneFlag != 5 || Hero == 0 || CharactersClient == 0 ||
+        DAT_083a7c24 != 0 || HeroDead())
+        return false;
+    if (DashBrakeActive((unsigned)SDL_GetTicks())) return false;
+    CHARACTER* hero = HeroC();
+    const int hx = (int)hero->PositionX;
+    const int hy = (int)hero->PositionY;
+    if (tileX == hx && tileY == hy) return false;
+    if (hero->Movement != 0) {
+        // Click-branch parity gate (same as DirectDriveIssue): while
+        // walking, only re-route when the cached route start is still
+        // within 2 tiles of the hero's real position.
+        const int rx = (int)(hero->Object.Position[0] * 0.01f);
+        const int ry = (int)(hero->Object.Position[1] * 0.01f);
+        if (std::abs(hx - rx) >= 2 || std::abs(hy - ry) >= 2) return false;
+    }
+    unsigned char* pathBuf =
+        (unsigned char*)((uintptr_t)hero + EntityOffset(0x354));
+    const unsigned int ok = Path_FindRoute(hx, hy, tileX, tileY, pathBuf, 0.0f);
+    if ((char)ok == '\0') return false;
+    hero->MovementType = 0;
+    Combat_SendMovePathPacket(hero, AsObject((uintptr_t)hero));
+    return true;
+}
+
 // MEAMU Train 17 (Feature 3): double-click ground teleport, dash wire
 // mode 2. Player_InputTick's ground-click branch detects the physical
 // double-click and hands over the clicked tile; this function clamps
