@@ -13,6 +13,7 @@ void __fastcall Cloth_Integrate(int*, float);
 int  __cdecl    Cloth_Solve(DWORD *a1);
 
 #include "Net/Net.h"
+#include "Render/ActionCamera.h" // MEAMU Train 22: locked-facing gate
 
 extern "C" void DbgLogPublic(const char* msg);
 extern "C" BYTE OffsetInventoryItems[];
@@ -551,7 +552,11 @@ static unsigned int MovePath_IDA_0043EA20(char *ent, char turn)
             }
             computeTarget(targetX, targetY);
         }
-        if (turn) {
+        // MEAMU Train 22: while the Action camera is pointer-locked, the
+        // hero's facing belongs to the aim alone (ActionCamera owns it,
+        // per frame) — the stock path turn must not fight it. Every other
+        // entity, and Classic mode, keep the stock turn.
+        if (turn && !(ent == Hero && gActionCamera.PointerLocked())) {
             const float angle = CreateAngle(AsCharacter(ent)->Object.Position[0], AsCharacter(ent)->Object.Position[1], targetX, targetY);
             const float delta = FarAngle(AsCharacter(ent)->Object.Angle[2], angle, 1);
             AsCharacter(ent)->Object.Angle[2] = (delta >= 45.0f) ? angle : TurnAngle2(AsCharacter(ent)->Object.Angle[2], angle, delta * 0.5f);
