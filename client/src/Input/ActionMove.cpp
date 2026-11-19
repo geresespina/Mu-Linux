@@ -669,10 +669,11 @@ void ActionMove_Tick()
         // value ActionCamera's idle ease targets). Camera not locked
         // (Classic, kill switch, cursor UI up) = face-movement stands.
         if (gActionCamera.PointerLocked()) {
-            float face = 180.0f - gActionCamera.GetYaw();
-            while (face > 180.0f) face -= 360.0f;
-            while (face <= -180.0f) face += 360.0f;
-            hero->Object.Angle[2] = face;
+            // MEAMU Train 22: facing is NOT pinned here anymore —
+            // ActionCamera's per-frame writer is the single owner of the
+            // hero's facing while locked (the duplicate pin here, the
+            // path turn and the old camera follow were the three writers
+            // whose fight twitched the hero). Drive logic below unchanged.
             // MEAMU Train 17: while locked, the park below can never
             // reach the game (Input_OnEvent eats MouseMove as a look
             // delta; the camera pins the cursor globals to centre) --

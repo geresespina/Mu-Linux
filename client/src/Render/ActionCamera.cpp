@@ -43,11 +43,10 @@ namespace {
                                             // 86..52 degrees of depression.)
     const float kYawSens        = 0.22f;    // degrees per mouse pixel
     const float kPitchSens      = 0.18f;
-    const float kFollowEase     = 0.12f;    // per 25 Hz step, shortest arc
-    const float kFacingEase     = 0.30f;    // idle hero-facing ease per step
-    const unsigned kLookGraceSteps = 30;    // 1.2 s at 25 Hz: after a mouse
-                                            // look, follow-yaw stays out of
-                                            // the way for this long
+    const float kFacingEase     = 0.30f;    // hero-facing ease per step
+                                            // (Train 22: follow ease +
+                                            // look grace removed with the
+                                            // camera-follow branch)
     const float kTerrainMargin  = 45.0f;    // camera floor above the terrain
     const int   kReticleRadiusPx  = 110;    // logical px from screen centre
     const int   kReticleRangeTiles = 14;    // Chebyshev tiles from the hero
@@ -231,23 +230,22 @@ void CActionCamera::Update()
     CHARACTER* hero = HeroC();
     const float hx = hero->Object.Position[0];
     const float hy = hero->Object.Position[1];
-    const float movedX = hx - m_LastHeroX, movedY = hy - m_LastHeroY;
-    const bool moving = (movedX * movedX + movedY * movedY) > 1.0f;
     m_LastHeroX = hx;
     m_LastHeroY = hy;
 
-    // Follow: while the hero moves (and the player has not just looked
-    // elsewhere with the mouse), ease the yaw toward the hero's back.
-    // Standing still never moves the camera.
-    if (moving && (m_Step - m_LastLookStep) > kLookGraceSteps) {
-        const float target = NormalizeDeg(180.0f - hero->Object.Angle[2]);
-        m_CamYaw = NormalizeDeg(m_CamYaw + ShortestArc(m_CamYaw, target) * kFollowEase);
-    }
+    // MEAMU Train 22: NO camera follow. The yaw is the player's alone
+    // (mouse only) — the old follow branch dragged the yaw toward the
+    // hero's back while he moved, and the facing writer below then
+    // chased the dragged yaw: a feedback loop that twitched the hero's
+    // facing while moving/strafing (G's bug report, 2026-11-19).
 
-    // The hero faces camera yaw when idle and not mid-cast, so an
-    // untargeted cast goes where the player is looking. Movement and
-    // cast animations own the facing otherwise.
-    if (!moving && hero->SkillStage == 0) {
+    // MEAMU Train 22: the hero faces the camera yaw whenever the camera
+    // is locked and no cast animation owns the facing — idle AND moving
+    // (GunZ law: hero faces the reticle, steady). This is the ONLY
+    // per-frame facing writer while locked: the path-follower's turn is
+    // gated off for the hero (Path_Legacy) and the movement input no
+    // longer pins facing itself (ActionMove).
+    if (hero->SkillStage == 0) {
         const float want = NormalizeDeg(180.0f - m_CamYaw);
         const float cur = hero->Object.Angle[2];
         hero->Object.Angle[2] = cur + ShortestArc(cur, want) * kFacingEase;
