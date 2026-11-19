@@ -533,7 +533,12 @@ static void HUD_HotkeyTick(void)
     // conserva su toggle de minimapa de siempre.
     if (kTab && !KbPlay_TabCycle()) gMiniMap.Toggle();
     // DESVIACION (MU 5.2): Espacio levanta el primer ítem cercano.
-    if (kSpace) HUD_PickUpNearestItem();
+    // MEAMU (Train 8 addendum, G 2026-11-19): Space primero es el ataque
+    // con latch de KbPlay (engancha el enemigo atacable mas cercano o
+    // cancela el latch); solo si KbPlay no lo consume (sin objetivo en
+    // rango, controles de teclado OFF o compuertas cerradas) Space
+    // conserva su trabajo de recoger el ítem cercano.
+    if (kSpace && !KbPlay_SpaceTap()) HUD_PickUpNearestItem();
     // DESVIACION (DLL Controller.cpp): F10 activa la cámara 3D, F11 la restaura.
     if (kF10) gCamera3D.Toggle();
     if (kF11) gCamera3D.Restore();

@@ -154,6 +154,10 @@ bool gYielded       = false;     // cast held but pad owns the right button
 int  gLockIdx       = -1;        // Tab-locked CharactersClient index
 int  gAimIdx        = -1;        // current cast aim (CharactersClient index)
 int  gLastIdx       = -1;        // hero's last valid attack target
+int  gAtkLatchIdx   = -1;        // Space attack latch: locked target index
+int  gAtkLatchKey   = -1;        // its network Key at lock time (slot guard)
+bool gAtkLeftDown   = false;     // the latch's virtual left-button state
+bool gAtkYielded    = false;     // latch on, digit cast / pad owns the buttons
 bool gNpcClickUp    = false;     // Enter NPC click: LeftUp due next tick
 bool gEnterPrev     = false;
 float gCurX = 0.0f, gCurY = 0.0f;   // last parked cursor (window px)
@@ -495,6 +499,92 @@ void AutoDriveButton()
     SetRightButton(true);
 }
 
+// ── Space attack latch (MEAMU Train 8 addendum, G's ruling 2026-11-19) ──────
+// G's model, ordered explicitly as a KEYBOARD-ONLY exception to the pad
+// no-latch law (PADCAST still never latches; F8/F9 AUTO is untouched):
+// TAP Space -> lock the closest attackable enemy -> the hero basic-attacks
+// it continuously WITHOUT holding anything -> the latch releases the
+// moment that target dies (hero stops; the next tap locks the next one).
+// A tap while latched cancels. Despawn / pool-slot recycling releases too.
+//
+// A basic attack has no skill, so the latch drives the LEFT button — the
+// stock click-attack pipeline (Player_InputTick: v32 = MouseLButtonPush ||
+// MouseLButton -> hover -> attack stage -> basic-attack packet, walk-in
+// included) — exactly a manual click-attack held down, parked on the
+// locked target each tick like every other drive in this module. Target
+// legality is ValidMonster, the same test Tab cycling and AUTO aim use;
+// the server enforces the rest (own summons, safe zones) exactly as it
+// does for mouse attacks.
+constexpr int kAtkRadius = 12;   // tiles (Chebyshev) for latch acquisition
+
+void SetLeftButton(bool down)
+{
+    if (down == gAtkLeftDown) return;
+    gAtkLeftDown = down;
+    SendMouse(down ? Platform::InputEventType::LeftDown
+                   : Platform::InputEventType::LeftUp, gCurX, gCurY);
+}
+
+// Clobber repair, mirroring AutoDriveButton: the shared MouseLButton flag
+// (DAT_083a42c4) is zeroed by Player_InputTick whenever it decides the
+// user is not clicking, so a fresh virtual LeftDown re-asserts the hold.
+void AtkDriveButton()
+{
+    if (DAT_083a42c4 == 0) gAtkLeftDown = false;
+    SetLeftButton(true);
+}
+
+// Closest-first acquisition (the AcquireTarget scan with the spec's
+// order: no Tab-lock / last-target preference — G's spec locks the
+// closest attackable enemy).
+int AcquireNearestBasic()
+{
+    CHARACTER* hero = HeroC();
+    int   best = -1, bestDist = 0;
+    float bestArc = 0.0f;
+    for (int i = 0; i < 400; ++i) {
+        if (!ValidMonster(i)) continue;
+        CHARACTER* c = EntryAt(i);
+        const int d = Cheb(hero, c);
+        if (d > kAtkRadius) continue;
+        typedef float (__cdecl *CreateAngleFn)(float, float, float, float);
+        const float ang = ((CreateAngleFn)&CreateAngle)(
+            hero->Object.Position[0], hero->Object.Position[1],
+            c->Object.Position[0],    c->Object.Position[1]);
+        const float arc = fabsf((float)FarAngle(hero->Object.Angle[2], ang, '\x01'));
+        if (best < 0 || d < bestDist || (d == bestDist && arc < bestArc)) {
+            best = i; bestDist = d; bestArc = arc;
+        }
+    }
+    return best;
+}
+
+void AtkLatchRelease(const char* why, bool announce)
+{
+    if (gAtkLatchIdx < 0) return;
+    gAtkLatchIdx = -1;
+    gAtkLatchKey = -1;
+    gAtkYielded  = false;
+    SetLeftButton(false);
+    if (announce && SceneFlag == 5) Say("Attack latch OFF");
+    KbLog("KB-ATK: latch off (%s)", why);
+}
+
+void AtkLatchEngage(int idx)
+{
+    // One cursor, one drive: the latch takes over from AUTO (and the
+    // tick drops the latch the moment AUTO engages instead).
+    if (gAutoOn) AutoSet(false, "space attack latch takes the drive", false);
+    gAtkLatchIdx = idx;
+    gAtkLatchKey = (int)EntryAt(idx)->Key;
+    gAtkYielded  = false;
+    ParkOnCharacter(EntryAt(idx));
+    AtkDriveButton();
+    Say("Target locked: %s", EntityName::Get((char*)EntryAt(idx)));
+    KbLog("KB-ATK: latch on idx %d key %d (%s)", idx, gAtkLatchKey,
+          EntityName::Get((char*)EntryAt(idx)));
+}
+
 // ── Cast-streak AUTO latch ──────────────────────────────────────────────────
 // LatchNow is the streak clock; the self-test substitutes a simulated
 // time so the state machine can be exercised deterministically at the
@@ -600,6 +690,7 @@ void KbSet(bool on, const char* why)
     if (!on) {
         StopCast("keyboard controls off");
         gLockIdx = -1;   // the Tab lock belongs to the feature
+        AtkLatchRelease("keyboard controls off", false);
     }
     gUserSettings.SetKeyboardEnable(on);
     if (SceneFlag == 5) Say("KEYBOARD CONTROLS: %s", on ? "ON" : "OFF");
@@ -882,6 +973,27 @@ bool KbPlay_TabCycle()
     return true;
 }
 
+// Space hook for HUD_HotkeyTick (Game/Player_InputTick.cpp), the Tab
+// pattern: true = the tap was consumed by the attack latch, false = Space
+// keeps its stock job (pick up the nearest ground item). Space's new job
+// wins whenever there is something to attack — the latch engages on the
+// closest attackable monster in range, or cancels a running latch — and
+// the pickup keeps the key only when no target exists, the keyboard
+// master switch is OFF, or the world gates are closed (chat included:
+// HUD_HotkeyTick never reaches here while typing).
+bool KbPlay_SpaceTap()
+{
+    if (!Gates() || !KbEnabled()) return false;
+    if (gAtkLatchIdx >= 0) {
+        AtkLatchRelease("space tap", true);
+        return true;
+    }
+    const int t = AcquireNearestBasic();
+    if (t < 0) return false;
+    AtkLatchEngage(t);
+    return true;
+}
+
 void KbPlay_Tick()
 {
     if (!gInitTried) {
@@ -1015,6 +1127,10 @@ void KbPlay_Tick()
     const bool mL = KeyHeld(1), mR = KeyHeld(2);
     if (gAutoOn && ((mL && !gMouseLPrev) || (mR && !gMouseRPrev)))
         AutoSet(false, "manual mouse input", true);
+    // The Space attack latch follows the same takeover rule: a fresh
+    // physical mouse press is the player taking control back.
+    if (gAtkLatchIdx >= 0 && ((mL && !gMouseLPrev) || (mR && !gMouseRPrev)))
+        AtkLatchRelease("manual mouse input", true);
     gMouseLPrev = mL; gMouseRPrev = mR;
 
     // Cast-streak latch: observe casts + run the anti-re-latch beat.
@@ -1040,6 +1156,41 @@ void KbPlay_Tick()
             if (gAutoYielded) { gAutoYielded = false; KbLog("KB-AUTO: re-engages"); }
             if (SelectedSkillType() != 0) { AimAndPark(); AutoDriveButton(); }
             else SetRightButton(false);   // empty slot selected: stand + scan
+        }
+    }
+
+    // ── Space attack latch drive ─────────────────────────────────────────────
+    // AUTO and the latch never drive at once (one cursor): engaging AUTO
+    // (F8 or the cast streak) drops the latch; engaging the latch drops
+    // AUTO (AtkLatchEngage). The drive runs on AutoGates() like AUTO's:
+    // it keeps attacking while the chat input is open — Space belongs to
+    // the chat there, so a cancel tap only lands with the chat closed.
+    if (gAutoOn && gAtkLatchIdx >= 0)
+        AtkLatchRelease("AUTO takes the drive", false);
+    if (gAtkLatchIdx >= 0) {
+        if (!AutoGates()) {
+            AtkLatchRelease(SceneFlag != 5 ? "scene change" : "gate closed (modal)", false);
+        } else if (HeroDead()) {
+            AtkLatchRelease("character death", true);
+        } else if (!ValidMonster(gAtkLatchIdx) ||
+                   (int)EntryAt(gAtkLatchIdx)->Key != gAtkLatchKey) {
+            // The spec's core rule: the latch releases the moment the
+            // target dies — ValidMonster also fails on despawn, and the
+            // Key guard catches a pool slot recycled to a different body.
+            // The hero stops; the next Space tap locks the next target.
+            AtkLatchRelease("target gone", false);
+        } else if (gCastVk || Gamepad_IsDriving()) {
+            // A hand-held digit cast or the gamepad outranks the latch
+            // while it drives (AUTO's yield rule); the latch resumes after.
+            if (!gAtkYielded) {
+                gAtkYielded = true;
+                SetLeftButton(false);
+                KbLog("KB-ATK: latch yields the button");
+            }
+        } else {
+            if (gAtkYielded) { gAtkYielded = false; KbLog("KB-ATK: latch re-engages"); }
+            ParkOnCharacter(EntryAt(gAtkLatchIdx));
+            AtkDriveButton();
         }
     }
 
