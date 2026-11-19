@@ -21,6 +21,7 @@
 #include "UI/HealthBar.h"
 #include "Net/HpBars.h"
 #include "UI/RenaHud.h"
+#include "Net/ExactStats.h" // MEAMU Train 11: exact stats store (F3:FB)
 #include "Net/Recv/NetRecv.h"
 #include "Net/ServerCharacterStats.h"
 
@@ -1353,6 +1354,12 @@ void NetRecv_F3(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         case 0xFA: {  // MEAMU Train 8: Rena balance push (F3:FA) — subcode is a
                        // placeholder pending RENA-REPORT.md; see UI/RenaHud.h
             RenaHud::Receive((const uint8_t*)Msg, Size);
+            break;
+        }
+        case 0xFB: {  // MEAMU Train 11 + Bounce 12: exact stats snapshot
+                       // (F3:FB) — the GS's own computed combat numbers;
+                       // see Net/ExactStats.h
+            ExactStats::Receive((const uint8_t*)Msg, Size);
             break;
         }
         case 0xFC: {  // MEAMU Train 10 + Bounce 11: fabricated-body flag

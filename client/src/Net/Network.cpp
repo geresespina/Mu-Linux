@@ -3,6 +3,7 @@
 #include "stdafx.h"
 #include "UI/BuffBar.h"
 #include "UI/BoostStrip.h"
+#include "Net/ExactStats.h" // MEAMU Train 11: exact stats store (F3:FB)
 #include "Net/NetText.h"
 #include "Platform/Text.h"
 #include "Platform/ISocket.h"
@@ -46,6 +47,7 @@ void CNetwork::ResetCharacterData()
     gChatLogWindow.Close();
     gBuffBar.Clear();
     gBoostStrip.Clear(); // MEAMU boost strip snapshot belongs to the character.
+    ExactStats::Clear(); // MEAMU Train 11: exact stats snapshot belongs to the character.
 }
 
 void CNetwork::ResetSessionData()
