@@ -99,6 +99,31 @@ namespace BijuTransform
     // formBit on + beast 0-9 -> 155+beast; formBit on + beast <0 or
     // >=10 -> 228 (Susanoo).
     int FormClassFor(bool formBit, int beastIndex);
+    // MEAMU TRAIN 7 (2026-11-18): name-aware extension of the
+    // tie-break -- G's PERSONAL Susanoo. When the form resolves
+    // to the pet-off titan (228) AND the character's display name
+    // (EntityName::Get -- the nameplate's own source) is "Gloccy"
+    // or "M4D4R4", the form resolves to class 229 instead:
+    // CRIMSON KARANE, his exclusive crimson variant of the titan
+    // (Data/Monster/KaraneCrimson). Pet-on (beast class 155-164)
+    // and every other name resolve exactly as FormClassFor does.
+    // Pure decision (name passed in), so tests/SkinBodyFix.cpp
+    // pins this table too. NOTE: class 229 renders only when the
+    // server catalog carries it (Monster.txt + CustomMonster.txt
+    // rows 229 -- GG's data-stage); without them Resolve falls
+    // back to the normal player render like any missing model.
+    int FormClassForNamed(bool formBit, int beastIndex, const char* name);
+
+    // MEAMU TRAIN 7 (2026-11-19): pose-less mode transforms (G's
+    // ruling 2026-11-19 00:16 EST) -- the seven mode toggles
+    // (58 Mangekyou, 59 Sage, 60 Jinchuriki, 61 Biju, 73 Chakra
+    // Cloak, 74 Perfect Susanoo, 75 Dragon Sage) cast with NO cast
+    // pose: the character keeps its current action and the mode
+    // ignites around it. Every cast-pose site (Combat self-cast
+    // branches, Skills 0x19 remote handler) consults this one
+    // predicate; tests/SkinBodyFix.cpp pins the table.
+    bool IsModeTransformSkill(int skillType);
+
 
     // MEAMU Train 4 (2026-11-17): Jinchuriki Mode aura tint for the
     // character's equipped beast (tails 1-10 -> beast index 0-9).

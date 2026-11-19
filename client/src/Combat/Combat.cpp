@@ -417,6 +417,7 @@
 #include "stdafx.h"
 #include "Party/Party.h"
 #include "Entity/EntityName.h"
+#include "Render/BijuTransform.h"   // MEAMU TRAIN 7: IsModeTransformSkill (casteo sin pose)
 #include "Platform/ITimer.h"
 #include "Item/ContentCatalog.h"
 #include "Item/Item_Equip.h"
@@ -1023,7 +1024,10 @@ static Attack_Flow97k Attack_ElfBranch97k(char* entity, int iType)
         // 74 Perfect Susanoo, 75 Dragon Sage Mode (mismos self-cast).
         // MEAMU (2026-11-18, Train 6 prep): + 76 Biju Legion (mismo self-cast).
         Attack_SendSkill19_97k(iType, (WORD)HeroKey);
-        SetPlayerMagic(AsCharacter(entity));
+        // MEAMU TRAIN 7 (2026-11-19): transforms de modo sin pose
+        // (58, 73-75 en esta lista) -- ver IsModeTransformSkill.
+        if (!BijuTransform::IsModeTransformSkill(iType))
+            SetPlayerMagic(AsCharacter(entity));
         return AF_RETURN;
     }
 
@@ -1198,8 +1202,15 @@ static void Attack_WarriorBranch97k(char* entity)
         if (lowMana) { Attack_UseManaScroll97k(); return; }
         if (!hasAg) return;                                   // IDA L4397
         Attack_SendSkill19_97k(iType, (WORD)HeroKey);
-        SetAction(AsObject(entity), 63);             // IDA LABEL_811
-        *(char *)&AsCharacter(entity)->Movement = 0;
+        // MEAMU TRAIN 7 (2026-11-19): los siete transforms de modo
+        // (58-61, 73-75) castean SIN pose -- ni accion 63 ni freno
+        // de movimiento; el modo se enciende alrededor del
+        // personaje en su accion actual (ruling de G). El resto
+        // del cuerpo compartido (48/57/72/76) conserva su pose.
+        if (!BijuTransform::IsModeTransformSkill(iType)) {
+            SetAction(AsObject(entity), 63);             // IDA LABEL_811
+            *(char *)&AsCharacter(entity)->Movement = 0;
+        }
         return;
     }
     case 55:                                                  // IDA L4665
@@ -1552,7 +1563,10 @@ static void Attack_WizardBranch97k(char* entity)
     case 58:                                                  // MEAMU (2026-11-15) -- Mangekyou Sharingan: auto-cast 0x19 sobre el heroe
     case 57:                                                  // MEAMU (2026-11-14) -- Omni Buff: auto-cast 0x19 sobre el heroe
         Attack_SendSkill19_97k(iType, (WORD)HeroKey);
-        SetPlayerMagic(AsCharacter(entity));
+        // MEAMU TRAIN 7 (2026-11-19): transforms de modo sin pose
+        // (58-61, 73-75) -- ver IsModeTransformSkill.
+        if (!BijuTransform::IsModeTransformSkill(iType))
+            SetPlayerMagic(AsCharacter(entity));
         return;
     default:                                                  // IDA L10109
         Attack_Label1158_97k(entity, iType, hasTarget);

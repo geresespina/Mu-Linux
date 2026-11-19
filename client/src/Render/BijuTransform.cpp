@@ -45,6 +45,7 @@
 #include "Model/ModelTypes.h"
 #include "Physics/ClothTypes.h"   // ClothModelMesh (TRAIN 8: swap de triángulos de la skin)
 #include "Entity/EntityTypes.h"
+#include "Entity/EntityName.h"   // MEAMU TRAIN 7: nombre visible (FormClassForNamed)
 #include "Item/ContentCatalog.h"
 #include "globals.h"
 #include "functions.h"
@@ -69,7 +70,8 @@ namespace
     constexpr int kFirstBeastSub   = 496;
     constexpr int kBeastCount      = 10;
     constexpr int kFirstBeastClass = 155;             // Shukaku .. Ten-Tails
-    constexpr int kSusanooClass    = 228;             // MEAMU TRAIN 3: Perfect Susanoo form (skill 74)
+    constexpr int kSusanooClass    = 228;
+    constexpr int kKaraneCrimsonClass = 229;          // MEAMU TRAIN 7: Crimson Karane, forma personal de G (skill 74, nombres Gloccy/M4D4R4)             // MEAMU TRAIN 3: Perfect Susanoo form (skill 74)
 
     signed char s_beastBySlot[400];
     // MEAMU SKIN BODY FIX (2026-11-18): skin de cuerpo entero puesta en el
@@ -133,7 +135,11 @@ namespace
         // Perfect Susanoo, class 228. A missing/unloaded 228 catalog
         // model falls back to the normal player render below, exactly
         // like a missing beast model does today.
-        const int formClass = FormClassFor(formBit, (int)s_beastBySlot[slot]);
+        // MEAMU TRAIN 7 (2026-11-18): la decision pasa por la variante
+        // con nombre -- Gloccy/M4D4R4 sin pet resuelven a la clase
+        // 229 (Crimson Karane) en vez de la 228; el resto, identico.
+        const int formClass = FormClassForNamed(formBit, (int)s_beastBySlot[slot],
+                                                EntityName::Get(character));
         if (formClass < 0) return false;
         const CatalogMonster* cm = gContentCatalog.GetMonster(formClass);
         if (!cm || cm->Model < 0) return false;
@@ -265,6 +271,30 @@ int FormClassFor(bool formBit, int beastIndex)
     if (beastIndex >= 0 && beastIndex < kBeastCount)
         return kFirstBeastClass + beastIndex;
     return kSusanooClass;
+}
+
+int FormClassForNamed(bool formBit, int beastIndex, const char* name)
+{
+    // MEAMU TRAIN 7 (2026-11-18): extension con nombre de
+    // FormClassFor -- ver el header. Solo el titan sin pet (228)
+    // es desviable, y solo para los dos nombres de G; la bestia
+    // (pet equipado) y el bit apagado jamas se tocan.
+    const int base = FormClassFor(formBit, beastIndex);
+    if (base != kSusanooClass || !name) return base;
+    if (std::strcmp(name, "Gloccy") == 0 ||
+        std::strcmp(name, "M4D4R4") == 0)
+        return kKaraneCrimsonClass;
+    return base;
+}
+
+bool IsModeTransformSkill(int skillType)
+{
+    // MEAMU TRAIN 7 (2026-11-19): ver el header -- exactamente los
+    // siete toggles de modo; 57/72/76 comparten cuerpos de casteo
+    // con ellos y NO estan: conservan su pose.
+    return skillType == 58 || skillType == 59 || skillType == 60 ||
+           skillType == 61 || skillType == 73 || skillType == 74 ||
+           skillType == 75;
 }
 
 bool JinchurikiTint(const CHARACTER* character, float out[3])

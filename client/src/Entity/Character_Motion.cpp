@@ -1975,6 +1975,7 @@ void __cdecl MoveCharacter(intptr_t p1)
                 float v368f = 10.0f;
                 float AnimationFrame = AsObject(o)->AnimationFrame
                                      - *(float*)((intptr_t)AsModel(v422)->Actions + sizeof(ModelAnimationAction) * (AsModel(v422)->CurrentAction) + 4);
+                if (AnimationFrame < 0.0f) AnimationFrame = 0.0f;  // Train 7 crash fix: trail sub-frames start at max(0, frame - speed)
                 float PriorFrame = AsObject(o)->PriorAnimationFrame;
                 float v370f = *(float*)((intptr_t)AsModel(v422)->Actions + sizeof(ModelAnimationAction) * (AsModel(v422)->CurrentAction) + 4) / 10.0f;
                 for (int kk = 0; kk < (int)v368f; ++kk) {
