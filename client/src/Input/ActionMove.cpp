@@ -571,8 +571,10 @@ namespace {
     unsigned gDcT = 0;
     unsigned gDcSerial = 0;
     unsigned gDcFiredSerial = 0;           // tombstone: a fired press never re-pairs
+    bool     gDcLocked = false;            // pair stored by the locked (Train 26) path
     constexpr unsigned kDcWindowMs = 300;
     constexpr int kDcPixelSlop = 8;        // a double-click is one spot
+    constexpr int kDcTileSlop = 1;         // locked path: aim wobble between presses
 }
 
 // The tick's Train 17 detection, on shared state (semantics unchanged:
@@ -580,6 +582,9 @@ namespace {
 // tile; a firing press is consumed and tombstoned — no triple chain).
 bool ActionMove_TickDoubleClick(int tileX, int tileY, int uiX, int uiY, unsigned serial)
 {
+    // A pair stored by the locked event path is not the tick's to
+    // consume (Train 26) — drop it and treat this click fresh.
+    if (gDcLocked) { gDcValid = false; gDcLocked = false; }
     const unsigned now = (unsigned)SDL_GetTicks();
     if (gDcValid && serial != gDcSerial && now - gDcT <= kDcWindowMs) {
         gDcValid = false;
@@ -587,7 +592,7 @@ bool ActionMove_TickDoubleClick(int tileX, int tileY, int uiX, int uiY, unsigned
         return ActionMove_TeleportToPoint(tileX, tileY);
     }
     if (serial != gDcFiredSerial) {
-        gDcValid = true;
+        gDcValid = true; gDcLocked = false;
         gDcTileX = tileX; gDcTileY = tileY;
         gDcUiX = uiX; gDcUiY = uiY;
         gDcT = now; gDcSerial = serial;
@@ -602,13 +607,41 @@ bool ActionMove_TickDoubleClick(int tileX, int tileY, int uiX, int uiY, unsigned
 // tick validated it as ground, and the slop keeps it the clicked tile.
 bool ActionMove_TryEventTeleport(int uiX, int uiY)
 {
+    // MEAMU Train 26: the pointer-locked (Action) path. Train 13's
+    // Action suppression makes the physical click invisible to the
+    // input tick, so tick-side pairing can NEVER run in Action mode —
+    // this path owns the pairing there. The sim raycasts the tile
+    // under the aim every step (SimulationPreparation's RenderTerrain(1)
+    // pick globals); while locked the cursor is pinned to the centre,
+    // so that tile IS his aim — fresh to the current step.
+    if (gActionCamera.PointerLocked()) {
+        if (SelectedCharacter != -1) return false;  // aiming at a character: the attack flow owns this click
+        if (((unsigned short)Platform::GetInput().KeyState(1) & 0x8000) == 0) return false;
+        const int tileX = (int)*(const float*)&DAT_080ab288;
+        const int tileY = (int)*(const float*)&DAT_080ab28c;
+        if (tileX < 0 || tileY < 0 || tileX > 255 || tileY > 255) return false;
+        const unsigned now = (unsigned)SDL_GetTicks();
+        if (gDcValid && gDcLocked && now - gDcT <= kDcWindowMs
+            && std::abs(tileX - gDcTileX) <= kDcTileSlop
+            && std::abs(tileY - gDcTileY) <= kDcTileSlop) {
+            gDcValid = false; gDcLocked = false;
+            gDcFiredSerial = Platform::RealInputSerial();
+            return ActionMove_TeleportToPoint(tileX, tileY);
+        }
+        gDcValid = true; gDcLocked = true;
+        gDcTileX = tileX; gDcTileY = tileY; gDcT = now;
+        gDcSerial = Platform::RealInputSerial();
+        return false;
+    }
+    // Unlocked: a locked-stored pair is not this path's to fire.
+    if (gDcLocked) { gDcValid = false; gDcLocked = false; return false; }
     if (!gDcValid) return false;
     const unsigned now = (unsigned)SDL_GetTicks();
     if (now - gDcT > kDcWindowMs) { gDcValid = false; return false; }
     if (std::abs(uiX - gDcUiX) > kDcPixelSlop || std::abs(uiY - gDcUiY) > kDcPixelSlop) return false;
     if (((unsigned short)Platform::GetInput().KeyState(1) & 0x8000) == 0) return false;
     const int tx = gDcTileX, ty = gDcTileY;
-    gDcValid = false;
+    gDcValid = false; gDcLocked = false;
     gDcFiredSerial = Platform::RealInputSerial();
     return ActionMove_TeleportToPoint(tx, ty);
 }
