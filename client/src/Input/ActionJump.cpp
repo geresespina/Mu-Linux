@@ -99,11 +99,17 @@ void CActionJump::Update()
     const bool spaceEdge = space && !m_SpacePrev;
     m_SpacePrev = space;
 
-    // Start gate: Action scheme engaged (pointer-locked), no text/UI
-    // focus (same pair the WASD drive gates on), currently grounded.
-    // Once airborne the arc always finishes — losing the lock mid-hop
-    // never freezes him in the air.
-    if (m_Phase == 0 && spaceEdge && gActionCamera.PointerLocked()
+    // Start gate: Action scheme, no text/UI focus (same pair the WASD
+    // drive gates on), currently grounded. Once airborne the arc
+    // always finishes.
+    // MEAMU Train 30: the gate no longer requires PointerLocked. On
+    // G's Mac (1520) Space never fired — every other condition checks
+    // out in code (Space scancode -> VK 0x20 is mapped, WASD proves
+    // the InputEnable/modal pair, this module IS called beside the
+    // camera), leaving the SDL relative-mode lock state as the one
+    // gate that can silently read false while Action play otherwise
+    // works. The lock is a camera concern, not a jump condition.
+    if (m_Phase == 0 && spaceEdge && gActionCamera.SchemeIsAction()
         && InputEnable == 0 && DAT_083a7c24 == 0) {
         m_Phase = 1;
         m_T = 0.0f;
