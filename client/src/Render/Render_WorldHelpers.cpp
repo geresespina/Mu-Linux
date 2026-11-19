@@ -1093,7 +1093,7 @@ bool __cdecl MoveMainCamera(void) {
     // MEAMU Train 14: Action Camera per-step update (lock state machine,
     // follow/facing easing). No-op unless the ACTION scheme engaged it.
     gActionCamera.Update();
-    gActionJump.Update();  // MEAMU Train 24: SPACE = JUMP hop arc (Action mode)
+    gActionJump.Update();  // MEAMU Train 24 seam: Train 28 spring + (Train 35) Space = facing blink
     float in1[3];
     float out[3];
     float matrix[3][4];
