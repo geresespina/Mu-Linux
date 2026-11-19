@@ -1016,9 +1016,11 @@ static Attack_Flow97k Attack_ElfBranch97k(char* entity, int iType)
 
     CheckTarget(AsCharacter(entity));               // IDA L1778 (retorno ignorado)
 
-    if (iType == 57 || iType == 58) {
+    if (iType == 57 || iType == 58 || iType == 72 || iType == 73 || iType == 74 || iType == 75) {
         // MEAMU (2026-11-14): Omni Buff -- auto-cast sobre el heroe,
         // mismo envio 0x19 auto-objetivo que las invocaciones.
+        // MEAMU (2026-11-18): + 72 Biju Bond, 73 Chakra Cloak,
+        // 74 Perfect Susanoo, 75 Dragon Sage Mode (mismos self-cast).
         Attack_SendSkill19_97k(iType, (WORD)HeroKey);
         SetPlayerMagic(AsCharacter(entity));
         return AF_RETURN;
@@ -1181,6 +1183,10 @@ static void Attack_WarriorBranch97k(char* entity)
         SetPlayerMagic(AsCharacter(entity));
         return;
     }
+    case 75:                                                  // MEAMU (2026-11-18) -- Dragon Sage Mode: self-cast, comparte el cuerpo del 48
+    case 74:                                                  // MEAMU (2026-11-18) -- Perfect Susanoo: self-cast, comparte el cuerpo del 48
+    case 73:                                                  // MEAMU (2026-11-18) -- Chakra Cloak: self-cast, comparte el cuerpo del 48
+    case 72:                                                  // MEAMU (2026-11-18) -- Biju Bond: self-cast, comparte el cuerpo del 48
     case 61:                                                  // MEAMU (2026-11-17, Train 4) -- Biju Mode: self-cast, comparte el cuerpo del 48
     case 60:                                                  // MEAMU (2026-11-17, Train 4) -- Jinchuriki Mode: self-cast, comparte el cuerpo del 48
     case 59:                                                  // MEAMU (2026-11-17) -- Sage Mode: self-cast, comparte el cuerpo del 48
@@ -1533,6 +1539,10 @@ static void Attack_WizardBranch97k(char* entity)
         Attack_SendSkill19_97k(iType, (WORD)HeroKey);
         SetPlayerMagic(AsCharacter(entity));                 // IDA LABEL_1430
         return;
+    case 75:                                                  // MEAMU (2026-11-18) -- Dragon Sage Mode: auto-cast 0x19 sobre el heroe
+    case 74:                                                  // MEAMU (2026-11-18) -- Perfect Susanoo: auto-cast 0x19 sobre el heroe
+    case 73:                                                  // MEAMU (2026-11-18) -- Chakra Cloak: auto-cast 0x19 sobre el heroe
+    case 72:                                                  // MEAMU (2026-11-18) -- Biju Bond: auto-cast 0x19 sobre el heroe
     case 61:                                                  // MEAMU (2026-11-17, Train 4) -- Biju Mode: auto-cast 0x19 sobre el heroe
     case 60:                                                  // MEAMU (2026-11-17, Train 4) -- Jinchuriki Mode: auto-cast 0x19 sobre el heroe
     case 59:                                                  // MEAMU (2026-11-17) -- Sage Mode: auto-cast 0x19 sobre el heroe
@@ -1606,7 +1616,12 @@ static bool Combat_IsAllyTargetSkill97k(int iType)
            iType == 68 ||   // Powder Blink (self)
            iType == 69 ||   // Ink Clone (self)
            iType == 70 ||   // Chakra Roar (self)
-           iType == 71;     // God Tree Roots (self)
+           iType == 71 ||   // God Tree Roots (self)
+           // MEAMU 2026-11-18: modes wave 2 self-casts.
+           iType == 72 ||   // Biju Bond (self)
+           iType == 73 ||   // Chakra Cloak (self)
+           iType == 74 ||   // Perfect Susanoo (self)
+           iType == 75;     // Dragon Sage Mode (self)
 }
 
 // C2 snap-targeting (STUDY §4a): when a cast starts with nothing selected,

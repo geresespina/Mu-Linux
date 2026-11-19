@@ -390,6 +390,40 @@ void PacketHandler_0x19(BYTE* pkt)
         goto common_tail;
     }
 
+    case 0x48:  // 72 Biju Bond (MEAMU 2026-11-18)
+    {
+        // Remote cast pose only -- mirror of 0x3A. The bonded beast
+        // and the Jinchuriki ignition are driven by the synced
+        // state, not by this packet.
+        SetAction(AsObject(caster), 63);
+        goto common_tail;
+    }
+
+    case 0x49:  // 73 Chakra Cloak (MEAMU 2026-11-18)
+    {
+        // Remote cast pose only -- mirror of 0x3A. The cloak aura
+        // is driven by the synced buff state (bit 0x4000).
+        SetAction(AsObject(caster), 63);
+        goto common_tail;
+    }
+
+    case 0x4A:  // 74 Perfect Susanoo (MEAMU 2026-11-18)
+    {
+        // Remote cast pose only -- mirror of 0x3D. The form itself
+        // is the BijuTransform render (bit 0x2000 state, class 228
+        // when no soul pet is equipped).
+        SetAction(AsObject(caster), 63);
+        goto common_tail;
+    }
+
+    case 0x4B:  // 75 Dragon Sage Mode (MEAMU 2026-11-18)
+    {
+        // Remote cast pose only -- mirror of 0x3B. The aura is
+        // driven by the synced buff state (bit 0x8000).
+        SetAction(AsObject(caster), 63);
+        goto common_tail;
+    }
+
     case 0x31:  // 49 Fire Breath
     {
         SetAction(AsObject(caster),
