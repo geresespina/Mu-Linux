@@ -34,6 +34,7 @@
 //   DAT_0839bc8c  — frame index mod 32
 
 #include "stdafx.h"
+extern "C" void DbgLogPublic(const char* msg);   // Train 32: render-mode proof line
 #include "Entity/EntityName.h"
 #include "Render/Gfx.h"
 #include "Render/RenderProfile.h"
@@ -98,6 +99,23 @@ void __cdecl Game_MainLoop(HDC param_1)
     // comenzar sólo al dibujar sumaba ese trabajo a la espera y ralentizaba SIM.
     const CFrameLimiter::StartTime renderStart = gFrameLimiter.Start();
     TimeRemain += gFrameLimiter.Advance(renderStart);
+    // MEAMU Train 32: prove the render mode on this machine, once per
+    // launch, in debug.log. Decoupled rendering is a Config.ini state
+    // (default ON when the key is absent) — this line is the ground
+    // truth for what any given install actually runs.
+    {
+        static bool s_modeLogged = false;
+        if (!s_modeLogged) {
+            s_modeLogged = true;
+            char modeBuf[160];
+            snprintf(modeBuf, sizeof(modeBuf),
+                "RENDER: decoupled=%d fpsLimit=%d vsync=%d (Train 32)",
+                gUserSettings.GetRenderDecoupled() ? 1 : 0,
+                gUserSettings.GetFpsLimit(),
+                gUserSettings.GetVSync() ? 1 : 0);
+            DbgLogPublic(modeBuf);
+        }
+    }
     RenderProfile::Frame profile(SceneFlag==5,gMapManager.GetCurrentMap());
     if(RenderProfile::active)RenderProfile::Configuration(gWindow.GetRealWidth(),gWindow.GetHeight(),gUserSettings.GetFpsLimit(),gUserSettings.GetVSync(),gUserSettings.GetRenderDecoupled(),TerrainDraw::Requested(),TerrainDraw::Composition(),Materials::Enabled(),true);
     int    shiftHeld;
