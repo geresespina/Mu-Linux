@@ -111,6 +111,7 @@
 #include "Core/Window.h"         // gWindow
 #include "Entity/EntityTypes.h"  // CHARACTER, CHARACTER_STRIDE
 #include "Entity/EntityName.h"   // EntityName::Get
+#include "Net/Recv/FabricatedMark.h" // FabricatedMark (Train 10: Space latch vs fabricated bodies)
 #include <SDL3/SDL.h>            // SDL_GetTicks
 #include <cmath>
 #include <cstdarg>
@@ -291,6 +292,30 @@ bool ValidMonster(int idx)
     if (c->Object.Kind != 0x22) return false;
     if (c->Dead != 0) return false;
     if (c->MonsterIndex == 0xFF) return false;
+    return true;
+}
+
+// Space-latch legality (MEAMU Train 10 + Bounce 11): ValidMonster, plus
+// fabricated player-kind bodies the GS flagged through F3:FC (see
+// Net/Recv/FabricatedMark.h) — phantoms/KAGE, companions, roamers,
+// ambushers, dancers, and other players' clan summons/tames. The
+// hero's OWN followers are excluded (a latch that eats your own army
+// is a bug, not a feature); real players are excluded by construction
+// — they are never flagged, so they stay manual-only targets. The
+// stock click-attack pipeline still decides whether a swing actually
+// goes out (CheckAttack: a rival-presented body passes at PK >= 6,
+// exactly as for the mouse), and the server enforces the rest.
+bool ValidLatchTarget(int idx)
+{
+    if (ValidMonster(idx)) return true;
+    if (idx < 0 || idx >= 400 || !Hero) return false;
+    CHARACTER* c = EntryAt(idx);
+    if ((char*)c == (char*)(uintptr_t)Hero) return false;
+    if (c->Object.Live == 0) return false;
+    if (c->Dead != 0) return false;
+    if (!FabricatedMark::Is(c)) return false;
+    if (FabricatedMark::Kind(c) == FabricatedMark::kFollower &&
+        FabricatedMark::Owner(c) == (int)HeroC()->Key) return false;
     return true;
 }
 
@@ -524,6 +549,14 @@ void AutoDriveButton()
 // table, i.e. every attackable entity on the visible screen (the table
 // holds exactly the entities the client has in view), and the
 // click-attack pipeline's walk-in closes the distance to a far lock.
+//
+// MEAMU Train 10 (2026-11-19): legality is ValidLatchTarget — ValidMonster
+// plus the fabricated player-kind bodies the Bounce 11 GS flags through
+// F3:FC (phantoms/KAGE/companions/roamers/ambushers/dancers and other
+// players' followers), minus the hero's own followers. Tab cycling and
+// AUTO aim keep plain ValidMonster; only the Space latch widened, so
+// Space can finally hunt in the Stadium. Real players are never
+// flagged and stay manual-only.
 
 void SetLeftButton(bool down)
 {
@@ -554,7 +587,7 @@ int AcquireNearestBasic()
     int   best = -1, bestDist = 0;
     float bestArc = 0.0f;
     for (int i = 0; i < 400; ++i) {
-        if (!ValidMonster(i)) continue;
+        if (!ValidLatchTarget(i)) continue;
         CHARACTER* c = EntryAt(i);
         const int d = Cheb(hero, c);
         typedef float (__cdecl *CreateAngleFn)(float, float, float, float);
@@ -1195,10 +1228,10 @@ void KbPlay_Tick()
             AtkLatchRelease(SceneFlag != 5 ? "scene change" : "gate closed (modal)", false);
         } else if (HeroDead()) {
             AtkLatchRelease("character death", true);
-        } else if (!ValidMonster(gAtkLatchIdx) ||
+        } else if (!ValidLatchTarget(gAtkLatchIdx) ||
                    (int)EntryAt(gAtkLatchIdx)->Key != gAtkLatchKey) {
             // The spec's core rule: the latch releases the moment the
-            // target dies — ValidMonster also fails on despawn, and the
+            // target dies — ValidLatchTarget also fails on despawn, and the
             // Key guard catches a pool slot recycled to a different body.
             // The hero stops; the next Space tap locks the next target.
             AtkLatchRelease("target gone", false);

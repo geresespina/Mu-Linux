@@ -10,6 +10,7 @@
 #include "Item/ItemDefines.h"
 #include "Render/BijuTransform.h"
 #include "Net/Recv/OwnedSummonMark.h"
+#include "Net/Recv/FabricatedMark.h"
 #include "Net/Recv/NetRecv.h"
 
 // ---------------------------------------------------------------------------
@@ -851,6 +852,72 @@ bool Is(const void* entity)
     return slot >= 0 && s_ownedSummonBySlot[slot];
 }
 } // namespace OwnedSummonMark
+
+// ── FabricatedMark (Train 10 + Bounce 11; see Net/Recv/FabricatedMark.h) ───
+// Per-pool-slot kind + owner for bodies the GS flagged through the
+// C1:F3:FC note. Same slot math and lifecycle as OwnedSummonMark:
+// set only by the flag handler below, cleared by CreateCharacterPointer
+// on every slot (re)creation.
+namespace {
+BYTE s_fabricatedKindBySlot[400] = {};
+short s_fabricatedOwnerBySlot[400] = {};
+bool s_fabricatedOwnerInit = false;
+} // namespace
+
+namespace FabricatedMark {
+void Set(void* entity, int kind, int ownerKey)
+{
+    const int slot = OwnedSummonSlotOf(entity);
+    if (slot < 0) return;
+    if (!s_fabricatedOwnerInit) {
+        for (int i = 0; i < 400; ++i) s_fabricatedOwnerBySlot[i] = -1;
+        s_fabricatedOwnerInit = true;
+    }
+    s_fabricatedKindBySlot[slot] = (BYTE)kind;
+    s_fabricatedOwnerBySlot[slot] = (short)ownerKey;
+}
+void Clear(void* entity)
+{
+    const int slot = OwnedSummonSlotOf(entity);
+    if (slot < 0) return;
+    s_fabricatedKindBySlot[slot] = 0;
+    s_fabricatedOwnerBySlot[slot] = -1;
+}
+bool Is(const void* entity)
+{
+    return Kind(entity) != kNone;
+}
+int Kind(const void* entity)
+{
+    const int slot = OwnedSummonSlotOf(entity);
+    return slot >= 0 ? (int)s_fabricatedKindBySlot[slot] : kNone;
+}
+int Owner(const void* entity)
+{
+    const int slot = OwnedSummonSlotOf(entity);
+    if (slot < 0 || s_fabricatedKindBySlot[slot] == 0) return -1;
+    return (int)s_fabricatedOwnerBySlot[slot];
+}
+} // namespace FabricatedMark
+
+// C1:F3:FC - fabricated-body flag note (Bounce 11). Arrives right after
+// the player viewport record(s) of the body it describes, on the same
+// ordered connection, so the entity already exists; an unknown key is
+// ignored (the body's next refresh re-sends the note).
+void Recv_FabricatedFlag(const BYTE* Msg, int Size)
+{
+    if (Size < 9 || !DAT_07abf5d0) return;
+    const int key = ((Msg[4] & 0x7F) << 8) | Msg[5];
+    const int kind = Msg[6];
+    if (kind != FabricatedMark::kArmy && kind != FabricatedMark::kFollower) return;
+    const int owner = (Msg[7] == 0xFF && Msg[8] == 0xFF)
+        ? -1 : (int)(((Msg[7] & 0x7F) << 8) | Msg[8]);
+    const int idx = FindCharacterIndex(key);
+    if (idx < 0 || idx >= 400) return;
+    BYTE* c = (BYTE*)(uintptr_t)DAT_07abf5d0 + (size_t)idx * CHARACTER_STRIDE;
+    FabricatedMark::Set(c, kind, owner);
+    NetLog("NET:  -> F3/FC FabricatedFlag key=%d kind=%d owner=%d", key, kind, owner);
+}
 
 // 0x1F
 void NetRecv_1F(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)

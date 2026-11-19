@@ -35,6 +35,7 @@
 #include "Entity/EntityView.h"
 #include "Render/PhantomNames.h"
 #include "Net/Recv/OwnedSummonMark.h"
+#include "Net/Recv/FabricatedMark.h"
 #include "globals.h"
 #include "functions.h"
 
@@ -118,6 +119,14 @@ void Render_HumanLabels(void)
         // OwnedSummonMark.h), never on the name text. Real players are
         // never marked and keep their labels.
         if (OwnedSummonMark::Is(ent)) continue;
+        // MEAMU (Train 10 + Bounce 11, G 2026-11-19): fabricated
+        // FOLLOWER bodies (clan summons + tame followers, flagged by
+        // the GS through F3:FC — see FabricatedMark.h) get no
+        // nameplate either; they are followers, not people. Fabricated
+        // ARMY bodies (phantoms/KAGE/companions/roamers/ambushers/
+        // dancers) are NOT skipped here: they are the war's "players"
+        // and keep exactly today's label behavior.
+        if (FabricatedMark::Kind(ent) == FabricatedMark::kFollower) continue;
         const char* name = view.Name();
         if (!name || !name[0]) continue;
         if (Phantom_IsPhantomName(name)) continue;
