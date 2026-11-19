@@ -18,6 +18,7 @@
 #include "Render/MaterialVisuals.h"
 #include "Platform/IInput.h"
 #include "Render/Camera3D.h"
+#include "Render/ActionCamera.h"
 #include "Render/EquipmentVisuals.h"
 #include "Entity/ObjectPose.h"
 #include "Config/UserSettings.h"
@@ -1088,6 +1089,9 @@ void __cdecl SkillEffects_RenderAll(void)
 //   CameraDistanceTarget. Retorna 0 (no-spectator) como IDA.
 // Sin force-yaw ni DIAG: el yaw lo preserva el estado de cámara, igual que IDA.
 bool __cdecl MoveMainCamera(void) {
+    // MEAMU Train 14: Action Camera per-step update (lock state machine,
+    // follow/facing easing). No-op unless the ACTION scheme engaged it.
+    gActionCamera.Update();
     float in1[3];
     float out[3];
     float matrix[3][4];
@@ -1123,6 +1127,9 @@ bool __cdecl MoveMainCamera(void) {
         const float zoom = gCamera3D.UpdateDistanceZoom();
         CameraViewFar = normalRange * scale * (zoom > 1.0f ? zoom : 1.0f);
         DrawDistance::Set(*(float*)(Hero + 16), *(float*)(Hero + 20), scale > 1.0f ? normalRange * 1.25f : 0.0f);
+        // MEAMU Train 14: the Action Camera owns position + angles when
+        // engaged; otherwise the stock placement below runs unchanged.
+        if (!gActionCamera.ApplyCamera(zoom)) {
         CameraDistance = 1000.0f;                    // CameraDistance
         in1[0] = 0.0f;
         in1[1] = -1000.0f * zoom;
@@ -1136,6 +1143,7 @@ bool __cdecl MoveMainCamera(void) {
         // dirección de vista stock (pitch fijado abajo) no cambia.
         CameraPosition[2] = *(float*)(Hero + 24) + (CameraDistance - gCamera3D.GetHeight()) * zoom;
         CameraAngle[0] = EarthQuake - gCamera3D.GetPitch();       // pitch después de la posición
+        }
     }
     if (gMapManager.GetCurrentMap() == 5) {
         float v1 = (float)sin((double)WorldTime * 0.00050000002);

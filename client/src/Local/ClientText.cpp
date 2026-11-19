@@ -68,7 +68,8 @@ const char* const English[] = {
     "Damage taken -%d%%", "Max HP +%d%%",
     "%s: %d of %d alive",
     "Commands", "Trade", "Party", "Guild",
-    "Chat History", "No messages yet"
+    "Chat History", "No messages yet",
+    "Controls: %s", "Classic (click to move)", "Action (WASD + mouse aim)"
 };
 constexpr size_t Count = (size_t)ClientTextId::Count;
 static_assert(sizeof(English) / sizeof(English[0]) == Count, "Faltan textos en ingles");
@@ -109,6 +110,10 @@ const char* MenuFallback(ClientTextId id, int language)
         { ClientTextId::RenderFps, "FPS: %d", "FPS: %d" },
         { ClientTextId::RenderUnlimited, "FPS: sin l\xC3\xAD" "mite", "FPS: sem limite" },
         { ClientTextId::RenderVSyncUnavailable, "VSync no disponible", "VSync indispon\xC3\xAD" "vel" },
+        { ClientTextId::ControlScheme, "Controles: %s", "Controles: %s" },
+        { ClientTextId::ControlClassic, "Cl\xC3\xA1" "sico (click para moverse)", "Cl\xC3\xA1" "ssico (clique para mover)" },
+        { ClientTextId::ControlAction, "Acci\xC3\xB3" "n (WASD + mouse)", "A\xC3\xA7\xC3\xA3" "o (WASD + mouse)" },
+
     };
     for (const Entry& entry : entries) {
         if (entry.id != id) continue;

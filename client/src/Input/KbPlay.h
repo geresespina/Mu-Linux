@@ -26,20 +26,35 @@
 //             gates are closed) does Space keep its stock HUD pickup
 //             job (true-nearest pick with the switch on, stock pick
 //             with it off).
-//   F8        AUTO mode: keep casting the selected skill until toggled
-//             off, the mouse is grabbed, a modal opens, the scene changes
-//             or the hero dies. Chat does NOT stop it — while the chat
-//             input is open every key (F8 included) belongs to the chat.
-//   Cast streak  casting the selected skill continuously for 2.0 s
-//             (no gap over ~0.6 s between casts) latches AUTO on —
-//             same engage path as F8. Digit holds, gamepad casts and
+//   F8        AUTO mode: keep casting AUTO's skill until toggled off,
+//             a modal opens, the scene changes or the hero dies. Chat
+//             does NOT stop it — while the chat input is open every
+//             key (F8 included) belongs to the chat. The mouse does
+//             NOT stop it either (Train 12 cursor freedom): the cursor
+//             stays the player's while AUTO runs — the drive parks
+//             only on a target change/drift or after the cursor sits
+//             still, never while the player moves the mouse or holds
+//             a button, and click-to-move simply relocates the fight.
+//   Cast streak  (Train 12) casting the SAME offensive skill
+//             continuously for 5.0 s latches AUTO on with that skill —
+//             same engage path as F8. "Continuously" allows gaps up to
+//             ~1.5x the skill's own cycle (measured live from the
+//             cast intervals, clamped 0.8–3.0 s). Digit holds and
 //             clicks count: the tick polls the hero's SkillStage
 //             cast-commit stamp. Casts made while the physical right
-//             mouse button is held NEVER count (RMB law, 2026-11-16,
-//             G's order: RMB must never latch AUTO — hold-to-attack
-//             is untouched, only the latch lost the mouse). After
-//             AUTO turns off, a fresh streak cannot arm until casting
-//             has fully stopped for ~0.8 s (anti-re-latch beat).
+//             mouse button is held NEVER count toward the span (RMB
+//             law, 2026-11-16, G's order: RMB must never latch AUTO),
+//             and neither do gamepad skill-button casts (pad law,
+//             same date) — a pad hold can never arm AUTO. Self/buff/
+//             mode skills never count at all. After AUTO turns off, a
+//             fresh span cannot arm until casting has fully stopped
+//             for ~0.8 s (anti-re-latch beat).
+//   AUTO steering  (Train 12) while AUTO runs, manual casts steer it:
+//             recasting AUTO's own skill by hand turns AUTO OFF (the
+//             cast still fires); casting a different offensive skill
+//             switches AUTO to it. AUTO's own casts do neither — they
+//             carry no manual source flag (no digit hold, no pad
+//             button, no physical mouse button).
 //   F9        keyboard-controls master toggle (MEAMU kb-toggle,
 //             2026-11-13): flips the keyboard feature ON/OFF in-world
 //             and persists Config.ini [Keyboard] Enable. OFF silences

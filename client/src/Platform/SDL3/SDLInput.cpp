@@ -26,6 +26,8 @@ int VirtualKey(SDL_Scancode key) {
     case SDL_SCANCODE_RETURN: case SDL_SCANCODE_KP_ENTER: return 13;
     case SDL_SCANCODE_ESCAPE: return 27;
     case SDL_SCANCODE_SPACE: return 32;
+    case SDL_SCANCODE_GRAVE: return 0xC0;   // MEAMU Trains 13+14: VK_OEM_3 — the ONE grave route (ActionMove scheme toggle)
+
     case SDL_SCANCODE_LSHIFT: return 0xa0;
     case SDL_SCANCODE_RSHIFT: return 0xa1;
     case SDL_SCANCODE_LCTRL: return 0xa2;
@@ -107,7 +109,8 @@ bool SDLCALL Watch(void*, SDL_Event* event) {
         DeliverSDLInput({InputEventType::LeftUp}); DeliverSDLInput({InputEventType::RightUp});
         DeliverSDLInput({InputEventType::MiddleUp}); return true;
     case SDL_EVENT_MOUSE_MOTION:
-        input.type = InputEventType::MouseMove; input.x = int(event->motion.x); input.y = int(event->motion.y); break;
+        input.type = InputEventType::MouseMove; input.x = int(event->motion.x); input.y = int(event->motion.y);
+        input.relX = int(event->motion.xrel); input.relY = int(event->motion.yrel); break;
     case SDL_EVENT_MOUSE_BUTTON_DOWN: case SDL_EVENT_MOUSE_BUTTON_UP: {
         const bool down = event->button.down;
         if (down) ++gRealInputSerial;              // MEAMU rev.5: real input
@@ -150,6 +153,10 @@ public:
         return result;
     }
     void CaptureMouse(bool capture) override { SDL_CaptureMouse(capture); }
+    // MEAMU Train 14: pointer lock. SDL3 relative mode hides + confines
+    // the cursor and makes motion events carry usable xrel/yrel deltas.
+    void SetRelativeMouseMode(bool enabled) override { SDL_SetWindowRelativeMouseMode(SDLWindow(), enabled); }
+    bool RelativeMouseMode() const override { return SDL_GetWindowRelativeMouseMode(SDLWindow()); }
     ImeState ReadImeState(bool clearActive) override {
         ImeState result{composing ? 1u : 0u, 0};
         // SDL expresa composición, no los bits de modo de idioma de IMM32.

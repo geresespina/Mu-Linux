@@ -84,6 +84,13 @@ struct UserFontSettings {
     int  strikeOut    = 0;
 };
 
+// MEAMU Train 13 (2026-11-19): esquema de control del jugador, Config.ini
+// [Controls] Scheme. CLASSIC = el click-to-move de siempre (default; un
+// Config.ini sin la clave se comporta EXACTAMENTE como antes de Train 13).
+// ACTION = WASD relativo a la camara + apuntado con el mouse (hover), sin
+// click-to-move; ver Input/ActionMove.h.
+enum class ControlScheme { Classic = 0, Action = 1, Count };
+
 // Backend de render pedido en [Window] RenderBackend. Se aplica al arrancar;
 // si el ejecutable no trae WebGPU, o el dispositivo no se crea, queda OpenGL.
 enum class RenderBackendPreference { OpenGL, Auto, D3D12, D3D11, Vulkan, Count };
@@ -159,6 +166,9 @@ public:
     // (Config.ini [Keyboard] Enable; F9 in game). Missing key = enabled.
     bool GetKeyboardEnable() const { return m_KeyboardEnable; }
     void SetKeyboardEnable(bool enabled);
+    // MEAMU Train 13: esquema de control ([Controls] Scheme, ver arriba).
+    ControlScheme GetControlScheme() const { return m_ControlScheme; }
+    void SetControlScheme(ControlScheme scheme);
     int GetGamepadDeadzone() const { return m_GamepadDeadzone; }       // percent 5..60
     int GetGamepadCursorSpeed() const { return m_GamepadCursorSpeed; } // px/s 100..3000
     bool GetDeleteHealthBar() const { return m_Antilag[ANTILAG_HEALTH_BAR]; }
@@ -183,6 +193,13 @@ public:
     // [Game] MoveMarker 1/0, default 1. Ver Net/MoveMarkers.h.
     bool GetMoveMarker() const { return m_MoveMarker; }
     void SetMoveMarker(bool enabled) { m_MoveMarker = enabled; }
+    // MEAMU Train 14: Action Camera (pointer-lock follow camera for the
+    // ACTION control scheme) — Config.ini [Game] ActionCamera 1/0,
+    // default 1: the feature is AVAILABLE, but the camera itself stays
+    // off until the ACTION scheme engages it (see Render/ActionCamera.h).
+    // 0 is a kill switch: no backtick toggle, no lock, no camera.
+    bool GetActionCamera() const { return m_ActionCamera; }
+    void SetActionCamera(bool enabled) { m_ActionCamera = enabled; }
     const char* GetUsername() const { return m_Username; }
     int GetLanguage() const { return m_Language; }
     // DESVIACION (Fase 4, Config.ini [Font] TextShadow / TextOutline): sombra
@@ -244,6 +261,8 @@ private:
     int  m_MusicLevel  = -1;
     bool m_GamepadEnable = true;
     bool m_KeyboardEnable = true;
+    ControlScheme m_ControlScheme = ControlScheme::Classic;
+
     int  m_GamepadDeadzone = 25;
     int  m_GamepadCursorSpeed = 900;
     bool m_Antilag[MAX_ANTILAG] = {};
@@ -251,6 +270,7 @@ private:
     bool m_BloodGore = true;
     bool m_HideWings = true;
     bool m_MoveMarker = true;
+    bool m_ActionCamera = true;
     int  m_Language = USER_LANG_DEFAULT;
     bool m_TextShadow = false;
     bool m_TextOutline = false;

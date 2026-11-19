@@ -134,11 +134,19 @@ void CUserSettings::Load(const char* iniPath)
     m_HideWings = ReadRange("Game", "HideWings", iniPath, 0, 1, 1) != 0;
     // MEAMU (2026-11-18): click/teleport markers — Config.ini [Game] MoveMarker 1/0.
     m_MoveMarker = ReadRange("Game", "MoveMarker", iniPath, 0, 1, 1) != 0;
+    // MEAMU Train 14: Action Camera kill switch — missing key reads as 1
+    // (feature available; engagement is the scheme's job, not this key's).
+    m_ActionCamera = ReadRange("Game", "ActionCamera", iniPath, 0, 1, 1) != 0;
 
     // MEAMU kb-toggle (2026-11-13): keyboard-only play master switch
     // ([Keyboard] Enable). Missing section/key reads as 1, so existing
     // installs keep the exact pre-toggle behavior.
     m_KeyboardEnable = ReadRange("Keyboard", "Enable", iniPath, 0, 1, 1) != 0;
+
+    // MEAMU Train 13 (2026-11-19): esquema de control ([Controls] Scheme).
+    // Sin clave = CLASSIC (0): el comportamiento previo a Train 13.
+    m_ControlScheme = (ControlScheme)ReadRange("Controls", "Scheme", iniPath,
+                                               0, (int)ControlScheme::Count - 1, 0);
 
     m_EnableSound = ReadFlag("Sound", "EnableSound", iniPath);
     m_EnableMusic = ReadFlag("Sound", "EnableMusic", iniPath);
@@ -210,9 +218,17 @@ void CUserSettings::SaveInt(const char* section, const char* key, int value) con
     Platform::GetFileSystem().WriteIniString(section, key, text, m_IniPath);
 }
 
+void CUserSettings::SetControlScheme(ControlScheme scheme)
+{
+    if (scheme < ControlScheme::Classic || scheme >= ControlScheme::Count) return;
+    m_ControlScheme = scheme;
+    SaveInt("Controls", "Scheme", (int)scheme);
+}
+
 void CUserSettings::SetKeyboardEnable(bool enabled)
 {
     m_KeyboardEnable = enabled;
+
     // Targeted write of the one value into the same Config.ini that was
     // read; the platform writer preserves every other line and creates
     // the [Keyboard] section when it is absent.

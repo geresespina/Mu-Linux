@@ -6,10 +6,12 @@
 #include "Platform/IInput.h"
 #include "Item/ContentCatalog.h"
 #include "Render/Camera3D.h"
+#include "Render/ActionCamera.h"
 #include "UI/MiniMap.h"
 #include "Input/KbPlay.h"
 #include "Input/Gamepad.h"
 #include "Input/NavMove.h"
+#include "Input/ActionMove.h"
 #include "Net/MoveMarkers.h"
 #include "UI/EventTimer.h"
 #include "UI/MoveList.h"
@@ -542,7 +544,9 @@ static void HUD_HotkeyTick(void)
     // DESVIACION (DLL Controller.cpp): F10 activa la cámara 3D, F11 la restaura.
     if (kF10) gCamera3D.Toggle();
     if (kF11) gCamera3D.Restore();
-
+    // MEAMU Train 15 (integration): the backtick scheme toggle lives ONLY
+    // in Train 13's ActionMove; the action camera mirrors the scheme from
+    // ActionMove_Scheme() itself (see Render/ActionCamera.cpp Update()).
     // IDA Chat_InputTick L4921-6414.  Al abrir con tecla, si la ventana del
     // NPC no se pudo cerrar (baul con EquipmentItem, Chaos con items) el panel
     // queda cerrado.  Los sonidos 25/28 salen al cerrar y al abrir el
@@ -1013,6 +1017,29 @@ void __cdecl Player_ProcessInput(void)
             s_clickStartedOnWindow = false;
         }
 
+        // MEAMU Train 13: esquema ACTION — el boton IZQUIERDO fisico no
+        // mueve ni ataca (el mouse es mira + UI; WASD mueve — ver
+        // Input/ActionMove). Cuando llega un evento de input REAL nuevo y
+        // el boton fisico esta apretado, se anulan los tres flags ANTES de
+        // que el ciclo de click los lea: para todo el bloque el click
+        // fisico no existe. Los botones virtuales (NavMove/KbPlay/
+        // gamepad/ActionMove via DeliverSDLInput) NO avanzan el serial de
+        // input real, asi que quedan intactos — AUTO y el latch conducen
+        // igual que en CLASSIC. El boton DERECHO no se toca: castear
+        // sobre el hover es el ataque de ACTION.
+        if (ActionMove_IsAction()) {
+            static unsigned s_actSerialSeen = 0;
+            const unsigned actSerial = Platform::RealInputSerial();
+            if (actSerial != s_actSerialSeen) {
+                s_actSerialSeen = actSerial;
+                if (((unsigned short)Platform::GetInput().KeyState(1) & 0x8000) != 0) {
+                    DAT_083a4124 = 0;
+                    DAT_083a413c = 0;
+                    DAT_083a42c4 = 0;
+                }
+            }
+        }
+
         // Capture: si el click recién empezó (DOWN edge) y mouse está sobre
         // window, marcar para todo el ciclo.
         if (bClickHeld && !s_clickCycleConsumed && g_MouseOnWindow) {
@@ -1356,9 +1383,37 @@ void __cdecl Player_ProcessInput(void)
                     // El port mandaba SIEMPRE a caminar cuando habia ruta, y en la
                     // rama sin ruta mandaba un move en vez de Action: de ahi que la
                     // elfa se acercara al cuerpo a cuerpo para poder pegar.
+                    // MEAMU Train 13 (blink-engage, AMBOS esquemas): con el
+                    // objetivo fuera del alcance cuerpo a cuerpo — y sin
+                    // ser un tiro de arco ya en alcance — se pide el blink
+                    // al server en vez de depender solo de caminar hasta
+                    // el (Input/ActionMove_TryBlinkEngage: UN intento por
+                    // enfrentamiento). Es fire-and-forget: el pathfind de
+                    // abajo sale igual en este mismo tick, asi que si el
+                    // server lo rechaza el walk-in es el de siempre, sin
+                    // stutter; si lo concede, el teletransporte deja al
+                    // heroe al lado y la ruta queda sin efecto. Este es el
+                    // camino del click de mouse Y del latch de Space (su
+                    // boton virtual corre por esta misma rama).
+                    {
+                        const int chebNow = (abs(dstX - srcX) > abs(dstY - srcY))
+                                          ? abs(dstX - srcX) : abs(dstY - srcY);
+                        bool bowInRange = false;
+                        const char* const cmB = (const char*)(uintptr_t)DAT_07cf1ffc;
+                        if (cmB) {
+                            const int lhB = ItemBehaviorType(*(const short*)(cmB + 536));
+                            const int rhB = ItemBehaviorType(*(const short*)(cmB + 604));
+                            bowInRange = ((lhB >= 136 && lhB < 143) || (lhB >= 144 && lhB < 160)
+                                       || (rhB >= 128 && rhB < 135) || rhB == 145) && chebNow <= 6;
+                        }
+                        if (chebNow > 1 && !bowInRange)
+                            ActionMove_TryBlinkEngage(SelectedCharacter, 1);
+                    }
+
                     unsigned int ok2 = Path_FindRoute(srcX, srcY,
                                                      dstX, dstY,
                                                      ent + EntityOffset(0x354), 0.0f);
+
                     if ((char)ok2 == 0) {
                         // Sin ruta (ya esta al lado, o inalcanzable) -> atacar.
                         if (Combat_CheckArrowRequirement() == 0)

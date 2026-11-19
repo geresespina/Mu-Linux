@@ -325,6 +325,8 @@ set(MU_SOURCES
     src/Input/Gamepad.cpp
     src/Input/NavMove.cpp
     src/Input/KbPlay.cpp
+    src/Input/ActionMove.cpp
+
     src/Item/Item_Equip.cpp
     src/Item/Item_EquipSlots.cpp
     src/Item/Item_Move.cpp
@@ -402,6 +404,7 @@ set(MU_SOURCES
     src/Core/DataPrefetch.cpp
     src/UI/MiniMap.cpp
     src/Render/Camera3D.cpp
+    src/Render/ActionCamera.cpp
     src/UI/OptionsMenu.cpp
     src/UI/MoveList.cpp
     src/UI/CommandMenu.cpp

@@ -335,6 +335,17 @@ void COptionsMenu::RenderGeneral()
     RenderToggle((float)RowY(row++), GlobalText[936], gUserSettings.GetPvPWithoutControl());
     RenderToggle((float)RowY(row++), GlobalText[386], m_bAutoAttack != 0);
     RenderToggle((float)RowY(row++), GlobalText[387], m_bWhisperSound != 0);
+    {
+        // MEAMU Train 13: selector de esquema de control (CLASSIC/ACTION).
+        char schemeText[96];
+        const char* schemeName = gClientText.Get(
+            gUserSettings.GetControlScheme() == ControlScheme::Action
+                ? ClientTextId::ControlAction : ClientTextId::ControlClassic);
+        Platform::TextFormatSecure(schemeText, gClientText.Get(ClientTextId::ControlScheme), schemeName);
+        RenderSelector((float)RowY(row++), schemeText,
+                       gUserSettings.GetControlScheme() != ControlScheme::Classic,
+                       gUserSettings.GetControlScheme() != ControlScheme::Action);
+    }
     RenderLevelBar((float)RowY(row++), GlobalText[922], g_EnableSound != 0, gSound.GetSoundLevel());
     RenderLevelBar((float)RowY(row++), GlobalText[923], gSound.GetMusicEnabled() != 0, gSound.GetMusicLevel());
     if (gSound.GetMusicEnabled()) RenderMusicControls((float)RowY(row++));
@@ -370,6 +381,18 @@ bool COptionsMenu::UpdateGeneral()
         if (Clicked(x, y, width, height)) { ConsumeClick(); m_bWhisperSound ^= 1; }
         return true;
     }
+    {
+        // MEAMU Train 13: flechas del selector de esquema (misma fila que
+        // dibuja RenderGeneral).
+        const int scheme = (int)gUserSettings.GetControlScheme();
+        const int step = UpdateSelector(RowY(row++), scheme > 0,
+                                        scheme < (int)ControlScheme::Count - 1);
+        if (step != INT_MIN) {
+            if (step) gUserSettings.SetControlScheme((ControlScheme)(scheme + step));
+            return true;
+        }
+    }
+
     y = RowY(row++);
     if (g_EnableSound) {
         const int level = LevelBarHit(y);
