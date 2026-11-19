@@ -20,6 +20,8 @@ namespace {
     const float kJumpSeconds = 0.60f;   // full up-and-down arc
     const float kLandSeconds = 0.08f;   // landing squash duration
     const float kLandDip     = 6.0f;    // landing squash depth (units)
+    const float kGlideHold   = 0.12f;   // Train 29: height held after an air-dash
+    const float kGlideFall   = 0.30f;   // Train 29: then a soft quadratic descent
 
     CHARACTER* HeroC() { return (CHARACTER*)(uintptr_t)Hero; }
 
@@ -113,6 +115,17 @@ void CActionJump::Update()
         const float p = m_T / kJumpSeconds;
         if (p >= 1.0f) { m_Phase = 2; m_T = 0.0f; }
         else z = kJumpPeak * 4.0f * p * (1.0f - p);  // parabola: soft top, weighty ends
+    } else if (m_Phase == 3) {
+        // Train 29 air-dash glide: hold the height a breath (the dash
+        // burst), then descend quadratically into the landing squash.
+        m_T += dt;
+        if (m_T < kGlideHold) {
+            z = m_GlideFrom;
+        } else {
+            const float q = (m_T - kGlideHold) / kGlideFall;
+            if (q >= 1.0f) { m_Phase = 2; m_T = 0.0f; }
+            else { const float r = 1.0f - q; z = m_GlideFrom * r * r; }
+        }
     } else if (m_Phase == 2) {
         m_T += dt;
         const float p = m_T / kLandSeconds;
@@ -128,5 +141,33 @@ void CActionJump::Update()
         hero->Object.Position[0] += offX;
         hero->Object.Position[1] += offY;
         m_AppliedX = offX; m_AppliedY = offY;
+    }
+}
+
+// MEAMU Train 29: a direction dash fired mid-air. The arc converts to a
+// glide from the CURRENT height (m_Applied is the offset in force —
+// the height he is visibly at); chaining another dash refreshes the
+// glide from wherever he is then. Grounded / landing: nothing to do.
+void CActionJump::OnAirDash()
+{
+    if (m_Phase != 1 && m_Phase != 3) return;
+    m_GlideFrom = m_Applied > 0.0f ? m_Applied : 0.0f;
+    if (m_GlideFrom <= 0.0f) { m_Phase = 0; m_T = 0.0f; return; }
+    m_Phase = 3;
+    m_T = 0.0f;
+}
+
+// MEAMU Train 29: a teleport-class move ends the air state NOW — the
+// offset comes off immediately so the arrival handler's terrain snap
+// never meets a stale hop offset (no one-step dip).
+void CActionJump::CancelAir()
+{
+    if (m_Phase == 0) return;
+    m_Phase = 0;
+    m_T = 0.0f;
+    CHARACTER* hero = HeroC();
+    if (hero && m_Applied != 0.0f) {
+        hero->Object.Position[2] -= m_Applied;
+        m_Applied = 0.0f;
     }
 }
