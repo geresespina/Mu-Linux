@@ -12,6 +12,7 @@
 #include "Input/Gamepad.h"
 #include "Input/NavMove.h"
 #include "Input/ActionMove.h"
+#include <SDL3/SDL.h>             // MEAMU Train 17: SDL_GetTicks (double-click window)
 #include "Net/MoveMarkers.h"
 #include "UI/EventTimer.h"
 #include "UI/MoveList.h"
@@ -1707,6 +1708,44 @@ void __cdecl Player_ProcessInput(void)
                             DAT_07e11d64 = 0;   // DontMove = false
                         else
                             DAT_07e11d64 = 1;   // DontMove = true
+
+                        // ── MEAMU Train 17 (Feature 3): double-click on
+                        // GROUND = teleport to that tile (dash wire
+                        // mode 2; ActionMove_TeleportToPoint clamps +
+                        // sends). This branch is terrain-only by
+                        // construction: NPC / item / attack clicks are
+                        // consumed by the branches above, and panel /
+                        // chat clicks never reach here (g_MouseOnWindow
+                        // and s_clickStartedOnWindow gates above).
+                        // Detection on the one-shot press edge only.
+                        // Pairing hygiene: two edges <= 300 ms apart,
+                        // BOTH with the physical LMB actually down
+                        // (platform KeyState reads real hardware only --
+                        // driver-synthesized edges from KbPlay / NavMove
+                        // / gamepad holds never qualify), and the
+                        // real-input serial advanced between them (the
+                        // second press is a fresh physical press). The
+                        // FIRST click walked exactly as stock -- stated
+                        // residual, same pattern as the double-tap
+                        // dash; the second click's walk route is
+                        // replaced by the teleport.
+                        if (bClickEdge) {
+                            static unsigned s_dcLastT = 0;
+                            static unsigned s_dcLastSerial = 0;
+                            const bool physDown =
+                                ((unsigned short)Platform::GetInput().KeyState(1) & 0x8000) != 0;
+                            const unsigned dcSerial = Platform::RealInputSerial();
+                            if (physDown && s_dcLastT != 0 &&
+                                (unsigned)SDL_GetTicks() - s_dcLastT <= 300 &&
+                                dcSerial != s_dcLastSerial) {
+                                s_dcLastT = 0;   // no triple-click chain
+                                if (ActionMove_TeleportToPoint((int)TargetX, (int)TargetY))
+                                    goto end_tick_inc;
+                            } else if (physDown) {
+                                s_dcLastT = (unsigned)SDL_GetTicks();
+                                s_dcLastSerial = dcSerial;
+                            }
+                        }
 
                         // La rama de piso de 004ACEF0 no rechaza una animación de
                         // acción/ataque activa. Resuelve el click sobre el terreno

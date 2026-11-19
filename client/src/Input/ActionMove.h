@@ -54,6 +54,22 @@
 // [C1][07][F3][FD][mode][b5][b6]; mode 0 = direction dash (b5 = engine
 // Dir 0..7, b6 = 0), mode 1 = dash-to-target (b5/b6 = target server
 // index HB/LB). Sends live in SendDashRequest() in ActionMove.cpp.
+//
+// TRAIN 17 (movement fix + Feature 3):
+// * While the Action Camera is POINTER-LOCKED, the park-and-hold drive
+//   cannot work: Input_OnEvent consumes MouseMove as a look delta and
+//   the camera pins the cursor globals to screen centre, so the input
+//   tick raycast the centre tile for every key and only the forward
+//   axis ever stepped (bugs #5/#6). In that state ActionMove drives
+//   DIRECTLY (Path_FindRoute + Combat_SendMovePathPacket, the ground-
+//   click branch's own tail) and keeps the virtual button up. The
+//   park drive above remains the not-locked path, unchanged.
+// * Mode 2 on the same wire = CLICK TELEPORT: a physical double-click
+//   on a ground point (detected in Player_InputTick's terrain-only
+//   ground branch) teleports to that tile — [C1][07][F3][FD][02][x][y],
+//   x/y = landing tile. Beyond-range clicks clamp along the
+//   hero->click line to the dash MaxRange (8, Chebyshev). Both
+//   schemes; server half is Bounce 14.
 
 void ActionMove_Tick();
 
@@ -85,3 +101,17 @@ unsigned ActionMove_SchemeFlipSerial();
 // basic attack, the skill's distance for a cast). Returns true only on
 // the one frame per engagement that actually sends the request.
 bool ActionMove_TryBlinkEngage(int targetIdx, int attackRangeTiles);
+
+// MEAMU Train 17: true while the Action Camera holds the pointer lock.
+// NavMove reads it to yield its arrow drive in ACTION+locked, where
+// ActionMove samples the arrows itself and direct-drives (its held
+// button would otherwise keep routing toward the pinned centre tile).
+bool ActionMove_CameraLocked();
+
+// MEAMU Train 17 (Feature 3): double-click ground teleport (dash wire
+// mode 2, see header note). Player_InputTick's ground-click branch
+// calls this with the clicked tile when it detects a physical
+// double-click on terrain; the target is clamped to range here and
+// the frame goes out through the dash choke point (Train 16 brake
+// discipline included). Returns true only when the frame was sent.
+bool ActionMove_TeleportToPoint(int tileX, int tileY);
