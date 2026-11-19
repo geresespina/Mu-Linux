@@ -16,6 +16,7 @@
 #include "Net/Reconnect.h"
 #include "Game/HeroVitals.h"
 #include "Net/MoveMarkers.h"
+extern "C" void __cdecl CreateTeleportEnd(OBJECT* entity);   // 0x00474310 (Entity_LegacyTeleport.cpp) — MEAMU Train 43
 #include "UI/EventTimer.h"
 #include "UI/MoveList.h"
 #include "UI/HealthBar.h"
@@ -1686,16 +1687,16 @@ void NetRecv_1C(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         *(BYTE*)&DAT_07eaa138 = 0;         // RepairEnable
     } else {
         // El server usa gate=0 para el teleport de skill.
-        // MEAMU Train 23: INSTANT arrival (G's ruling 2026-11-19 —
-        // teleports are movement verbs, not spells). The stock
-        // CreateTeleportEnd package (cast pose 87 + fade-in + sparkle
-        // 1176 + chime 88) is skipped: in MEAMU every gate=0 arrival is
-        // the dash / blink / double-click family, and he is simply
-        // THERE — fully opaque, no pose, no wind-up. The landing marker
-        // still fires and the Teleport cleanup is unchanged.
-        AsObject(hero)->Alpha = 1.0f;
-        AsObject(hero)->AlphaTarget = 1.0f;
-        MoveMarkers::OnTeleportArrival(AsObject(hero));
+        // MEAMU Train 43 (2026-11-19): G REVERSED Train 23 — the
+        // arrival package is BACK. He played the no-animation
+        // version and wants the teleport to READ as a teleport:
+        // CreateTeleportEnd restores the cast pose 87 + fade-in +
+        // sparkle 1176 + chime 88 (and fires the landing marker
+        // itself). The instant FIRE and the latency cuts (Trains
+        // 25/26/32) are untouched — the blink still leaves and
+        // lands with zero wind-up delay; only the arrival visual
+        // returns.
+        CreateTeleportEnd(AsObject(hero));
         Teleport = 0;                 // IDA L508: Teleport = 0 (0x05826D14)
     }
 
