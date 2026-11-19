@@ -53,6 +53,7 @@
 #include "stdafx.h"
 #include "../Combat/Skills.h"
 #include "Render/BijuTransform.h"   // MEAMU TRAIN 8 ADDENDUM: NoteFormSource (0x19 witness feed)
+#include "Input/AnimTrace.h"        // MEAMU Train 42 (ANIMTRACE round 2)
 
 
 // Forward declarations for functions identified in decompilation
@@ -160,8 +161,10 @@ void PacketHandler_0x19(BYTE* pkt)
     // (MoveCharacter's swing tick) on every server echo, Mangekyou
     // included. Mode visuals are state-bit driven (aura/burst), so
     // nothing consumes these fields for the family.
-    if (!BijuTransform::IsModeTransformSkill(skill_type))
+    if (!BijuTransform::IsModeTransformSkill(skill_type)) {
+        if ((void*)caster == (void*)(uintptr_t)DAT_07abf5d8) AnimTrace::NoteDirect("pkt-019");
         AsCharacter(caster)->Skill = (BYTE)skill_type;
+    }
 
     AsCharacter(caster)->TargetCharacter = (short)target_idx;
     // IDA 0x42BCA0 escribe `sc->SkillSuccess = (TargetKey >> 15) != 0`, y el

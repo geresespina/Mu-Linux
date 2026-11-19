@@ -677,6 +677,7 @@ void NetRecv_1E(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
     if (!caster) return;
 
     const BYTE skill = Msg[3];
+    if ((void*)caster == (void*)(uintptr_t)DAT_07abf5d8) AnimTrace::NoteDirect("pkt-01e"); // Train 42
     // ReceiveMagicContinue @ 0042CD10 stores the received skill
     // en c+770 antes de armar c+757. CharacterAnimation después
     // llama a AttackStage, que despacha sus efectos visuales desde
@@ -1059,6 +1060,7 @@ void NetRecv_1A(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
             AsCharacter(caster)->Object.CurrentAction = 90;            // cast anim (action 90)
             AsCharacter(caster)->Object.AnimationFrame = 0.0f;
         }
+        if ((void*)caster == (void*)(uintptr_t)Hero) AnimTrace::NoteDirect("pkt-01a-skill"); // Train 42: tag OUTSIDE the modeSkill gate
         AsCharacter(caster)->Skill = Msg[5];           // ReceiveMagicPosition
         if (!modeSkill)
             AsCharacter(caster)->SkillStage = 1;         // attack pending (Train 33: never for modes)

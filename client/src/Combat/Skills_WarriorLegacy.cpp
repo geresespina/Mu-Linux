@@ -2,6 +2,7 @@
 #include "stdafx.h"
 #include <cstring>
 #include "Game/RenderSnapshots.h"
+#include "Input/AnimTrace.h"        // MEAMU Train 42 (ANIMTRACE round 2)
 #include "Platform/ITimer.h"
 #include "globals.h"
 #include "functions.h"
@@ -283,7 +284,7 @@ void __cdecl Combat_UseWarriorSkill(intptr_t c /* IDA: c */, intptr_t o /* IDA: 
             Warrior_SendSkill19(skillType, targetKey);
     }
 
-    AsCharacter(c)->SkillStage = 1;
+    { AnimTrace::NoteDirect("warrior"); AsCharacter(c)->SkillStage = 1; }
     if ((*(DWORD*)(o + 120) & 0x20) == 0) {
         int tileX = (int)(AsCharacter(c)->TargetPosition[0] * 0.01f);
         int tileY = (int)(AsCharacter(c)->TargetPosition[1] * 0.01f);
