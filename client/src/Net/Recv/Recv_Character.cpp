@@ -1685,9 +1685,17 @@ void NetRecv_1C(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         DAT_07eaa134 = 0;
         *(BYTE*)&DAT_07eaa138 = 0;         // RepairEnable
     } else {
-        // El server usa gate=0 para el teleport de skill. IDA
-        // completa ese efecto visual y limpia Teleport acá.
-        CreateTeleportEnd(AsObject(hero));
+        // El server usa gate=0 para el teleport de skill.
+        // MEAMU Train 23: INSTANT arrival (G's ruling 2026-11-19 —
+        // teleports are movement verbs, not spells). The stock
+        // CreateTeleportEnd package (cast pose 87 + fade-in + sparkle
+        // 1176 + chime 88) is skipped: in MEAMU every gate=0 arrival is
+        // the dash / blink / double-click family, and he is simply
+        // THERE — fully opaque, no pose, no wind-up. The landing marker
+        // still fires and the Teleport cleanup is unchanged.
+        AsObject(hero)->Alpha = 1.0f;
+        AsObject(hero)->AlphaTarget = 1.0f;
+        MoveMarkers::OnTeleportArrival(AsObject(hero));
         Teleport = 0;                 // IDA L508: Teleport = 0 (0x05826D14)
     }
 
