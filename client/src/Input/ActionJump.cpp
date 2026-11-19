@@ -13,6 +13,7 @@
 #include "Entity/EntityTypes.h"   // CHARACTER
 #include "Render/ActionCamera.h"  // gActionCamera (lock + scheme state)
 #include "Input/ActionMove.h"     // ActionMove_TeleportToPoint (Train 35 blink)
+#include "Game/NinjaRun.h"        // Train 37: dash burst flag refresh
 #include "globals.h"              // Hero, InputEnable, DAT_083a7c24
 #include <SDL3/SDL.h>             // SDL_GetTicks
 #include <cmath>
@@ -51,6 +52,12 @@ void CActionJump::Update()
     if (!hero) { m_SpacePrev = false; m_LastTick = 0; m_SpringInit = false; return; }
 
     const unsigned now = (unsigned)SDL_GetTicks();
+    // MEAMU Train 37: the pure-dash burst flag is derived here per
+    // frame (the drive tick refreshes it per step too) so it can
+    // never stick on across a scheme flip or a closed UI.
+    NinjaRun::gDashBurst = (NinjaRun::gDashBurstEndMs != 0 &&
+                            (int)(now - NinjaRun::gDashBurstEndMs) < 0);
+    if (!NinjaRun::gDashBurst) NinjaRun::gDashBurstEndMs = 0;
     float dt = m_LastTick ? (float)(now - m_LastTick) / 1000.0f : 0.0f;
     m_LastTick = now;
     if (dt > 0.1f) dt = 0.1f;  // clamp tab-outs / hitches

@@ -136,7 +136,10 @@ extern "C" bool __cdecl CharacterAnimation(intptr_t c, intptr_t o)
         // Attack actions (34..91) are NOT locomotion and keep stock cadence.
         if (type == 390 && EntityView((const void*)c).Kind() == EntityView::PlayerKind &&
             NinjaRun::IsLocomotionAction(modelAction)) {
-            speed *= NinjaRun::kSpeedFactor;
+            // Train 37: the hero's cadence follows the active factor
+            // (dash burst); other players keep the base factor.
+            speed *= (c == (intptr_t)(void*)Hero) ? NinjaRun::ActiveFactor()
+                                                  : NinjaRun::kSpeedFactor;
         }
     }
 
