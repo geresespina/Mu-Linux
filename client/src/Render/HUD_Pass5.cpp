@@ -231,6 +231,12 @@ extern "C" void __cdecl sub_4BB940(float HeightArg, float xArg, float yArg,
         const float cellU = (float)(cell % 5) * 0.2f;
         const float cellV = (float)(cell / 5) * 0.5f;
         GL_DrawTexture(0x102, fx, fy, fw, fh, cellU + 0.002f, cellV + 0.002f, 0.196f, 0.496f, 1, 1);
+    } else if (v10 == 57) {
+        // MEAMU 2026-11-18 (Train 6 prep): Omni Buff -- the last
+        // mode-band skill with no dedicated texture; it fell to the
+        // stock atlas (index 56 -> row 7, off the 256px texture).
+        // Dedicated texture (bitmap 0x0ca), same as the other modes.
+        GL_DrawTexture(0x0ca, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
     } else if (v10 == 58) {
         // MEAMU 2026-11-15: Mangekyou Sharingan -- no cell exists in
         // the 256px Skill.jpg atlas for skill 58 (row 7 is off the
@@ -254,9 +260,11 @@ extern "C" void __cdecl sub_4BB940(float HeightArg, float xArg, float yArg,
         // MEAMU 2026-11-17 (Train 6): bitmap 0x135 (309), NOT 301 --
         // 301 (0x12d) is BITMAP_SKIN (player skin variant 0).
         GL_DrawTexture(0x135, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
-    } else if (v10 == 72) {
+    } else if (v10 == 72 || v10 == 76) {
         // MEAMU 2026-11-18 (Train 3): Biju Bond -- ignites Jinchuriki
         // Mode, so it draws the Jinchuriki texture (0x135), as BuffBar.
+        // MEAMU 2026-11-18 (Train 6 prep): 76 Biju Legion rides the
+        // same texture (the soul-pet family icon).
         GL_DrawTexture(0x135, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
     } else if (v10 == 73) {
         // MEAMU 2026-11-18 (Train 3): Chakra Cloak -- dedicated

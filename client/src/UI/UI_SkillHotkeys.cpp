@@ -121,15 +121,21 @@ void __cdecl RenderSkillIcon(int iIndex, float x, float y, float width, float he
         const float cellV = (float)(cell / 5) * 0.5f;
         GL_DrawTexture(0x102, fX, fY, fWidth, fHeight,
                        cellU + 0.002f, cellV + 0.002f, 0.196f, 0.496f, 1, 1);
-    } else if (skillId == 58 || skillId == 59 || skillId == 60 || skillId == 61 ||
-               skillId == 72 || skillId == 73 || skillId == 74 || skillId == 75) {
+    } else if (skillId == 57 || skillId == 58 || skillId == 59 || skillId == 60 || skillId == 61 ||
+               skillId == 72 || skillId == 73 || skillId == 74 || skillId == 75 || skillId == 76) {
         // MEAMU 2026-11-18 (Train 3): 72 Biju Bond -> Jinchuriki
         // texture (it ignites that mode); 73 Chakra Cloak -> 0x0c8;
         // 74 Perfect Susanoo -> Biju texture (shared form bit; the
         // model is its identity); 75 Dragon Sage Mode -> 0x0c9.
-        const int dedicated = (skillId == 58) ? 299 :
+        // MEAMU 2026-11-18 (Train 6 prep): 76 Biju Legion -> the
+        // Jinchuriki texture, same as 72 (its family skill).
+        // MEAMU 2026-11-18 (Train 6 prep): 57 Omni Buff -> 0x0ca --
+        // it was the last skill of the band still falling through
+        // to the stock atlas (index 56 -> row 7, off the texture).
+        const int dedicated = (skillId == 57) ? 0x0ca :
+                              (skillId == 58) ? 299 :
                               (skillId == 59) ? 0x134 :
-                              (skillId == 60 || skillId == 72) ? 0x135 :
+                              (skillId == 60 || skillId == 72 || skillId == 76) ? 0x135 :
                               (skillId == 73) ? 0x0c8 :
                               (skillId == 75) ? 0x0c9 : 0x106;
         GL_DrawTexture(dedicated, fX, fY, fWidth, fHeight,

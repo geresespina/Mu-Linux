@@ -475,6 +475,106 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
             }
         }
 
+        // ── 0e. Aura Chakra Cloak (DESVIACION, solo cliente; MEAMU
+        // 2026-11-18, Train 6) ───────────────────────────────────
+        // G's live verdict on Bounce 5/7: skill 73 worked (x5) but
+        // had NO in-world visual -- Modes-2 shipped only the status
+        // icon (Train 3, bitmap 0x0c8) and the Skills.cpp 0x49
+        // comment promised an aura this block never had. The buff
+        // arrives as bit 0x4000 of the persistent state (entity+120),
+        // the same channel as 0x0400/0x0800/0x1000, so the shroud is
+        // visible to everyone in view for exactly the buff's life.
+        // Fiery ORANGE-GOLD Kurama-cloak energy: between Sage (suelo
+        // 8.4 / halo 5.5) and Jinchuriki (25.2 / 16.5) in size, with
+        // a white-hot core and a FASTER pulse (900 ms -- flame
+        // flicker, not the 1200 ms breathing of the other modes),
+        // so it never reads as the beast-tinted Jinchuriki aura
+        // (which is also bigger) nor as Sage green. Brasas 0x4ab en
+        // anillo, naranjas.
+        if (bVar7 == 0xFF && AsCharacter(puVar13)->Dead == 0 &&
+            !gUserSettings.GetAntilag(ANTILAG_GLOW) &&
+            (*(DWORD*)((BYTE*)puVar13 + 120) & 0x4000) != 0) {
+            const float ct = 0.5f - 0.5f * cosf(WorldTime * (2.0f * 3.14159265f / 900.0f));
+            float ckLight[3] = { 1.0f,
+                                 0.42f + (0.68f - 0.42f) * ct,
+                                 0.06f + (0.22f - 0.06f) * ct };
+            float ckPos[3] = { AsObject(puVar13)->Position[0],
+                               AsObject(puVar13)->Position[1],
+                               AsObject(puVar13)->Position[2] };
+            float ckGround[3] = { ckLight[0] * 0.6f, ckLight[1] * 0.6f, ckLight[2] * 0.6f };
+            Equipment_AddSprite(0x47e, ckPos, 12.6f, ckGround,
+                                (intptr_t)puVar13, 0.0f, 0);
+            float ckOff[3] = { 0.0f, 0.0f, 0.0f };
+            float ckBody[3];
+            BMD_TransformPosition(pvVar23,
+                (float *)((intptr_t)AsObject(puVar13)->BoneMatrices + 0 * 0x30),
+                ckOff, ckBody, '\x01');
+            Equipment_AddSprite(0x47e, ckBody, 9.0f, ckLight,
+                                (intptr_t)puVar13, 0.0f, 0);
+            float ckCore[3] = { ckLight[0] + (1.0f - ckLight[0]) * 0.45f,
+                                ckLight[1] + (1.0f - ckLight[1]) * 0.45f,
+                                ckLight[2] + (1.0f - ckLight[2]) * 0.45f };
+            Equipment_AddSprite(0x47e, ckBody, 5.0f, ckCore,
+                                (intptr_t)puVar13, 0.0f, 0);
+            const int ckPhase = (int)(((intptr_t)puVar13 >> 5) & 0x3F);
+            if ((((int)WorldTime + ckPhase) % 120) < 16) {
+                float ckEmber[3] = { 1.0f, 0.5f, 0.12f };
+                const float ckAng = (WorldTime + (float)ckPhase * 61.0f) *
+                                    (2.0f * 3.14159265f / 2400.0f);
+                const float ckRad = 9.0f * 18.0f;
+                float emberPos[3] = { ckBody[0] + cosf(ckAng) * ckRad,
+                                      ckBody[1] + sinf(ckAng) * ckRad,
+                                      ckBody[2] };
+                Particle_Spawn(0x4ab, emberPos, (float *)(puVar13 + 7),
+                               ckEmber, 0, 0.5f, 0);
+            }
+        }
+
+        // ── 0f. Aura Dragon Sage Mode (DESVIACION, solo cliente;
+        // MEAMU 2026-11-18, Train 6) ─────────────────────────────
+        // Skill 75 is built on the Sage chassis server-side but
+        // carries its OWN state bit (0x8000), so the Sage block
+        // (0c, bit 0x0800) never fires for it and the mode rendered
+        // with no aura at all. This is the Sage aura verbatim --
+        // same size, same Senju green breathing to gold, same motes
+        // -- keyed on 0x8000: Dragon Sage IS Sage-family energy, so
+        // sharing the family's look is the design. The modes are
+        // mutually exclusive server-side, so 0c and 0f never draw
+        // on the same character at once.
+        if (bVar7 == 0xFF && AsCharacter(puVar13)->Dead == 0 &&
+            !gUserSettings.GetAntilag(ANTILAG_GLOW) &&
+            (*(DWORD*)((BYTE*)puVar13 + 120) & 0x8000) != 0) {
+            const float dt = 0.5f - 0.5f * cosf(WorldTime * (2.0f * 3.14159265f / 1200.0f));
+            float dsLight[3] = { 0.47f + (0.85f - 0.47f) * dt,
+                                 0.86f + (0.66f - 0.86f) * dt,
+                                 0.24f + (0.23f - 0.24f) * dt };
+            float dsPos[3] = { AsObject(puVar13)->Position[0],
+                               AsObject(puVar13)->Position[1],
+                               AsObject(puVar13)->Position[2] };
+            float dsGround[3] = { dsLight[0] * 0.6f, dsLight[1] * 0.6f, dsLight[2] * 0.6f };
+            Equipment_AddSprite(0x47e, dsPos, 8.4f, dsGround,
+                                (intptr_t)puVar13, 0.0f, 0);
+            float dsOff[3] = { 0.0f, 0.0f, 0.0f };
+            float dsBody[3];
+            BMD_TransformPosition(pvVar23,
+                (float *)((intptr_t)AsObject(puVar13)->BoneMatrices + 0 * 0x30),
+                dsOff, dsBody, '\x01');
+            Equipment_AddSprite(0x47e, dsBody, 5.5f, dsLight,
+                                (intptr_t)puVar13, 0.0f, 0);
+            const int dsPhase = (int)(((intptr_t)puVar13 >> 5) & 0x3F);
+            if ((((int)WorldTime + dsPhase) % 120) < 16) {
+                float moteLight[3] = { 0.6f, 1.0f, 0.4f };
+                const float dsAng = (WorldTime + (float)dsPhase * 61.0f) *
+                                    (2.0f * 3.14159265f / 2400.0f);
+                const float dsRad = 5.5f * 18.0f;
+                float motePos[3] = { dsBody[0] + cosf(dsAng) * dsRad,
+                                     dsBody[1] + sinf(dsAng) * dsRad,
+                                     dsBody[2] };
+                Particle_Spawn(0x4ab, motePos, (float *)(puVar13 + 7),
+                               moteLight, 0, 0.45f, 0);
+            }
+        }
+
 
         // ── 1. Glove sparkle: class byte (cls&7)==0 + (cls_skin&0xF8)==8 ───
         // (DK 2nd-tier with specific skin range): sprite + sin halo at bone 19

@@ -133,7 +133,11 @@ int __cdecl OpenTerrainAttribute(const char *FileName) {
         switch (gMapManager.GetCurrentMap()) {
         case 0: if (TerrainWall[31623] != 5) Error = true; break;
         case 1: if (TerrainWall[30947] != 4) Error = true; break;
-        case 2: if (TerrainWall[14288] != 5) Error = true; break;
+        // MEAMU 2026-11-18 (Train 6): the map-2 magic byte sits on tile
+        // (208,55), INSIDE the Devias lake rect whose safe-zone bit was
+        // cleared on both server + client Terrain3.att -- its attr is
+        // now 4 (was 5), so 4 is the expected value.
+        case 2: if (TerrainWall[14288] != 4) Error = true; break;
         case 3: if (TerrainWall[30650] != 5) Error = true; break;
         case 4: if (TerrainWall[19393] != 5) Error = true; break;
         }

@@ -105,6 +105,12 @@ void Render()
     Label(kButtonX, kButtonY + kButtonSize / 2, kButtonSize, u8"\U0001F600");
     gFont.SelectFont(gFont.GetTextDC(), gFont.GetFont(FONT_NORMAL));
     if (click && overButton) { s_Open = !s_Open; Consume(); click = false; }
+    // MEAMU 2026-11-18 (Train 6, chat-glitch fix): the rects above
+    // leave Texture2D disabled behind the legacy state flag's back;
+    // every later textured HUD draw would come out as a solid quad.
+    // Restore before leaving, like every other rect drawer does
+    // (ChatLogWindow::Rect, BoostStrip::DrawChipBox).
+    GL_ResetState();
     if (!s_Open) return;
 
     // ── Panel ──
@@ -162,5 +168,6 @@ void Render()
         }
     }
     BufferedDraw::Color4f(1.0f, 1.0f, 1.0f, 1.0f);
+    GL_ResetState();   // MEAMU 2026-11-18 (Train 6): ver la nota de arriba.
 }
 }
