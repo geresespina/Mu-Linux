@@ -191,6 +191,53 @@ bool DriveGates()
            InputEnable == 0 && DAT_083a7c24 == 0 && !HeroDead();
 }
 
+// ── Dash brake (MEAMU Train 16, Fix 4 — GunZ rule: dash is an INSTANT
+// verb; G's playtest: "runs a few steps first, THEN teleports") ────────
+// Armed by SendDashRequest (the one choke point BOTH dash kinds pass
+// through) BEFORE the packet goes out, right after ReleaseDrive() has
+// killed this module's virtual hold: stop-then-send, never
+// send-then-stop. While armed, every synthetic movement source stays
+// off: this module's drive (ActionMove_Tick checks it), NavMove's
+// arrow/follow drives and Player_InputTick's walk-in move packet (both
+// read ActionMove_DashBraking()). The brake clears when:
+//   * the hero's tile changes (the teleport landed — with every drive
+//     off, nothing of ours can move him first), or
+//   * a FRESH direction press edge arrives (the player's new input
+//     takes control back; DashScan clears it), or
+//   * kDashBrakeMs lapses — the GS refuses SILENTLY (no negative ack on
+//     the wire), so without a timeout a refused dash would wedge
+//     movement until re-press; on lapse the callers' walk-in fallback
+//     resumes exactly as Train 13 designed it.
+constexpr unsigned kDashBrakeMs = 600;
+bool     gBrakeActive  = false;
+unsigned gBrakeArmedMs = 0;
+int      gBrakeTileX   = 0;
+int      gBrakeTileY   = 0;
+
+void ArmDashBrake(unsigned now)
+{
+    gBrakeActive  = true;
+    gBrakeArmedMs = now;
+    if (Hero != 0) {
+        gBrakeTileX = (int)HeroC()->PositionX;
+        gBrakeTileY = (int)HeroC()->PositionY;
+    }
+}
+
+// Lazy evaluation: correct no matter which module asks first in a frame.
+bool DashBrakeActive(unsigned now)
+{
+    if (!gBrakeActive) return false;
+    if (Hero != 0) {
+        CHARACTER* hero = HeroC();
+        const int dx = std::abs((int)hero->PositionX - gBrakeTileX);
+        const int dy = std::abs((int)hero->PositionY - gBrakeTileY);
+        if ((dx > dy ? dx : dy) >= 1) { gBrakeActive = false; return false; }  // landed
+    }
+    if ((int)(now - gBrakeArmedMs) > (int)kDashBrakeMs) { gBrakeActive = false; return false; }
+    return true;
+}
+
 // ── Dash / blink wire (LIVE — DASH-WIRE.md) ──────────────────────────────────
 // Emits exactly: C1 07 F3 FD <mode> <b5> <b6>. For mode 1, keyOrDir is the
 // target's server object index (CHARACTER.Key, the viewport/attack-packet
@@ -198,6 +245,14 @@ bool DriveGates()
 // is the engine Dir byte (see OctantOf) and b6 = 0.
 bool SendDashRequest(unsigned char mode, int keyOrDir)
 {
+    // MEAMU Train 16 (Fix 4): STOP-THEN-SEND. Kill this module's movement
+    // output and arm the dash brake BEFORE the request leaves, so no
+    // step can be issued from the fire frame until the teleport lands.
+    // (The shipped order sent first and let the tick sort it out after;
+    // a second held direction kept the drive alive for the whole round
+    // trip — the run-up G felt.)
+    ReleaseDrive();
+    ArmDashBrake((unsigned)SDL_GetTicks());
     BYTE b5, b6;
     if (mode == kDashModeTarget) {
         b5 = (BYTE)((keyOrDir >> 8) & 0xFF);   // target index HB
@@ -249,6 +304,11 @@ bool DashScan(unsigned now, int wantX, int wantY)
         TapSlot& t = gTaps[s];
         const bool held = KeyHeld(kSlotVk[s][0]) || KeyHeld(kSlotVk[s][1]);
         if (held && !t.held) {                       // press edge
+            // Train 16 (Fix 4): a FRESH press takes control back from a
+            // dash brake armed earlier (strict >: an edge in the same
+            // scan that armed the brake — a simultaneous second key —
+            // must not clear the brake the firing edge just armed).
+            if (gBrakeActive && now > gBrakeArmedMs) gBrakeActive = false;
             t.pressT = now;
             if (t.releaseT != 0 && now - t.releaseT <= kDashWindowMs &&
                 t.pressDur <= kTapMaxMs) {
@@ -293,6 +353,11 @@ bool ActionMove_IsAction()
 {
     return gInit && gScheme == ControlScheme::Action &&
            SceneFlag == 5 && Hero != 0;
+}
+
+bool ActionMove_DashBraking()
+{
+    return DashBrakeActive((unsigned)SDL_GetTicks());
 }
 
 ControlScheme ActionMove_Scheme() { return gScheme; }
@@ -352,6 +417,13 @@ void ActionMove_Tick()
     // Double-tap -> dash. A press consumed by a dash must not also walk:
     // while EVERY held direction slot is consumed, the drive stays off.
     DashScan(now, wantX, wantY);
+    // MEAMU Train 16 (Fix 4): while a dash/teleport is in flight the
+    // drive stays OFF even when another direction is still held live —
+    // no steps between the request and the landing. When the brake
+    // clears on landing, the still-held keys resume the drive on the
+    // next tick (correct shooter behaviour); the steps BEFORE the
+    // teleport were the bug.
+    if (DashBrakeActive(now)) { ReleaseDrive(); return; }
     bool anyHeld = false, anyLive = false;
     for (int s = 0; s < 4; ++s) {
         if (!gTaps[s].held) continue;
