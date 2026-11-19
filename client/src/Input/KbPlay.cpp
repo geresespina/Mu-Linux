@@ -357,7 +357,7 @@ void QuickSlotDigit(int digitVal)
 bool IsSelfSkill(int skillType)
 {
     // Elf heal/buff line: Heal, Greater Defense, Greater Damage, Greater Life.
-    return skillType == 26 || skillType == 27 || skillType == 28 || skillType == 48 || skillType == 57 || skillType == 58 || skillType == 59 || skillType == 60 || skillType == 61;  // 57 = Omni Buff (MEAMU 2026-11-14), 58 = Mangekyou Sharingan (MEAMU 2026-11-15), 59 = Sage Mode (MEAMU 2026-11-17), 60 = Jinchuriki Mode + 61 = Biju Mode (MEAMU 2026-11-17, Train 4)
+    return skillType == 26 || skillType == 27 || skillType == 28 || skillType == 48 || skillType == 57 || skillType == 58 || skillType == 59 || skillType == 60 || skillType == 61 || skillType == 72 || skillType == 73 || skillType == 74 || skillType == 75;  // 57 = Omni Buff (MEAMU 2026-11-14), 58 = Mangekyou Sharingan (MEAMU 2026-11-15), 59 = Sage Mode (MEAMU 2026-11-17), 60 = Jinchuriki Mode + 61 = Biju Mode (MEAMU 2026-11-17, Train 4), 72 = Biju Bond + 73 = Chakra Cloak + 74 = Perfect Susanoo + 75 = Dragon Sage Mode (MEAMU 2026-11-18)
 }
 
 int SelectedSkillType()
