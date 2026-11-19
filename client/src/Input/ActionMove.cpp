@@ -329,11 +329,19 @@ void DirectDriveIssue(int ox, int oy, unsigned now)
         const int ry = (int)(hero->Object.Position[1] * 0.01f);
         if (std::abs(hx - rx) >= 2 || std::abs(hy - ry) >= 2) return;
     }
-    const int tx = hx + ox * kStepTiles;
-    const int ty = hy + oy * kStepTiles;
+    // MEAMU Train 28 (fluid drive): the direct drive routes ONE tile
+    // ahead, not kStepTiles — a shorter rolling route keeps the
+    // re-route parity gate above from ever refusing a turn mid-route,
+    // so a direction change bites within a tile. (The park drive's
+    // cursor lookahead keeps kStepTiles; it is a different animal.)
+    const int tx = hx + ox;
+    const int ty = hy + oy;
     const bool octChanged = !gDirectValid || ox != gDirectOx || oy != gDirectOy;
-    if (!octChanged && (int)(now - gDirectIssueT) < (int)kDirectRefreshMs)
-        return;   // same octant, just issued (also caps wall retries)
+    if (!octChanged && (int)(now - gDirectIssueT) < (int)kDirectRefreshMs
+        && hero->Movement != 0)
+        return;   // same octant, just issued, route still walking
+                  // (Train 28: a drained route re-issues at once —
+                  // the 200 ms cap must never stall a held direction)
     if (!octChanged && hero->Movement != 0 && tx == gDirectTx && ty == gDirectTy)
         return;   // already walking a route to this exact target
     unsigned char* pathBuf =
