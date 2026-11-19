@@ -160,6 +160,10 @@ namespace BijuTransform
     // ignites around it. Every cast-pose site (Combat self-cast
     // branches, Skills 0x19 remote handler) consults this one
     // predicate; tests/SkinBodyFix.cpp pins the table.
+    // MEAMU TRAIN 19 (2026-11-19): + 72 Biju Bond (G's verdict
+    // 13:37 EST -- every mode toggle fires instant, no cast
+    // motion, no animation lock, ON and OFF). The set is now
+    // exactly {58, 59, 60, 61, 72, 73, 74, 75}.
     bool IsModeTransformSkill(int skillType);
 
 

@@ -130,6 +130,8 @@ int main()
     // exactly the seven mode transforms cast with no pose; the
     // shared-body neighbours (48 Greater Life, 57 Omni Buff, 72
     // Biju Bond, 76 Biju Legion) and attack skills keep theirs.
+    // -- MEAMU TRAIN 19 (2026-11-19): G's verdict 13:37 EST --
+    // Biju Bond (72) joins the instant family; the pin flips.
     auto ExpectModeSkill = [](int skill, bool want, const char* label) {
         const bool got = BijuTransform::IsModeTransformSkill(skill);
         if (got != want) {
@@ -148,7 +150,7 @@ int main()
     ExpectModeSkill(75, true,  "Dragon Sage Mode");
     ExpectModeSkill(48, false, "Greater Life keeps pose");
     ExpectModeSkill(57, false, "Omni Buff keeps pose");
-    ExpectModeSkill(72, false, "Biju Bond keeps pose");
+    ExpectModeSkill(72, true,  "Biju Bond (Train 19)");
     ExpectModeSkill(76, false, "Biju Legion keeps pose");
     ExpectModeSkill(70, false, "Chakra Roar keeps pose");
     ExpectModeSkill(41, false, "Twisting Slash keeps pose");
