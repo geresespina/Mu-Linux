@@ -62,6 +62,9 @@ struct Stats {
     int32_t scaleMulX1000 = 1000;
     int32_t finalPhysiMin = 0, finalPhysiMax = 0;
     int32_t finalMagicMin = 0, finalMagicMax = 0;
+    // MEAMU Train 41 + Bounce 17: exact HP figures (0 on older GS).
+    int32_t drainExact = 0;
+    int32_t shieldHP = 0;
 };
 
 // Pure parser (header-inline so a proof harness exercises this
@@ -90,6 +93,10 @@ inline bool ParsePacket(const uint8_t* msg, int size, Stats& out)
         s.scaleMulX1000 = rd(76);
         s.finalPhysiMin = rd(80); s.finalPhysiMax = rd(84);
         s.finalMagicMin = rd(88); s.finalMagicMax = rd(92);
+    }
+    if (size >= 104) { // Bounce 17: exact HP figures
+        s.drainExact = rd(96);
+        s.shieldHP = rd(100);
     }
     out = s;
     return true;
