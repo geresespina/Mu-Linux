@@ -1730,21 +1730,18 @@ void __cdecl Player_ProcessInput(void)
                         // dash; the second click's walk route is
                         // replaced by the teleport.
                         if (bClickEdge) {
-                            static unsigned s_dcLastT = 0;
-                            static unsigned s_dcLastSerial = 0;
+                            // MEAMU Train 25: pairing state is shared
+                            // with the event path (ActionMove) — the SDL
+                            // event usually fires the teleport at press
+                            // time; this tick detection remains as the
+                            // fallback and keeps the same semantics.
                             const bool physDown =
                                 ((unsigned short)Platform::GetInput().KeyState(1) & 0x8000) != 0;
-                            const unsigned dcSerial = Platform::RealInputSerial();
-                            if (physDown && s_dcLastT != 0 &&
-                                (unsigned)SDL_GetTicks() - s_dcLastT <= 300 &&
-                                dcSerial != s_dcLastSerial) {
-                                s_dcLastT = 0;   // no triple-click chain
-                                if (ActionMove_TeleportToPoint((int)TargetX, (int)TargetY))
-                                    goto end_tick_inc;
-                            } else if (physDown) {
-                                s_dcLastT = (unsigned)SDL_GetTicks();
-                                s_dcLastSerial = dcSerial;
-                            }
+                            if (physDown && ActionMove_TickDoubleClick(
+                                    (int)TargetX, (int)TargetY,
+                                    (int)DAT_083a427c, (int)DAT_083a4278,
+                                    Platform::RealInputSerial()))
+                                goto end_tick_inc;
                         }
 
                         // La rama de piso de 004ACEF0 no rechaza una animación de

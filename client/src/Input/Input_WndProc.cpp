@@ -9,6 +9,7 @@
 #include "Platform/Text.h"
 #include "Render/Camera3D.h"
 #include "Render/ActionCamera.h"
+#include "Input/ActionMove.h"     // MEAMU Train 25: ActionMove_TryEventTeleport
 #include "Input/Input.h"
 
 // Helper de src/UI/Chat_InputTick.cpp — envía una línea de chat
@@ -100,6 +101,11 @@ void Input_OnEvent(const Platform::InputEvent& event)
         DAT_083a42c4 = 1;                    // g_DblClickPending = 1
         DAT_055ca03c = DAT_083a427c;         // snapshot posición al down
         DAT_055ca040 = DAT_083a4278;
+        // MEAMU Train 25: instant double-click teleport — if the input
+        // tick stored a fresh ground click, a same-spot physical
+        // re-press fires the teleport NOW, at event time, instead of
+        // waiting up to 40 ms for the next input step to notice it.
+        ActionMove_TryEventTeleport((int)DAT_083a427c, (int)DAT_083a4278);
         break;
 
     case Platform::InputEventType::LeftUp:     // 0x202

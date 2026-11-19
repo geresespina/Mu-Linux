@@ -41,6 +41,7 @@ extern "C" void DbgLogPublic(const char* msg);
 
 namespace Platform {
 void DeliverSDLInput(const InputEvent& event);   // SDLWindow.cpp
+unsigned RealInputSerial();                      // SDLInput.cpp
 }
 
 namespace {
@@ -555,6 +556,61 @@ bool ActionMove_TeleportToPoint(int tileX, int tileY)
     ActLog("ACTION: click-teleport to (%d,%d)%s", tx, ty,
            clamped ? " (clamped: click was beyond range)" : "");
     return sent;
+}
+
+// ── Double-click pairing state (MEAMU Train 25 — teleport latency cut) ──
+// Train 17 detected the pair inside Player_ProcessInput's 40 ms step, so
+// the second press waited 0-40 ms (avg ~20) just to be NOTICED. The state
+// now lives here so Input_OnEvent's LeftDown (which runs at press time)
+// can fire the teleport within ~1 ms of the physical click. The tick
+// keeps its Train 17 detection as fallback on the same state.
+namespace {
+    bool     gDcValid = false;
+    int      gDcTileX = 0, gDcTileY = 0;   // tick-validated ground tile (first click)
+    int      gDcUiX = 0, gDcUiY = 0;       // first click's cursor (UI 640x480 space)
+    unsigned gDcT = 0;
+    unsigned gDcSerial = 0;
+    unsigned gDcFiredSerial = 0;           // tombstone: a fired press never re-pairs
+    constexpr unsigned kDcWindowMs = 300;
+    constexpr int kDcPixelSlop = 8;        // a double-click is one spot
+}
+
+// The tick's Train 17 detection, on shared state (semantics unchanged:
+// fresh physical press inside the window fires at the CURRENT click's
+// tile; a firing press is consumed and tombstoned — no triple chain).
+bool ActionMove_TickDoubleClick(int tileX, int tileY, int uiX, int uiY, unsigned serial)
+{
+    const unsigned now = (unsigned)SDL_GetTicks();
+    if (gDcValid && serial != gDcSerial && now - gDcT <= kDcWindowMs) {
+        gDcValid = false;
+        gDcFiredSerial = serial;
+        return ActionMove_TeleportToPoint(tileX, tileY);
+    }
+    if (serial != gDcFiredSerial) {
+        gDcValid = true;
+        gDcTileX = tileX; gDcTileY = tileY;
+        gDcUiX = uiX; gDcUiY = uiY;
+        gDcT = now; gDcSerial = serial;
+    }
+    return false;
+}
+
+// Event path (Input_OnEvent LeftDown, at press time): fire NOW if the
+// stored first click is fresh, this press lands on the same spot, and
+// the physical button is really down (hardware KeyState — synthetic
+// edges from the drives never qualify). Fires at the stored tile: the
+// tick validated it as ground, and the slop keeps it the clicked tile.
+bool ActionMove_TryEventTeleport(int uiX, int uiY)
+{
+    if (!gDcValid) return false;
+    const unsigned now = (unsigned)SDL_GetTicks();
+    if (now - gDcT > kDcWindowMs) { gDcValid = false; return false; }
+    if (std::abs(uiX - gDcUiX) > kDcPixelSlop || std::abs(uiY - gDcUiY) > kDcPixelSlop) return false;
+    if (((unsigned short)Platform::GetInput().KeyState(1) & 0x8000) == 0) return false;
+    const int tx = gDcTileX, ty = gDcTileY;
+    gDcValid = false;
+    gDcFiredSerial = Platform::RealInputSerial();
+    return ActionMove_TeleportToPoint(tx, ty);
 }
 
 void ActionMove_Tick()
