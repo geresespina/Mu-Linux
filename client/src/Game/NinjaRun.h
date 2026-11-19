@@ -59,7 +59,7 @@ namespace NinjaRun
     // 1.75 under 200. The window end is written by ActionMove's
     // DashScan (SDL ticks); the live flag is refreshed per frame by
     // ActionJump::Update and per step by the drive tick.
-    inline constexpr float kDashFactor = 3.0f;   // Train 46 (2026-11-19): G reverted the x4.0 tune back to x3.0   // Train 44 (2026-11-19): G's x4.0 dash tune (Bounce 18 ceiling x4.60)
+    inline constexpr float kDashFactor = 4.0f;   // Train 47 (2026-11-19): G CANCELLED the revert — x4.0 STAYS (Train 46 superseded)   // Train 44 (2026-11-19): G's x4.0 dash tune (Bounce 18 ceiling x4.60)
     inline unsigned gDashBurstEndMs = 0;   // SDL tick the burst ends (0 = none)
     inline bool     gDashBurst = false;    // derived live flag
     inline float ActiveFactor() { return gDashBurst ? kDashFactor : kSpeedFactor; }
