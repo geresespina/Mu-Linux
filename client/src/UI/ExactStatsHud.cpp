@@ -138,7 +138,7 @@ void RunSelfTestOnce()
 
 void RenderSheet(const ExactStats::Stats& s)
 {
-    constexpr int kW = 304, kH = 322; // Train 40: +3 rows (FINAL x2, SCALE)
+    constexpr int kW = 304, kH = 340; // Train 40: +3 rows; Train 41: +1 (SHIELD)
     const int ox = gWindow.PanelOrigin(Ui::WindowLeft) + (640 - kW) / 2;
     const int oy = 96;
     DrawBox((float)ox, (float)oy, (float)kW, (float)kH);
@@ -223,8 +223,16 @@ void RenderSheet(const ExactStats::Stats& s)
     FormatMulPct(100 + s.clanBonusPct, a, sizeof(a));
     line("CLAN WAR", a);
 
-    Platform::TextFormatSecure(v, sizeof(v), "%d%%/s", (int)s.drainPct);
-    line("DRAIN %/s", v);
+    // Train 41: the drain as the EXACT HP per second when the GS
+    // sends it (Bounce 17); the % rate stays the fallback.
+    if (s.drainExact > 0) {
+        FormatNum(s.drainExact, a, sizeof(a));
+        Platform::TextFormatSecure(v, sizeof(v), "%s HP/s", a);
+        line("DRAIN", v);
+    } else {
+        Platform::TextFormatSecure(v, sizeof(v), "%d%%/s", (int)s.drainPct);
+        line("DRAIN %/s", v);
+    }
 
     if (s.formMax > 0) {
         FormatNum(s.formCur, a, sizeof(a)); FormatNum(s.formMax, b, sizeof(b));
@@ -233,6 +241,12 @@ void RenderSheet(const ExactStats::Stats& s)
         Platform::TextFormatSecure(v, sizeof(v), "-");
     }
     line("FORM POOL", v);
+
+    // Train 41: the Sand Shield's exact standing HP (Bounce 17).
+    if (s.shieldHP > 0) {
+        FormatNum(s.shieldHP, a, sizeof(a));
+        line("SHIELD HP", a);
+    }
 
     FormatNum(s.moveSpeed, a, sizeof(a));
     line("MOVE SPD", a);
@@ -283,7 +297,11 @@ void Render()
         x += DrawSlimChip(x, kLineBottom, label, 0xFFFFC040u) + kChipGap;
     }
 
-    if (s.drainPct > 0) {
+    if (s.drainExact > 0) {
+        FormatNum(s.drainExact, a, sizeof(a));
+        Platform::TextFormatSecure(label, sizeof(label), "-%s/s", a);
+        x += DrawSlimChip(x, kLineBottom, label, 0xFFFF7070u) + kChipGap;
+    } else if (s.drainPct > 0) {
         Platform::TextFormatSecure(label, sizeof(label), "-%d%%/s", (int)s.drainPct);
         x += DrawSlimChip(x, kLineBottom, label, 0xFFFF7070u) + kChipGap;
     }
