@@ -577,6 +577,20 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
         }
 
 
+        // MEAMU TRAIN 8 (2026-11-19): GIANT FORM AURA -- G's live
+        // verdict on Train 7: "i need a wayyyyy bigger glow. i cant
+        // see it at all. BIG HUGE GIGANTIC GLOW please". The form
+        // aura (0g Susanoo 228 + 0h Karane 229) outer halo goes from
+        // 46 to kFormAuraHalo world units (~x3; target read: glow
+        // diameter ~4-5x the character's height on screen). ONE
+        // constant drives BOTH forms; inner layers keep their
+        // Train 7 proportions to the halo, and the halo/ground
+        // alpha factors drop (0.26->0.16, 0.6->0.45) so the bigger
+        // disc stays a soft aura, not a solid disc. The 1500 ms
+        // breath cycle is unchanged; embers keep their orbit and
+        // cadence, size 0.6->0.9. Future tune = this one number.
+        static constexpr float kFormAuraHalo = 140.0f;
+
         // ── 0g. Aura Perfect Susanoo (DESVIACION, solo cliente;
         // MEAMU 2026-11-18, Train 7) ─────────────────────────────
         // G's order, verbatim: "give it a HUUUUUUUGE purple glow".
@@ -619,23 +633,23 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
             float suPos[3] = { AsObject(puVar13)->Position[0],
                                AsObject(puVar13)->Position[1],
                                AsObject(puVar13)->Position[2] };
-            float suHalo[3] = { suBase[0] * 0.26f, suBase[1] * 0.26f, suBase[2] * 0.26f };
-            Equipment_AddSprite(0x47e, suPos, 46.0f, suHalo,
+            float suHalo[3] = { suBase[0] * 0.16f, suBase[1] * 0.16f, suBase[2] * 0.16f };
+            Equipment_AddSprite(0x47e, suPos, kFormAuraHalo, suHalo,
                                 (intptr_t)puVar13, 0.0f, 0);
-            float suGround[3] = { suLight[0] * 0.6f, suLight[1] * 0.6f, suLight[2] * 0.6f };
-            Equipment_AddSprite(0x47e, suPos, 34.0f, suGround,
+            float suGround[3] = { suLight[0] * 0.45f, suLight[1] * 0.45f, suLight[2] * 0.45f };
+            Equipment_AddSprite(0x47e, suPos, kFormAuraHalo * 0.739f, suGround,
                                 (intptr_t)puVar13, 0.0f, 0);
             float suOff[3] = { 0.0f, 0.0f, 0.0f };
             float suBody[3];
             BMD_TransformPosition(pvVar23,
                 (float *)((intptr_t)AsObject(puVar13)->BoneMatrices + 0 * 0x30),
                 suOff, suBody, '\x01');
-            Equipment_AddSprite(0x47e, suBody, 23.0f, suLight,
+            Equipment_AddSprite(0x47e, suBody, kFormAuraHalo * 0.5f, suLight,
                                 (intptr_t)puVar13, 0.0f, 0);
             float suCore[3] = { suBase[0] + (1.0f - suBase[0]) * 0.40f,
                                 suBase[1] + (1.0f - suBase[1]) * 0.40f,
                                 suBase[2] + (1.0f - suBase[2]) * 0.40f };
-            Equipment_AddSprite(0x47e, suBody, 11.0f, suCore,
+            Equipment_AddSprite(0x47e, suBody, kFormAuraHalo * 0.239f, suCore,
                                 (intptr_t)puVar13, 0.0f, 0);
             const int suPhase = (int)(((intptr_t)puVar13 >> 5) & 0x3F);
             if ((((int)WorldTime + suPhase) % 120) < 16) {
@@ -647,7 +661,7 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
                                       suBody[1] + sinf(suAng) * suRad,
                                       suBody[2] };
                 Particle_Spawn(0x4ab, emberPos, (float *)(puVar13 + 7),
-                               suEmber, 0, 0.6f, 0);
+                               suEmber, 0, 0.9f, 0);
             }
         }
 
@@ -685,23 +699,23 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
             float kcPos[3] = { AsObject(puVar13)->Position[0],
                                AsObject(puVar13)->Position[1],
                                AsObject(puVar13)->Position[2] };
-            float kcHalo[3] = { kcBase[0] * 0.26f, kcBase[1] * 0.26f, kcBase[2] * 0.26f };
-            Equipment_AddSprite(0x47e, kcPos, 46.0f, kcHalo,
+            float kcHalo[3] = { kcBase[0] * 0.16f, kcBase[1] * 0.16f, kcBase[2] * 0.16f };
+            Equipment_AddSprite(0x47e, kcPos, kFormAuraHalo, kcHalo,
                                 (intptr_t)puVar13, 0.0f, 0);
-            float kcGround[3] = { kcLight[0] * 0.6f, kcLight[1] * 0.6f, kcLight[2] * 0.6f };
-            Equipment_AddSprite(0x47e, kcPos, 34.0f, kcGround,
+            float kcGround[3] = { kcLight[0] * 0.45f, kcLight[1] * 0.45f, kcLight[2] * 0.45f };
+            Equipment_AddSprite(0x47e, kcPos, kFormAuraHalo * 0.739f, kcGround,
                                 (intptr_t)puVar13, 0.0f, 0);
             float kcOff[3] = { 0.0f, 0.0f, 0.0f };
             float kcBody[3];
             BMD_TransformPosition(pvVar23,
                 (float *)((intptr_t)AsObject(puVar13)->BoneMatrices + 0 * 0x30),
                 kcOff, kcBody, '\x01');
-            Equipment_AddSprite(0x47e, kcBody, 23.0f, kcLight,
+            Equipment_AddSprite(0x47e, kcBody, kFormAuraHalo * 0.5f, kcLight,
                                 (intptr_t)puVar13, 0.0f, 0);
             float kcCore[3] = { kcBase[0] + (1.00f - kcBase[0]) * 0.45f,
                                 kcBase[1] + (0.38f - kcBase[1]) * 0.45f,
                                 kcBase[2] + (0.18f - kcBase[2]) * 0.45f };
-            Equipment_AddSprite(0x47e, kcBody, 11.0f, kcCore,
+            Equipment_AddSprite(0x47e, kcBody, kFormAuraHalo * 0.239f, kcCore,
                                 (intptr_t)puVar13, 0.0f, 0);
             const int kcPhase = (int)(((intptr_t)puVar13 >> 5) & 0x3F);
             if ((((int)WorldTime + kcPhase) % 120) < 16) {
@@ -713,7 +727,7 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
                                       kcBody[1] + sinf(kcAng) * kcRad,
                                       kcBody[2] };
                 Particle_Spawn(0x4ab, emberPos, (float *)(puVar13 + 7),
-                               kcEmber, 0, 0.6f, 0);
+                               kcEmber, 0, 0.9f, 0);
             }
         }
 

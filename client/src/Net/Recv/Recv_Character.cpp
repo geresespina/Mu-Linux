@@ -20,6 +20,7 @@
 #include "UI/MoveList.h"
 #include "UI/HealthBar.h"
 #include "Net/HpBars.h"
+#include "UI/RenaHud.h"
 #include "Net/Recv/NetRecv.h"
 #include "Net/ServerCharacterStats.h"
 
@@ -1347,6 +1348,11 @@ void NetRecv_F3(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         }
         case 0xF9: {  // MEAMU Train 2: Biju Powers proc visuals + bearer state (F3:F9)
             BijuProcVisuals::Receive((const BYTE*)Msg, Size);
+            break;
+        }
+        case 0xFA: {  // MEAMU Train 8: Rena balance push (F3:FA) — subcode is a
+                       // placeholder pending RENA-REPORT.md; see UI/RenaHud.h
+            RenaHud::Receive((const uint8_t*)Msg, Size);
             break;
         }
         case 0x30: {

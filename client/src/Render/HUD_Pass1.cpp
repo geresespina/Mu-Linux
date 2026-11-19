@@ -25,6 +25,7 @@
 #include "Render/ResourceTables.h"
 #include "Platform/Text.h"
 #include "UI/MiniMap.h"
+#include "UI/RenaHud.h"
 #include "globals.h"
 #include "structs.h"
 #include "functions.h"
@@ -514,6 +515,12 @@ void Render_HotbarItems3D_(void)
             }
             slot_x += 31;
         }
+
+        // MEAMU Train 8: Rena balance icon — the Rena item model
+        // in the bar's bottom-left corner, drawn with this pass's
+        // own item projection (number half lives in sub_4BD650;
+        // see UI/RenaHud). No-op until the GS pushes a balance.
+        RenaHud::RenderIcon3D();
     } else {
         // sub_4F54B0 — event-chip dialog renderer.  Not yet ported.
     }
