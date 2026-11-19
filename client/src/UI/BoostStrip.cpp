@@ -57,6 +57,7 @@ constexpr int kIconW = 16, kIconH = 18;
 // atlas (0x102) instead -- Train 2 combiner fix.
 void DrawSkillIcon(int skill, float x, float y)
 {
+    if (skill == 57) { GL_DrawTexture(0x0ca, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }
     if (skill == 58) { GL_DrawTexture(299, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }
     if (skill == 59) { GL_DrawTexture(0x134, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }
     if (skill == 60) { GL_DrawTexture(0x135, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }
@@ -65,6 +66,7 @@ void DrawSkillIcon(int skill, float x, float y)
     // Bond -> Jinchuriki texture, 73 Chakra Cloak -> 0x0c8, 74
     // Perfect Susanoo -> Biju texture, 75 Dragon Sage Mode -> 0x0c9.
     if (skill == 72) { GL_DrawTexture(0x135, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }
+    if (skill == 76) { GL_DrawTexture(0x135, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }
     if (skill == 73) { GL_DrawTexture(0x0c8, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }
     if (skill == 74) { GL_DrawTexture(0x106, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }
     if (skill == 75) { GL_DrawTexture(0x0c9, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }

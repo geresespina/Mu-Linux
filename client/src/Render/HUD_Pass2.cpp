@@ -284,6 +284,12 @@ void Render_ChatBox_(void)
     }
     // DESVIACION (Fase 4): selector de emojis junto al campo de texto.
     EmojiPicker::Render();
+    // MEAMU 2026-11-18 (Train 6, chat-glitch fix): the chat box
+    // always leaves with normalized GL state -- the passes that run
+    // after it (RenderExperience, the 1000L/240L HUD passes, the
+    // hotbar items) draw textured quads that trust the state the
+    // chat path leaves behind.
+    GL_ResetState();
 }
 
 void Render_ChatBox(void) { Render_ChatBox_(); }

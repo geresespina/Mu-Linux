@@ -399,6 +399,14 @@ void PacketHandler_0x19(BYTE* pkt)
         goto common_tail;
     }
 
+    case 0x4C:  // 76 Biju Legion (MEAMU 2026-11-18, Train 6 prep)
+    {
+        // Remote cast pose only -- mirror of 0x48. The legion
+        // itself is driven by the synced state, not by this packet.
+        SetAction(AsObject(caster), 63);
+        goto common_tail;
+    }
+
     case 0x49:  // 73 Chakra Cloak (MEAMU 2026-11-18)
     {
         // Remote cast pose only -- mirror of 0x3A. The cloak aura

@@ -21,6 +21,13 @@ constexpr int IconW = 16, IconH = 18, Gap = 2, BarY = 10, BarX = 110;
 
 void DrawSkillIcon(int skill, float x, float y)
 {
+    if (skill == 57) {
+        // MEAMU 2026-11-18 (Train 6 prep): Omni Buff -- dedicated
+        // texture (bitmap 0x0ca); it was the last mode-band skill
+        // falling through to the stock atlas row 7 (off-texture).
+        GL_DrawTexture(0x0ca, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        return;
+    }
     if (skill == 58) {
         // MEAMU 2026-11-15: Mangekyou Sharingan has no cell in the
         // 256px Skill.jpg atlas (row 7 falls off the texture); it
@@ -58,6 +65,12 @@ void DrawSkillIcon(int skill, float x, float y)
     if (skill == 72) {
         // MEAMU 2026-11-18 (Train 3): Biju Bond -- the bond ignites
         // Jinchuriki Mode, so it draws the Jinchuriki texture (0x135).
+        GL_DrawTexture(0x135, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        return;
+    }
+    if (skill == 76) {
+        // MEAMU 2026-11-18 (Train 6 prep): Biju Legion -- the
+        // soul-pet family skill, same Jinchuriki texture as 72.
         GL_DrawTexture(0x135, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
         return;
     }
@@ -249,6 +262,10 @@ void CBuffBar::Render()
         else {
             Gfx::Color4f(0.2f, 0.2f, 0.2f, 0.8f);
             GL_DrawRect((float)x, (float)BarY, (float)IconW, (float)IconH);
+            // MEAMU 2026-11-18 (Train 6): untextured rects leave
+            // Texture2D off behind the state flag's back -- restore
+            // so the icons drawn after this one stay textured.
+            GL_ResetState();
         }
         if (MouseX >= x && MouseX < x + IconW && MouseY >= BarY && MouseY < BarY + IconH) {
             hovered = &buff;
