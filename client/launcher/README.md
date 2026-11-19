@@ -5,7 +5,7 @@ Auto-updating starter for the MEAMU desktop client. Run
 
 - Reads the local version from the stamp embedded in `main.exe`
   (`vYYYYMMDD-HHMM`).
-- Fetches the live version config from `https://meamu.exmco.com`
+- Fetches the live version config from `https://meamu.ca`
   (`patchVersion` is the source of truth).
 - Out of date → downloads the update pack, verifies the new exe's stamp
   **before** swapping it in (the old exe is kept as

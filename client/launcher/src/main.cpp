@@ -2,7 +2,7 @@
 //
 // Drop MEAMU-Launcher.exe next to main.exe and run it instead of main.exe.
 // It reads the local client's version from the stamp embedded in main.exe
-// (vYYYYMMDD-HHMM), fetches the live version config from meamu.exmco.com,
+// (vYYYYMMDD-HHMM), fetches the live version config from meamu.ca,
 // downloads the update pack (or the full client when main.exe is missing),
 // verifies the new exe's stamp BEFORE swapping it in, then launches the game.
 //
@@ -37,7 +37,7 @@ namespace {
 // Constants
 // ---------------------------------------------------------------------------
 
-const wchar_t* kSiteHost = L"meamu.exmco.com";
+const wchar_t* kSiteHost = L"meamu.ca";
 // The site's live version config (same fields as config/downloads.json on the
 // server), published as a static file inside the downloads dir. The bare
 // /downloads.json path is the fallback if it is ever exposed directly.
@@ -234,7 +234,7 @@ HINTERNET OpenSession() {
 // request path on kSiteHost. Only our own host is ever contacted.
 std::wstring RequestPath(const std::string& urlOrPath) {
   std::wstring w = Utf8ToWide(urlOrPath);
-  const std::wstring prefix = L"https://meamu.exmco.com";
+  const std::wstring prefix = L"https://meamu.ca";
   if (w.compare(0, prefix.size(), prefix) == 0) return w.substr(prefix.size());
   if (!w.empty() && w[0] == L'/') return w;
   return L"/" + w;
