@@ -19,6 +19,7 @@
 #include "Platform/IInput.h"
 #include "Render/Camera3D.h"
 #include "Render/ActionCamera.h"
+#include "Input/ActionJump.h"    // MEAMU Train 24: gActionJump
 #include "Render/EquipmentVisuals.h"
 #include "Entity/ObjectPose.h"
 #include "Config/UserSettings.h"
@@ -1092,6 +1093,7 @@ bool __cdecl MoveMainCamera(void) {
     // MEAMU Train 14: Action Camera per-step update (lock state machine,
     // follow/facing easing). No-op unless the ACTION scheme engaged it.
     gActionCamera.Update();
+    gActionJump.Update();  // MEAMU Train 24: SPACE = JUMP hop arc (Action mode)
     float in1[3];
     float out[3];
     float matrix[3][4];

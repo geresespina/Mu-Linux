@@ -326,6 +326,7 @@ set(MU_SOURCES
     src/Input/NavMove.cpp
     src/Input/KbPlay.cpp
     src/Input/ActionMove.cpp
+    src/Input/ActionJump.cpp
 
     src/Item/Item_Equip.cpp
     src/Item/Item_EquipSlots.cpp
