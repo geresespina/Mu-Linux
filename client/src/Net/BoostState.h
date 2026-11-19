@@ -51,3 +51,17 @@
 // server-side WITHOUT a protocol change; this build's server
 // always sends PowerCount 0, and the render path below already
 // draws any entries that arrive.
+//
+// CLIENT COMPOSITION (MEAMU TRAIN 8 ADDENDUM, 2026-11-19): the
+// wire above is unchanged, but the strip no longer takes its
+// factor set, headline total or drain from this snapshot: the
+// snapshot predates the all-stack law (no Cloak/Dragon Sage
+// flag exists -- 0x40/0x80 are still reserved; the total counts
+// the clan factor once for Sage-or-Mangekyou; the drain byte
+// carries one mode's rate). CBoostStrip::Render composes those
+// from the hero's state bitmap via BoostCompose (UI/BoostStrip.h)
+// and uses this packet for the war bonus %, the power entries,
+// and fallback values. A future GS revision could retire the
+// composition by spending the two reserved flag bits, counting
+// both clan modes in the total, and sending the summed drain
+// (CCustomBijuHunt::ModeDrainPercentFor already computes it).
