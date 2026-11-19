@@ -264,19 +264,44 @@ void CBoostStrip::Render()
     RunSelfTestOnce(*this);
     if (SceneFlag != 5 || !m_Have) return;
 
-    const bool form = (m_Flags & kFlagForm) != 0;
-    const bool jinchuriki = (m_Flags & kFlagJinchuriki) != 0;
-    const bool sage = (m_Flags & kFlagSage) != 0;
-    const bool mangekyou = (m_Flags & kFlagMangekyou) != 0;
+    // MEAMU TRAIN 8 ADDENDUM (2026-11-19): factor truth comes
+    // from the hero's own state bitmap (entity+120, the DWORD
+    // the mode auras key off) whenever it can be read -- the
+    // wire snapshot has no Cloak / Dragon Sage flag, counts
+    // the clan modes once in its total, and its drain byte is
+    // a single mode's rate. The wire keeps the war bonus, the
+    // power entries, and the fallback for every value.
+    DWORD heroState = 0;
+    bool heroStateOk = false;
+    {
+        const BYTE* heroEnt = (const BYTE*)(uintptr_t)DAT_07abf5d8;
+        if (heroEnt && heroEnt[0]) {
+            heroState = *(const DWORD*)(heroEnt + 120);
+            heroStateOk = true;
+        }
+    }
+    const bool form       = heroStateOk ? (heroState & 0x2000) != 0 : (m_Flags & kFlagForm) != 0;
+    const bool jinchuriki = heroStateOk ? (heroState & 0x1000) != 0 : (m_Flags & kFlagJinchuriki) != 0;
+    const bool sage       = heroStateOk ? (heroState & 0x0800) != 0 : (m_Flags & kFlagSage) != 0;
+    const bool mangekyou  = heroStateOk ? (heroState & 0x0400) != 0 : (m_Flags & kFlagMangekyou) != 0;
+    const bool dragonSage = heroStateOk && (heroState & 0x8000) != 0;
+    const bool cloak      = heroStateOk && (heroState & 0x4000) != 0;
     const bool war = (m_Flags & kFlagWar) != 0;
+    const int totalMul = heroStateOk
+        ? BoostCompose::TotalMulX1000(mangekyou, sage, jinchuriki, dragonSage, cloak,
+                                      war ? (int)m_WarBonusPct : 0)
+        : (int)m_TotalMulX1000;
+    const int drainPct = heroStateOk
+        ? BoostCompose::DrainPctPerSec(mangekyou, sage, jinchuriki, form, dragonSage, cloak)
+        : (int)m_DrainPctPerSec;
 
     // Empty-state rule: product exactly x1.000, no form, no
     // factor, no drain, no powers = no strip at all. (A pet
     // alone shows nothing since the drain ruling: the drain
     // chip keys off the drain field, which is 0 with no beast
     // mode running.)
-    const bool headline = form || m_TotalMulX1000 != 1000;
-    if (!headline && !jinchuriki && !form && !sage && !mangekyou && !war && m_DrainPctPerSec == 0 && m_PowerCount == 0) return;
+    const bool headline = form || totalMul != 1000;
+    if (!headline && !jinchuriki && !form && !sage && !mangekyou && !dragonSage && !cloak && !war && drainPct == 0 && m_PowerCount == 0) return;
 
     int x = gWindow.PanelOrigin(Ui::WindowLeft) + kOrbX;
 
@@ -285,11 +310,16 @@ void CBoostStrip::Render()
     // product field stays live for the drop back to normal.
     if (headline) {
         char label[32];
+        char mul[16];
+        FormatMul(totalMul, mul, sizeof(mul));
         if (form) {
-            Platform::TextFormatSecure(label, sizeof(label), "FORM");
+            // MEAMU TRAIN 8 ADDENDUM: in form the headline keeps
+            // the FORM word AND gains the product -- the form
+            // funnel composes this same product over the form's
+            // pool-% base, so the number his hits use stays
+            // visible while transformed.
+            Platform::TextFormatSecure(label, sizeof(label), "FORM %s", mul);
         } else {
-            char mul[16];
-            FormatMul(m_TotalMulX1000, mul, sizeof(mul));
             Platform::TextFormatSecure(label, sizeof(label), "TOTAL %s", mul);
         }
         x += DrawChip(x, kStripBottom, kHeadlineH, 0, label, 0xFFFFC040u, true) + kChipGap;
@@ -315,10 +345,33 @@ void CBoostStrip::Render()
         x += DrawChip(x, kStripBottom, kFactorH, 61, label, 0xFFE6E6E6u, false) + kChipGap;
     }
 
-    if (sage || mangekyou) {
+    // MEAMU TRAIN 8 ADDENDUM: one chip per clan/dragon/cloak
+    // factor, each with its own icon and its true multiplier --
+    // the old combined chip drew ONE x1.25 (Sage icon winning
+    // over Mangekyou) even when both clan modes were stacked,
+    // and Cloak / Dragon Sage had no chip at all.
+    if (mangekyou) {
         char mul[16];
         FormatMul(1250, mul, sizeof(mul));
-        x += DrawChip(x, kStripBottom, kFactorH, sage ? 59 : 58, mul, 0xFFE6E6E6u, false) + kChipGap;
+        x += DrawChip(x, kStripBottom, kFactorH, 58, mul, 0xFFE6E6E6u, false) + kChipGap;
+    }
+
+    if (sage) {
+        char mul[16];
+        FormatMul(1250, mul, sizeof(mul));
+        x += DrawChip(x, kStripBottom, kFactorH, 59, mul, 0xFFE6E6E6u, false) + kChipGap;
+    }
+
+    if (dragonSage) {
+        char mul[16];
+        FormatMul(1250, mul, sizeof(mul));
+        x += DrawChip(x, kStripBottom, kFactorH, 75, mul, 0xFFE6E6E6u, false) + kChipGap;
+    }
+
+    if (cloak) {
+        char mul[16];
+        FormatMul(5000, mul, sizeof(mul));
+        x += DrawChip(x, kStripBottom, kFactorH, 73, mul, 0xFFE6E6E6u, false) + kChipGap;
     }
 
     if (war) {
@@ -327,13 +380,14 @@ void CBoostStrip::Render()
         x += DrawChip(x, kStripBottom, kFactorH, 0, label, 0xFF8FD8FFu, false) + kChipGap;
     }
 
-    if (m_DrainPctPerSec > 0) {
-        // Mode drain: shown while a beast mode runs (the server
-        // sends 0 otherwise); the %/s is the server's live drain
-        // config for whichever mode is active -- never a
-        // client-side constant.
+    if (drainPct > 0) {
+        // Mode drain. TRAIN 8 ADDENDUM: under the stack law the
+        // rates SUM (3%/s per transform + 8%/s Cloak), which the
+        // wire's single-rate byte cannot express -- the chip
+        // shows the composed sum from the hero bitmap (falling
+        // back to the wire byte when the bitmap is unreadable).
         char label[16];
-        Platform::TextFormatSecure(label, sizeof(label), "-%d%%/s", (int)m_DrainPctPerSec);
+        Platform::TextFormatSecure(label, sizeof(label), "-%d%%/s", drainPct);
         x += DrawChip(x, kStripBottom, kFactorH, 0, label, 0xFFFF7070u, false) + kChipGap;
     }
 

@@ -52,6 +52,7 @@
 
 #include "stdafx.h"
 #include "../Combat/Skills.h"
+#include "Render/BijuTransform.h"   // MEAMU TRAIN 8 ADDENDUM: NoteFormSource (0x19 witness feed)
 
 
 // Forward declarations for functions identified in decompilation
@@ -396,6 +397,11 @@ void PacketHandler_0x19(BYTE* pkt)
         // MEAMU TRAIN 7 (2026-11-19): SIN pose de casteo -- el
         // modo se enciende alrededor del personaje en su accion
         // actual (ruling de G); aura/forma = estado sincronizado.
+        // MEAMU TRAIN 8 ADDENDUM (2026-11-19): this cast is the
+        // witness that the shared form bit came from Biju Mode --
+        // BijuTransform records it per slot (the GS echoes 0x19 to
+        // the caster too, so the hero is covered by the same feed).
+        BijuTransform::NoteFormSource(caster, 61);
         goto common_tail;
     }
 
@@ -434,6 +440,11 @@ void PacketHandler_0x19(BYTE* pkt)
         // MEAMU TRAIN 7 (2026-11-19): SIN pose de casteo -- el
         // modo se enciende alrededor del personaje en su accion
         // actual (ruling de G); aura/forma = estado sincronizado.
+        // MEAMU TRAIN 8 ADDENDUM (2026-11-19): witness feed --
+        // with this cast recorded, BijuTransform resolves the
+        // form to the titan (228/229) even when a soul pet IS
+        // equipped (G's ruling: Susanoo = always the titan).
+        BijuTransform::NoteFormSource(caster, 74);
         goto common_tail;
     }
 

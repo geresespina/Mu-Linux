@@ -605,6 +605,13 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
         // as the purple titan, hero and remotes alike. Biju Mode
         // (beast known -> class 155-164) never enters here, and
         // the Cloak (0e) / Dragon Sage (0f) blocks are untouched.
+        // MEAMU TRAIN 8 ADDENDUM (2026-11-19): the gate now calls
+        // FormClassForEntity -- the render path's own decision,
+        // form-source aware: a witnessed Susanoo cast (74) resolves
+        // to 228/229 even WITH a soul pet equipped (G's ruling:
+        // Susanoo = always the titan), so this aura follows the
+        // titan body in that case too; Biju Mode (61) still never
+        // enters (its resolution is the beast class).
         // Scale: the titan stands at catalog scale 2.0 (~450 world
         // units of wingspan), so the shroud is built ~1.35x the
         // Jinchuriki aura (0d: halo 34 / suelo 25.2 / halo 16.5),
@@ -619,9 +626,7 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
         if (bVar7 == 0xFF && AsCharacter(puVar13)->Dead == 0 &&
             !gUserSettings.GetAntilag(ANTILAG_GLOW) &&
             (*(DWORD*)((BYTE*)puVar13 + 120) & 0x2000) != 0 &&
-            BijuTransform::FormClassForNamed(true,
-                BijuTransform::BeastFor((const CHARACTER*)puVar13),
-                EntityName::Get(puVar13)) == 228) {
+            BijuTransform::FormClassForEntity((const CHARACTER*)puVar13) == 228) {
             const float st7 = 0.5f - 0.5f * cosf(WorldTime * (2.0f * 3.14159265f / 1500.0f));
             float suBase[3] = { 0.40f + (0.60f - 0.40f) * st7,
                                 0.10f + (0.24f - 0.10f) * st7,
@@ -685,9 +690,7 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
         if (bVar7 == 0xFF && AsCharacter(puVar13)->Dead == 0 &&
             !gUserSettings.GetAntilag(ANTILAG_GLOW) &&
             (*(DWORD*)((BYTE*)puVar13 + 120) & 0x2000) != 0 &&
-            BijuTransform::FormClassForNamed(true,
-                BijuTransform::BeastFor((const CHARACTER*)puVar13),
-                EntityName::Get(puVar13)) == 229) {
+            BijuTransform::FormClassForEntity((const CHARACTER*)puVar13) == 229) {
             const float ct7 = 0.5f - 0.5f * cosf(WorldTime * (2.0f * 3.14159265f / 1500.0f));
             float kcBase[3] = { 0.50f + (0.74f - 0.50f) * ct7,
                                 0.04f + (0.08f - 0.04f) * ct7,

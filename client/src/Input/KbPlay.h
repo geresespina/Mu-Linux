@@ -11,7 +11,14 @@
 //   1..9, 0   select the quick-slot skill AND cast it (hold = repeat-cast)
 //   Tab       cycle/lock a combat target (hooked from HUD_HotkeyTick)
 //   Enter     talk to the nearest NPC (virtual click; hero walks up)
-//   Space     pickup stays the stock HUD handler (upgraded to true-nearest)
+//   Space     attack latch first (MEAMU Train 8 addendum, G 2026-11-19):
+//             a tap locks the closest attackable monster and the hero
+//             basic-attacks it continuously with no key held; the latch
+//             releases the moment the target dies/despawns, and a second
+//             tap cancels it. Keyboard-only exception to the pad no-latch
+//             law, ordered by G; the gamepad and F8/F9 are untouched.
+//             Only when nothing is in range (or the latch declines) does
+//             Space keep its stock HUD pickup job (true-nearest pick).
 //   F8        AUTO mode: keep casting the selected skill until toggled
 //             off, the mouse is grabbed, a modal opens, the scene changes
 //             or the hero dies. Chat does NOT stop it — while the chat
@@ -45,6 +52,12 @@
 
 void KbPlay_Tick();
 bool KbPlay_TabCycle();
+
+// Space hook called by HUD_HotkeyTick on the Space press edge (same
+// pattern as KbPlay_TabCycle): true when the tap latched a target or
+// cancelled the latch (Space consumed), false when Space keeps its
+// stock pickup job.
+bool KbPlay_SpaceTap();
 
 // The keyboard-controls master state (boot config + F9 flips). Read by the
 // Space pickup handler so OFF restores the stock first-in-pool pick.

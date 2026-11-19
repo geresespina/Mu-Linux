@@ -12,6 +12,7 @@
 #include "Item/ContentCatalog.h"
 #include "Entity/EntityName.h"
 #include "Render/BijuTransform.h"
+#include "Net/Recv/OwnedSummonMark.h"
 #include "globals.h"
 #include "functions.h"
 #include "Platform/PlatformHeaders.h"
@@ -28,6 +29,9 @@ void __cdecl CreateCharacterPointer(unsigned char *param_1, int Type,
     gContentCatalog.ClearEntityParts(param_1);
     // MEAMU BIJU TRANSFORM: tampoco hereda la transformacion del slot.
     BijuTransform::Clear(param_1);
+    // MEAMU (Train 8 addendum): tampoco hereda la marca de invocado propio
+    // (0x1F) — el cuerpo nuevo la gana solo si llega por ese paquete.
+    OwnedSummonMark::Clear(param_1);
     // 0.97.40: el nombre completo del slot anterior no se hereda.
     EntityName::Clear(param_1);
 
