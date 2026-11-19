@@ -75,6 +75,9 @@
 // keeps its stock minimap toggle).
 
 void KbPlay_Tick();
+// MEAMU Train 31: release the Space attack latch (scheme flip to
+// Action clears any latch — Action is manual movement only).
+void KbPlay_ClearAttackLatch();
 bool KbPlay_TabCycle();
 
 // Space hook called by HUD_HotkeyTick on the Space press edge (same

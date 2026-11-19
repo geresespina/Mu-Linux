@@ -586,6 +586,15 @@ void AimAndPark()
     // the helper's guard throttles it to a single attempt).
     if (t >= 0 && Cheb(hero, EntryAt(t)) > SelectedSkillDist())
         ActionMove_TryBlinkEngage(t, SelectedSkillDist());
+    // MEAMU Train 31 (G's law: Action = manual movement only): in the
+    // Action scheme the aim NEVER moves him — no locked walk-in, and
+    // the park lands on the hero himself, so AUTO and skill-holds cast
+    // in place at aim. The blink above is the only closer, and it is a
+    // teleport he triggers by attacking. Classic keeps the walk-in.
+    if (ActionMove_IsAction()) {
+        ParkOnCharacter(hero);
+        return;
+    }
     // MEAMU Train 20: while pointer-locked the park below is swallowed
     // and the held button's pipeline would walk toward the reticle
     // hover instead — close on the aim by direct route.
@@ -738,12 +747,17 @@ void AutoDriveStep()
         gAutoParkIdx = -2;   // park fresh when the drive resumes
         return;
     }
+    // MEAMU Train 31 (G's law: Action = manual movement only): AUTO
+    // never steers him in the Action scheme — no locked walk-in, and
+    // the park below lands on the hero (cast in place at aim), never
+    // on the aim character. Classic keeps the full steering.
+    const bool actionManual = ActionMove_IsAction();
     // MEAMU Train 20: while pointer-locked, close on the aim by direct
     // route — the park-and-hold steering below reads the pinned centre
     // cursor and can only ever walk toward the reticle hover. (Placed
     // after the physical-button yield above: a held physical button is
     // the player's moment, and no steering of any kind fills it.)
-    LockedWalkInStep(t, SelectedSkillDist());
+    if (!actionManual) LockedWalkInStep(t, SelectedSkillDist());
     const int cx = (int)DAT_083a427c, cy = (int)DAT_083a4278;   // MouseX / MouseY
     if (UiDist(cx, cy, ux, uy) <= kCursorAimPx) {
         AutoDriveButton();   // aim is under the cursor: hold, no park
@@ -753,7 +767,7 @@ void AutoDriveStep()
                           UiDist(ux, uy, gParkUiX, gParkUiY) > kParkDriftPx;
     const bool cursorIdle = (SDL_GetTicks() - gCursorChangeT) >= kCursorIdleMs;
     if (!PlayerMovingMouse() && (aimMoved || cursorIdle)) {
-        ParkOnCharacter(aimC);
+        ParkOnCharacter(actionManual ? hero : aimC);   // Train 31
         gAutoParkIdx = t;
         AutoDriveButton();
         return;
@@ -1315,6 +1329,10 @@ void SelfTestDrive()
 
 // The master state, for the Space pickup handler in Player_InputTick.cpp.
 bool KbPlay_Enabled() { return KbEnabled(); }
+
+// MEAMU Train 31: ActionMove's scheme flip calls this when entering
+// Action — a latch engaged in Classic never carries its walk-in over.
+void KbPlay_ClearAttackLatch() { AtkLatchRelease("scheme flip to Action", false); }
 
 // Tab hook for HUD_HotkeyTick: cycle the combat lock among attackable
 // monsters in range (nearest first, wrapping). True = Tab consumed.

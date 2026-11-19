@@ -1043,7 +1043,10 @@ void __cdecl Player_ProcessInput(void)
             const unsigned actSerial = Platform::RealInputSerial();
             if (actSerial != s_actSerialSeen) {
                 s_actSerialSeen = actSerial;
-                if (((unsigned short)Platform::GetInput().KeyState(1) & 0x8000) != 0) {
+                // MEAMU Train 31: the pressed-EDGE bit counts too —
+                // a press+release completed inside one step gap reads
+                // "up" at tick time and used to slip a click through.
+                if (((unsigned short)Platform::GetInput().KeyState(1) & 0x8001) != 0) {
                     DAT_083a4124 = 0;
                     DAT_083a413c = 0;
                     DAT_083a42c4 = 0;
@@ -1424,6 +1427,13 @@ void __cdecl Player_ProcessInput(void)
                         }
                         if (chebNow > 1 && !bowInRange)
                             ActionMove_TryBlinkEngage(SelectedCharacter, 1);
+                        // MEAMU Train 31: in Action, a refused blink
+                        // means NO movement — the route below never
+                        // runs for an out-of-reach click (manual
+                        // movement only). The click's only closer was
+                        // the blink.
+                        if (chebNow > 1 && !bowInRange && ActionMove_IsAction())
+                            goto end_tick_inc;
                     }
 
                     unsigned int ok2 = Path_FindRoute(srcX, srcY,
