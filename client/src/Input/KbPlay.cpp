@@ -150,7 +150,8 @@
 #include "Config/UserSettings.h" // gUserSettings ([Keyboard] Enable)
 #include "Input/Gamepad.h"       // Gamepad_IsDriving (cast yield), Gamepad_PadCastHeld (pad law)
 #include "Input/NavMove.h"       // NavMove_ArrowsHeld (NPC click guard)
-#include "Input/ActionMove.h"    // Train 13: scheme gate + blink-engage hook
+#include "Input/ActionMove.h"
+#include "Input/TargetLock.h"   // Train 48: verb-lock awareness    // Train 13: scheme gate + blink-engage hook
 #include "Platform/IInput.h"     // Platform::InputEvent, GetInput
 #include "Core/Window.h"         // gWindow
 #include "Entity/EntityTypes.h"  // CHARACTER, CHARACTER_STRIDE
@@ -428,7 +429,10 @@ int AcquireTarget(int skillDist)
     if (acq < 8) acq = 8;
     if (acq > 14) acq = 14;
 
-    if (ValidMonster(gLockIdx) && Cheb(hero, EntryAt(gLockIdx)) <= acq + 2)
+    // Train 48: a VERB lock (TargetLock) may hold a fabricated rival
+    // (ValidLatchTarget), not only a monster — same precedence slot.
+    if ((ValidMonster(gLockIdx) || (TargetLock_Active() && ValidLatchTarget(gLockIdx)))
+        && Cheb(hero, EntryAt(gLockIdx)) <= acq + 2)
         return gLockIdx;
     if (ValidLatchTarget(gLastIdx) && Cheb(hero, EntryAt(gLastIdx)) <= acq)
         return gLastIdx;
@@ -1464,8 +1468,8 @@ void KbPlay_Tick()
     if (AutoGates() && Attacking == 1 && ValidLatchTarget(DAT_00559c70))
         gLastIdx = DAT_00559c70;
     // A dead/gone lock clears silently.
-    if (gLockIdx >= 0 && (!AutoGates() || !ValidMonster(gLockIdx)))
-        gLockIdx = -1;
+    if (gLockIdx >= 0 && (!AutoGates() || (!ValidMonster(gLockIdx) && !TargetLock_Active())))
+        gLockIdx = -1;   // Train 48: verb locks are TargetLock_Tick's to clear
 
     // ── Digits: press = select + cast once, hold = repeat-cast ───────────────
     const bool modifiers = KeyHeld(0x11) || KeyHeld(0x12);   // Ctrl / Alt
@@ -1662,3 +1666,29 @@ void KbPlay_RenderAutoIndicator()
     if (!gAutoOn) return;
     UI_RenderText(532, 6, (char*)"AUTO", (LPSIZE)0x0, '\0', 0);
 }
+
+// ── Train 48: TargetLock bridges ─────────────────────────────────────
+// The lock state + predicates live in this TU's anonymous namespace;
+// TargetLock.cpp orchestrates the verb through these exports.
+int KbPlay_LockIndex() { return gLockIdx; }
+void KbPlay_LockSet(int idx)
+{
+    gLockIdx = idx;
+    if (idx >= 0) {
+        ParkOnCharacter(EntryAt(idx));   // stock target display = the marker
+        Say("Target: %s", EntityName::Get((char*)EntryAt(idx)));
+    }
+}
+void KbPlay_LockClear() { gLockIdx = -1; }
+bool KbPlay_LatchLegal(int idx) { return ValidLatchTarget(idx); }
+int KbPlay_TargetDist(int idx)
+{
+    if (!Hero || idx < 0 || idx >= 400) return 9999;
+    return Cheb(HeroC(), EntryAt(idx));
+}
+void KbPlay_TargetTile(int idx, int& tx, int& ty)
+{
+    CHARACTER* c = (idx < 0) ? HeroC() : EntryAt(idx);
+    tx = (int)c->PositionX; ty = (int)c->PositionY;
+}
+void KbPlay_SayText(const char* s) { Say("%s", s); }
