@@ -171,13 +171,15 @@ jobs:
         shell: bash
         run: |
           git clone --depth 1 https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
+          git -C "$VCPKG_ROOT" fetch --depth 1 origin 661e42cd1600603016ced1d76a15359e7dade9f5
+          git -C "$VCPKG_ROOT" checkout --detach FETCH_HEAD
           "$VCPKG_ROOT/bootstrap-vcpkg.bat" -disableMetrics
           mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
       - name: Caché de binarios de vcpkg
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/vcpkg-cache
-          key: vcpkg-x64-windows-mu-${{ hashFiles('client/vcpkg.json', 'client/vcpkg-configuration.json', 'client/cmake/triplets/x64-windows-mu.cmake') }}
+          key: vcpkg-x64-windows-mu-${{ hashFiles('client/vcpkg.json', 'client/vcpkg-configuration.json', 'client/cmake/triplets/x64-windows-mu.cmake') }}-${{ github.run_id }}
           restore-keys: vcpkg-x64-windows-mu-
       - name: Configurar
         run: cmake --preset windows-sdl3-x64-release
@@ -216,13 +218,15 @@ jobs:
       - name: Preparar vcpkg
         run: |
           git clone --depth 1 https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
+          git -C "$VCPKG_ROOT" fetch --depth 1 origin 661e42cd1600603016ced1d76a15359e7dade9f5
+          git -C "$VCPKG_ROOT" checkout --detach FETCH_HEAD
           "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
           mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
       - name: Caché de binarios de vcpkg
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/vcpkg-cache
-          key: vcpkg-x64-linux-${{ hashFiles('client/vcpkg.json', 'client/vcpkg-configuration.json') }}
+          key: vcpkg-x64-linux-${{ hashFiles('client/vcpkg.json', 'client/vcpkg-configuration.json') }}-${{ github.run_id }}
           restore-keys: vcpkg-x64-linux-
       - name: Configurar
         run: cmake --preset linux-x64-release
@@ -304,13 +308,15 @@ jobs:
       - name: Preparar vcpkg
         run: |
           git clone --depth 1 https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
+          git -C "$VCPKG_ROOT" fetch --depth 1 origin 661e42cd1600603016ced1d76a15359e7dade9f5
+          git -C "$VCPKG_ROOT" checkout --detach FETCH_HEAD
           "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
           mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
       - name: Caché de binarios de vcpkg
         uses: actions/cache@v4
         with:
           path: vcpkg-cache
-          key: vcpkg-x64-mingw-mu-${{ hashFiles('client/vcpkg.json', 'client/vcpkg-configuration.json', 'client/cmake/triplets/x64-mingw-mu.cmake', 'client/cmake/triplets/mingw-include/**') }}
+          key: vcpkg-x64-mingw-mu-${{ hashFiles('client/vcpkg.json', 'client/vcpkg-configuration.json', 'client/cmake/triplets/x64-mingw-mu.cmake', 'client/cmake/triplets/mingw-include/**') }}-${{ github.run_id }}
           restore-keys: vcpkg-x64-mingw-mu-
       - name: Configurar
         run: cmake --preset mingw-x64-webgpu-release
