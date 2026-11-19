@@ -1355,6 +1355,13 @@ void NetRecv_F3(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
             RenaHud::Receive((const uint8_t*)Msg, Size);
             break;
         }
+        case 0xFC: {  // MEAMU Train 10 + Bounce 11: fabricated-body flag
+                       // (F3:FC) — kind + owner for a fabricated player-kind
+                       // body; see Net/Recv/FabricatedMark.h
+            void Recv_FabricatedFlag(const BYTE* Msg, int Size);
+            Recv_FabricatedFlag((const BYTE*)Msg, Size);
+            break;
+        }
         case 0x30: {
             // ── ReceiveOption (IDA 0x436FB0) — PORT FIEL ─────────────────
             // Layout autoritativo del server MuEmu (Protocol.h,
