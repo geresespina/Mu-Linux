@@ -244,7 +244,8 @@ void NavMove_Tick()
     // steering, arrows yield (Gamepad checks NavMove_ArrowsHeld and yields
     // its own stick in turn — the two never fight over the cursor).
     const bool gates = inWorld && InputEnable == 0 && DAT_083a7c24 == 0 &&
-                       !ActionMove_DashBraking();   // Train 16: the dash brake kills this drive too
+                       !ActionMove_DashBraking() &&   // Train 16: the dash brake kills this drive too
+                       !(ActionMove_IsAction() && ActionMove_CameraLocked());  // Train 17: in ACTION+locked, ActionMove samples the arrows itself and direct-drives; this drive's held button would only route toward the pinned centre tile
     if (gates && gArrowsHeldRaw && !Gamepad_IsDriving()) {
         const float dx = (KeyHeld(39) ? 1.0f : 0.0f) - (KeyHeld(37) ? 1.0f : 0.0f);
         const float dy = (KeyHeld(40) ? 1.0f : 0.0f) - (KeyHeld(38) ? 1.0f : 0.0f);

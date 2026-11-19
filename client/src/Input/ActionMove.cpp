@@ -82,6 +82,16 @@ constexpr unsigned char kDashHead = 0xF3;
 constexpr unsigned char kDashSub  = 0xFD;
 constexpr unsigned char kDashModeDirection = 0;
 constexpr unsigned char kDashModeTarget    = 1;
+constexpr unsigned char kDashModeClickTp   = 2;   // Train 17 (Feature 3):
+                                        // double-click ground teleport --
+                                        // b5 = landing tile X, b6 = tile Y
+                                        // (map coords, one byte each).
+constexpr int   kClickTpRangeTiles = 8; // clamp ceiling for mode 2 = the
+                                        // GS dash MaxRange (Dash.txt,
+                                        // Bounce 13). G's clamp rule: a
+                                        // click beyond range lands at the
+                                        // furthest tile of the range along
+                                        // the hero->click line.
 
 // ── State ────────────────────────────────────────────────────────────────────
 bool          gInit       = false;
@@ -238,12 +248,95 @@ bool DashBrakeActive(unsigned now)
     return true;
 }
 
+// ── Direct drive (MEAMU Train 17 — bugs #5/#6: strafe/backpedal dead) ──────
+// While the Action Camera is POINTER-LOCKED, the park-and-hold drive
+// can never move the hero: Input_OnEvent's MouseMove case
+// (Input_WndProc.cpp) consumes every MouseMove as a camera look delta
+// when PointerLocked() and never writes the cursor globals, and
+// CActionCamera::Update() pins those globals to screen centre every
+// sim step. Player_ProcessInput's ground branch therefore raycasts the
+// SAME centre tile for every key — the tile along the camera forward —
+// so only "forward" ever produced steps (W looked fine by coincidence;
+// A/D/S routed forward too). The octant selection was never broken;
+// its output channel was.
+//
+// Fix: while locked, this module issues the move ITSELF, with the exact
+// tail Player_InputTick's ground-click branch uses — Path_FindRoute
+// into the hero's own path buffer, MovementType = 0,
+// Combat_SendMovePathPacket — aimed at the tile kStepTiles ahead in
+// the chosen octant. The virtual button stays UP while locked, so the
+// input tick cannot interleave centre routes. Re-issue mirrors
+// hold-to-move: on octant change, when the current route runs out
+// (Movement == 0), or on a 200 ms refresh once the target tile has
+// shifted with the hero; a 1-tile FindRoute fallback covers a blocked
+// 2-tile target, and no route at all = the hero stops, exactly like
+// clicking into a wall. GS pacing is unchanged (steps pace on
+// MoveSpeed server-side; one path packet per re-route, like a click).
+constexpr unsigned kDirectRefreshMs = 200;
+int      gDirectOx = 0, gDirectOy = 0;     // last issued octant
+int      gDirectTx = -1, gDirectTy = -1;   // last issued target tile
+unsigned gDirectIssueT = 0;                // last issue / failed attempt
+bool     gDirectValid = false;
+
+void ResetDirectDrive()
+{
+    gDirectValid = false;
+    gDirectTx = gDirectTy = -1;
+}
+
+// ReleaseDrive + forget the direct-drive route state. Used by the
+// tick's early-outs so a fresh press always issues immediately.
+void StopDrive()
+{
+    ReleaseDrive();
+    ResetDirectDrive();
+}
+
+void DirectDriveIssue(int ox, int oy, unsigned now)
+{
+    CHARACTER* hero = HeroC();
+    const int hx = (int)hero->PositionX;
+    const int hy = (int)hero->PositionY;
+    if (hero->Movement != 0) {
+        // Click-branch parity gate (Player_InputTick IDA gates): while
+        // walking, only re-route when the cached route start is still
+        // within 2 tiles of the hero's real position.
+        const int rx = (int)(hero->Object.Position[0] * 0.01f);
+        const int ry = (int)(hero->Object.Position[1] * 0.01f);
+        if (std::abs(hx - rx) >= 2 || std::abs(hy - ry) >= 2) return;
+    }
+    const int tx = hx + ox * kStepTiles;
+    const int ty = hy + oy * kStepTiles;
+    const bool octChanged = !gDirectValid || ox != gDirectOx || oy != gDirectOy;
+    if (!octChanged && (int)(now - gDirectIssueT) < (int)kDirectRefreshMs)
+        return;   // same octant, just issued (also caps wall retries)
+    if (!octChanged && hero->Movement != 0 && tx == gDirectTx && ty == gDirectTy)
+        return;   // already walking a route to this exact target
+    unsigned char* pathBuf =
+        (unsigned char*)((uintptr_t)hero + EntityOffset(0x354));
+    unsigned int ok = Path_FindRoute(hx, hy, tx, ty, pathBuf, 0.0f);
+    int usedTx = tx, usedTy = ty;
+    if ((char)ok == '\0') {
+        usedTx = hx + ox; usedTy = hy + oy;   // 1-tile fallback
+        ok = Path_FindRoute(hx, hy, usedTx, usedTy, pathBuf, 0.0f);
+    }
+    gDirectOx = ox; gDirectOy = oy;
+    gDirectTx = usedTx; gDirectTy = usedTy;
+    gDirectIssueT = now;
+    gDirectValid = true;
+    if ((char)ok == '\0') return;             // wall: no route, hero stops
+    hero->MovementType = 0;
+    Combat_SendMovePathPacket(hero, AsObject((uintptr_t)hero));
+}
+
 // ── Dash / blink wire (LIVE — DASH-WIRE.md) ──────────────────────────────────
 // Emits exactly: C1 07 F3 FD <mode> <b5> <b6>. For mode 1, keyOrDir is the
 // target's server object index (CHARACTER.Key, the viewport/attack-packet
 // index) split MAKE_NUMBERW-style: b5 = HB, b6 = LB. For mode 0, keyOrDir
 // is the engine Dir byte (see OctantOf) and b6 = 0.
-bool SendDashRequest(unsigned char mode, int keyOrDir)
+// The ONE choke point every dash frame passes through (modes 0/1 via
+// SendDashRequest below, mode 2 via ActionMove_TeleportToPoint).
+bool EmitDashFrame(unsigned char mode, BYTE b5, BYTE b6, const char* label)
 {
     // MEAMU Train 16 (Fix 4): STOP-THEN-SEND. Kill this module's movement
     // output and arm the dash brake BEFORE the request leaves, so no
@@ -253,6 +346,15 @@ bool SendDashRequest(unsigned char mode, int keyOrDir)
     // trip — the run-up G felt.)
     ReleaseDrive();
     ArmDashBrake((unsigned)SDL_GetTicks());
+    const BYTE pkt[7] = { 0xC1, 0x07, kDashHead, kDashSub, mode, b5, b6 };
+    gNetwork.SendC1(pkt, sizeof(pkt));
+    ActLog("ACTION-WIRE: %s sent — C1 07 F3 FD %02X %02X %02X",
+           label, (unsigned)mode, (unsigned)b5, (unsigned)b6);
+    return true;
+}
+
+bool SendDashRequest(unsigned char mode, int keyOrDir)
+{
     BYTE b5, b6;
     if (mode == kDashModeTarget) {
         b5 = (BYTE)((keyOrDir >> 8) & 0xFF);   // target index HB
@@ -261,12 +363,8 @@ bool SendDashRequest(unsigned char mode, int keyOrDir)
         b5 = (BYTE)(keyOrDir & 0xFF);          // engine Dir 0..7
         b6 = 0;
     }
-    const BYTE pkt[7] = { 0xC1, 0x07, kDashHead, kDashSub, mode, b5, b6 };
-    gNetwork.SendC1(pkt, sizeof(pkt));
-    ActLog("ACTION-WIRE: %s sent — C1 07 F3 FD %02X %02X %02X",
-           mode == kDashModeTarget ? "blink-to-target" : "dash",
-           (unsigned)mode, (unsigned)pkt[5], (unsigned)pkt[6]);
-    return true;
+    return EmitDashFrame(mode, b5, b6,
+        mode == kDashModeTarget ? "blink-to-target" : "dash");
 }
 
 // World octant of a tile delta, in the ENGINE's Dir numbering — the value
@@ -385,6 +483,46 @@ bool ActionMove_TryBlinkEngage(int targetIdx, int attackRangeTiles)
     return sent;
 }
 
+bool ActionMove_CameraLocked()
+{
+    return gActionCamera.PointerLocked();
+}
+
+// MEAMU Train 17 (Feature 3): double-click ground teleport, dash wire
+// mode 2. Player_InputTick's ground-click branch detects the physical
+// double-click and hands over the clicked tile; this function clamps
+// and sends. BOTH schemes (the dash system is scheme-wide, like blink):
+// DriveGates carries no scheme condition. Clamp (G's rule): a click
+// beyond kClickTpRangeTiles lands at the furthest tile of the range
+// along the hero->click line -- never a failed cast, never a short
+// hop; a click inside range lands exactly on the clicked tile.
+bool ActionMove_TeleportToPoint(int tileX, int tileY)
+{
+    if (!DriveGates()) return false;   // in-world, alive, chat/text
+                                       // closed, no error modal
+    CHARACTER* hero = HeroC();
+    const int hx = (int)hero->PositionX;
+    const int hy = (int)hero->PositionY;
+    const int dx = tileX - hx, dy = tileY - hy;
+    const int adx = std::abs(dx), ady = std::abs(dy);
+    const int cheb = adx > ady ? adx : ady;
+    if (cheb == 0) return false;       // clicked the hero's own tile
+    int tx = tileX, ty = tileY;
+    bool clamped = false;
+    if (cheb > kClickTpRangeTiles) {
+        const float s = (float)kClickTpRangeTiles / (float)cheb;
+        tx = hx + (int)lroundf((float)dx * s);
+        ty = hy + (int)lroundf((float)dy * s);
+        clamped = true;
+    }
+    if (tx < 0 || ty < 0 || tx > 255 || ty > 255) return false;
+    const bool sent = EmitDashFrame(kDashModeClickTp, (BYTE)tx, (BYTE)ty,
+                                    "click-teleport");
+    ActLog("ACTION: click-teleport to (%d,%d)%s", tx, ty,
+           clamped ? " (clamped: click was beyond range)" : "");
+    return sent;
+}
+
 void ActionMove_Tick()
 {
     if (!gInit) {
@@ -405,8 +543,8 @@ void ActionMove_Tick()
         FlipScheme();
     gGravePrev = grave;
 
-    if (!ActionMove_IsAction()) { ReleaseDrive(); return; }
-    if (!DriveGates() || Gamepad_IsDriving()) { ReleaseDrive(); return; }
+    if (!ActionMove_IsAction()) { StopDrive(); return; }
+    if (!DriveGates() || Gamepad_IsDriving()) { StopDrive(); return; }
 
     // ── Held direction (screen space: x right, y down) ───────────────────────
     const int wantX = (KeyHeld(0x44) || KeyHeld(39) ? 1 : 0) -
@@ -423,7 +561,7 @@ void ActionMove_Tick()
     // clears on landing, the still-held keys resume the drive on the
     // next tick (correct shooter behaviour); the steps BEFORE the
     // teleport were the bug.
-    if (DashBrakeActive(now)) { ReleaseDrive(); return; }
+    if (DashBrakeActive(now)) { StopDrive(); return; }
     bool anyHeld = false, anyLive = false;
     for (int s = 0; s < 4; ++s) {
         if (!gTaps[s].held) continue;
@@ -431,7 +569,7 @@ void ActionMove_Tick()
         if (!gTaps[s].consumed) anyLive = true;
     }
     if (!anyHeld || (wantX == 0 && wantY == 0) || !anyLive) {
-        ReleaseDrive();
+        StopDrive();
         return;
     }
 
@@ -501,9 +639,20 @@ void ActionMove_Tick()
             while (face > 180.0f) face -= 360.0f;
             while (face <= -180.0f) face += 360.0f;
             hero->Object.Angle[2] = face;
+            // MEAMU Train 17: while locked, the park below can never
+            // reach the game (Input_OnEvent eats MouseMove as a look
+            // delta; the camera pins the cursor globals to centre) --
+            // drive directly instead, and keep the virtual button up
+            // so Player_ProcessInput does not interleave routes toward
+            // the pinned centre tile. See DirectDriveIssue.
+            SetButton(false);
+            gParkValid = false;
+            DirectDriveIssue(bestOx, bestOy, now);
+            return;
         }
     } else {
         // Projection degenerate (should not happen): NavMove's screen park.
+        if (gActionCamera.PointerLocked()) { StopDrive(); return; }
         parkX = winW * 0.5f + wx * radius;
         parkY = winH * 0.5f + wy * radius;
     }

@@ -78,7 +78,7 @@ private:
     bool  m_Locked       = false;
     bool  m_HasYaw       = false;
     float m_CamYaw       = -45.0f;  // degrees, CameraAngle[2] convention
-    float m_Pitch        = 10.0f;   // camera elevation above the aim point (default 10 deg, Train 16; band 4..38 deg)
+    float m_Pitch        = 15.0f;   // camera elevation above the aim point = view-axis depression (default 15 deg, Train 18; band 6..45 deg)
     float m_LastHeroX    = 0.0f;
     float m_LastHeroY    = 0.0f;
     unsigned m_Step      = 0;

@@ -29,11 +29,18 @@ namespace {
                                             // in CAMFIX-REPORT — the hero now sits
                                             // in the lower third across the band)
     const float kShoulderRight  = 55.0f;    // GTA-style right-shoulder offset
-    const float kPitchMin       = 4.0f;     // camera elevation band, degrees:
-    const float kPitchMax       = 38.0f;    //   look pitch is -38..-4
-                                            // (Train 16: was 8..60 — at 60 the
-                                            // camera went near-top-down and G
-                                            // lost his character in frame)
+    const float kPitchMin       = 6.0f;     // camera elevation band, degrees.
+    const float kPitchMax       = 45.0f;    // m_Pitch is the TRUE elevation of
+                                            // the camera above the aim point —
+                                            // and, since Train 18, also the true
+                                            // view-axis depression (see the
+                                            // ApplyCamera note: CameraAngle[0]
+                                            // is measured from the vertical in
+                                            // this engine). Band 6..45 =
+                                            // over-shoulder flat .. steep-but-
+                                            // never-top-down. (Train 16's 4..38
+                                            // nominal band really delivered
+                                            // 86..52 degrees of depression.)
     const float kYawSens        = 0.22f;    // degrees per mouse pixel
     const float kPitchSens      = 0.18f;
     const float kFollowEase     = 0.12f;    // per 25 Hz step, shortest arc
@@ -173,17 +180,23 @@ void CActionCamera::OnMouseDelta(int dx, int dy)
     if (!m_Locked) return;
     if (dx == 0 && dy == 0) return;
     m_CamYaw = NormalizeDeg(m_CamYaw + (float)dx * kYawSens);
-    // MEAMU Train 16 (Fix 1 — G's playtest: the shipped pitch response
-    // felt INVERTED): SDL reports dy > 0 when the mouse moves DOWN, and
-    // m_Pitch is the camera ELEVATION above the aim point. The shipped
-    // code did m_Pitch += dy*sens, so mouse-up (dy<0) sank the camera
-    // toward the ground and mouse-down raised it. Flipped: mouse-up now
-    // raises the elevation, mouse-down lowers it — the response G asked
-    // for. Yaw is unchanged on purpose: forward = (sin yaw, cos yaw),
+    // Pitch response (Train 18 — read with the ApplyCamera note below):
+    // m_Pitch is the view-axis depression = camera elevation above the
+    // aim point. "Look up" (mouse up, dy < 0) must DECREASE the
+    // depression so the sightline rises toward the horizon; mouse down
+    // increases it (look down at the ground around the hero). Hence +=.
+    // History: 1224 shipped += against the broken axis mapping (the
+    // engine reads CameraAngle[0] from the vertical, so the delivered
+    // depression was 90 - pitch and mouse-up plunged the view at the
+    // hero's feet — the inversion G reported). Train 16 flipped the sign
+    // (-=) but kept the broken mapping, which made mouse-up flatten the
+    // axis only as far as 52 degrees. With the mapping fixed in
+    // ApplyCamera, += is the standard non-inverted response again.
+    // Yaw is unchanged on purpose: forward = (sin yaw, cos yaw),
     // right = (cos yaw, -sin yaw), so dx > 0 (mouse right) grows the
     // yaw and rotates the view toward the hero's right — already the
     // standard direction (audit in CAMFIX-REPORT).
-    m_Pitch -= (float)dy * kPitchSens;
+    m_Pitch += (float)dy * kPitchSens;
     if (m_Pitch < kPitchMin) m_Pitch = kPitchMin;
     if (m_Pitch > kPitchMax) m_Pitch = kPitchMax;
     m_LastLookStep = m_Step;
@@ -284,7 +297,20 @@ bool CActionCamera::ApplyCamera(float distanceZoom)
     CameraPosition[0] = cx;
     CameraPosition[1] = cy;
     CameraPosition[2] = cz;
-    CameraAngle[0] = EarthQuake - m_Pitch;
+    // MEAMU Train 18 — THE ANGLE BUG. This engine measures CameraAngle[0]
+    // from the VERTICAL: GL_BeginViewport (Render/Camera.cpp) builds the
+    // view as Ry(a1)·Rx(a0)·Rz(a2), whose forward is
+    // (-sin a0·sin a2, -sin a0·cos a2, -cos a0), so the view-axis
+    // depression is 90 - |a0|. Proof by the stock camera: a0 = -48.5
+    // (gCamera3D pitch default) delivers 41.5 degrees of depression,
+    // matching its position geometry (850 up / 1000 back = 40.4 deg).
+    // Trains 14/16 wrote EarthQuake - m_Pitch here, i.e. they delivered
+    // depression 90 - m_Pitch (band 4..38 nominal = 86..52 real: always
+    // top-down, hero off-frame except at the steep end). Writing
+    // EarthQuake - (90 - m_Pitch) makes the delivered depression exactly
+    // m_Pitch, and the axis passes through the aim point again (the
+    // position above already sits at elevation m_Pitch over the aim).
+    CameraAngle[0] = EarthQuake - (90.0f - m_Pitch);
     CameraAngle[1] = 0.0f;
     CameraAngle[2] = m_CamYaw;
     CameraDistance = dist;
