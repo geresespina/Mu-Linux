@@ -62,6 +62,14 @@ void ActionMove_Tick();
 // gate). CLASSIC always reads false.
 bool ActionMove_IsAction();
 
+// MEAMU Train 16 (Fix 4): true while a dash/blink request is in flight
+// and movement output must stay killed — from the send frame until the
+// teleport lands (hero tile changes), a fresh direction press takes
+// control back, or the 600 ms silent-refusal timeout lapses. Read by
+// Player_InputTick (walk-in move packet), NavMove (arrow/follow drives)
+// and ActionMove's own drive.
+bool ActionMove_DashBraking();
+
 // THE shared scheme accessor (Train 14's pointer-lock camera keys off
 // this same state — wire it here, not to the settings object, so the
 // runtime cache and the persisted value can never disagree mid-frame).
