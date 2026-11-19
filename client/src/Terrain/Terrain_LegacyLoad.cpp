@@ -130,17 +130,27 @@ int __cdecl OpenTerrainAttribute(const char *FileName) {
 
     if (DAT_083a410c == '\0') {
         // Per-world magic byte check (sanity vs distributed .att files).
+        // MEAMU Train 38 (2026-11-19): a magic mismatch now WARNS and
+        // ACCEPTS. It used to reject the whole load — and because the
+        // memcpy above had already run, the map kept half-valid data
+        // while the caller fell through to the Enc file (wrong size,
+        // also rejected): Devias ran on a broken wall map and the WASD
+        // drive failed against phantom walls (848 A* FAILs in one
+        // session log). Root cause was data drift (the Nov 18 lake
+        // edit reached the server file + this check's expectation but
+        // never the client data — fixed in the same train). Header and
+        // >=0x80 corruption stay fatal; a one-byte sanity drift must
+        // never nuke a map again.
+        bool magicBad = false;
         switch (gMapManager.GetCurrentMap()) {
-        case 0: if (TerrainWall[31623] != 5) Error = true; break;
-        case 1: if (TerrainWall[30947] != 4) Error = true; break;
-        // MEAMU 2026-11-18 (Train 6): the map-2 magic byte sits on tile
-        // (208,55), INSIDE the Devias lake rect whose safe-zone bit was
-        // cleared on both server + client Terrain3.att -- its attr is
-        // now 4 (was 5), so 4 is the expected value.
-        case 2: if (TerrainWall[14288] != 4) Error = true; break;
-        case 3: if (TerrainWall[30650] != 5) Error = true; break;
-        case 4: if (TerrainWall[19393] != 5) Error = true; break;
+        case 0: if (TerrainWall[31623] != 5) magicBad = true; break;
+        case 1: if (TerrainWall[30947] != 4) magicBad = true; break;
+        case 2: if (TerrainWall[14288] != 4) magicBad = true; break;
+        case 3: if (TerrainWall[30650] != 5) magicBad = true; break;
+        case 4: if (TerrainWall[19393] != 5) magicBad = true; break;
         }
+        if (magicBad)
+            DbgLogPublic("OpenTerrainAttribute: magic byte mismatch (accepted — data drift, see Train 38)");
     }
     for (int i = 0; i < 65536; ++i) {
         if (TerrainWall[i] >= 0x80) { Error = true; break; }

@@ -505,7 +505,23 @@ void NetRecv_18(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
     };
     bool walking = (AsCharacter(slot)->Class & 7) == 2;
 
-    switch (action) {
+    // MEAMU Train 38 (2026-11-19): the channel Train 33 missed. This
+    // handler animates the caster from the GS action broadcast — hero
+    // included — and its skill-action cases (18, 108..131) SetAnim a
+    // cast pose. A mode toggle's echo lands here and the hero swings,
+    // even though every 0x19/0x1A/0x1E feed is inert. The packet
+    // carries no skill id, but the hero's CurrentSkill (set by every
+    // local cast) names what he just cast: if it is a mode skill,
+    // the skill-action anims are skipped for the hero. Basic attacks
+    // (100/101) and stops (102/103) are NOT casts and stay live, and
+    // a real skill sets CurrentSkill to itself before its echo
+    // returns, so real casts keep their poses.
+    const bool heroModeCast = isHero &&
+        BijuTransform::IsModeTransformSkill(AsCharacter(slot)->CurrentSkill);
+    if (heroModeCast && (action == 18 || (action >= 108 && action <= 131))) {
+        // Mode toggle echo: no pose. The mode's own visuals (aura,
+        // burst, sound) are state-bit driven and unaffected.
+    } else switch (action) {
     case 18:
         SetAnim(slot, 92);
         PlayBuffer(81, 0, 0);
