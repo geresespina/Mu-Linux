@@ -59,7 +59,7 @@ public:
     int ReticlePick() const;
 
     // Centre reticle, drawn in the HUD pass while pointer-locked.
-    void RenderReticle();
+    // Train 21: RenderReticle removed (G: no crosshair).
 
     // True while any cursor-owning UI is up (inventory, character, shop,
     // warehouse, chaos mix, trade, guild, party, event/NPC dialog,

@@ -86,10 +86,9 @@ void __cdecl RenderInformation(void) {
     // DESVIACION: menú D y ventana de historial de chat, sobre los paneles DLL.
     gCommandMenu.Render();
     gChatLogWindow.Render();
-    // MEAMU Train 14: centre reticle while pointer-locked; the software
-    // cursor is suppressed (the lock hides the OS cursor and the logical
-    // cursor is parked at the centre, under the reticle).
-    gActionCamera.RenderReticle();
+    // MEAMU Train 21: centre reticle REMOVED (G's verdict 2026-11-19 -
+    // "remove the crosshair"). Aim picking (ReticlePick) is untouched;
+    // only the visible cross is gone.
     if (!gActionCamera.PointerLocked()) Cursor_Render(); // RenderCursor
     RenderInfomation3D(); // RenderInfomation3D
 }

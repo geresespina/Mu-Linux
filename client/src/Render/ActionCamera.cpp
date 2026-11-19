@@ -345,19 +345,5 @@ int CActionCamera::ReticlePick() const
     return best;
 }
 
-void CActionCamera::RenderReticle()
-{
-    if (!m_Locked) return;
-    const float cx = (float)ScreenCentreX();
-    const float cy = 240.0f;
-    EnableAlphaTest(true);
-    EnableAlphaBlend();
-    Gfx::Color4f(1.0f, 1.0f, 1.0f, 0.85f);
-    GL_DrawRect(cx - 9.0f, cy - 1.0f, 7.0f, 2.0f);   // left arm
-    GL_DrawRect(cx + 2.0f, cy - 1.0f, 7.0f, 2.0f);   // right arm
-    GL_DrawRect(cx - 1.0f, cy - 9.0f, 2.0f, 7.0f);   // top arm
-    GL_DrawRect(cx - 1.0f, cy + 2.0f, 2.0f, 7.0f);   // bottom arm
-    GL_DrawRect(cx - 1.0f, cy - 1.0f, 2.0f, 2.0f);   // centre dot
-    Gfx::Color4f(1.0f, 1.0f, 1.0f, 1.0f);
-    GL_ResetState();
-}
+// MEAMU Train 21: RenderReticle() removed - G ordered the crosshair gone
+// (2026-11-19). ReticlePick() above stays: aim targeting is unchanged.
