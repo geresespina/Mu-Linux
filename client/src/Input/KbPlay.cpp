@@ -150,6 +150,7 @@
 #include "Config/UserSettings.h" // gUserSettings ([Keyboard] Enable)
 #include "Input/Gamepad.h"       // Gamepad_IsDriving (cast yield), Gamepad_PadCastHeld (pad law)
 #include "Input/NavMove.h"       // NavMove_ArrowsHeld (NPC click guard)
+#include "Input/ActionMove.h"    // Train 13: scheme gate + blink-engage hook
 #include "Platform/IInput.h"     // Platform::InputEvent, GetInput
 #include "Core/Window.h"         // gWindow
 #include "Entity/EntityTypes.h"  // CHARACTER, CHARACTER_STRIDE
@@ -537,6 +538,14 @@ void AimAndPark()
 {
     CHARACTER* hero = HeroC();
     const int t = ComputeAim();
+    // MEAMU Train 13 (blink-engage): a valid aim target beyond the skill's
+    // reach gets ONE blink request per engagement instead of relying on
+    // the combat walk-in alone; if the server refuses or never answers,
+    // the park + hold below walks in exactly as before. This is AUTO's
+    // gap-closer too (the AUTO drive aims through here every tick, and
+    // the helper's guard throttles it to a single attempt).
+    if (t >= 0 && Cheb(hero, EntryAt(t)) > SelectedSkillDist())
+        ActionMove_TryBlinkEngage(t, SelectedSkillDist());
     ParkOnCharacter(t >= 0 ? EntryAt(t) : hero);
 }
 
@@ -1316,7 +1325,12 @@ bool KbPlay_TabCycle()
 // the drive in the tick already ran switch-free on AutoGates().
 bool KbPlay_SpaceTap()
 {
+    // MEAMU Train 13: in the ACTION control scheme the Space latch does
+    // not engage — mouse aim owns targeting there — so Space keeps its
+    // stock pickup job. CLASSIC is untouched.
+    if (ActionMove_IsAction()) return false;
     if (!Gates()) return false;
+
     if (gAtkLatchIdx >= 0) {
         AtkLatchRelease("space tap", true);
         return true;

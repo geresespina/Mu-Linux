@@ -49,6 +49,7 @@
 #include "Input/Gamepad.h"
 #include "Input/NavMove.h"
 #include "Input/KbPlay.h"
+#include "Input/ActionMove.h"
 #include "UI/HealthBar.h"
 #include "Scene/Scene.h"
 #include "Sound/SoundManager.h"
@@ -722,6 +723,8 @@ int main(int, char**)
         Gamepad_Tick();
         NavMove_Tick();
         KbPlay_Tick();
+        ActionMove_Tick();
+
         HealthBar_SelfTestTick();   // MEAMU: env-gated Biju HP-bar gate check (no-op unset)
         Targeting_SelfTestTick();  // MEAMU rival targeting rig (MU_TARGET_SELFTEST=1)
         if (Platform::GetWindow().CloseRequested()) break;

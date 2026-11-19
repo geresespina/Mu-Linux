@@ -84,6 +84,13 @@ struct UserFontSettings {
     int  strikeOut    = 0;
 };
 
+// MEAMU Train 13 (2026-11-19): esquema de control del jugador, Config.ini
+// [Controls] Scheme. CLASSIC = el click-to-move de siempre (default; un
+// Config.ini sin la clave se comporta EXACTAMENTE como antes de Train 13).
+// ACTION = WASD relativo a la camara + apuntado con el mouse (hover), sin
+// click-to-move; ver Input/ActionMove.h.
+enum class ControlScheme { Classic = 0, Action = 1, Count };
+
 // Backend de render pedido en [Window] RenderBackend. Se aplica al arrancar;
 // si el ejecutable no trae WebGPU, o el dispositivo no se crea, queda OpenGL.
 enum class RenderBackendPreference { OpenGL, Auto, D3D12, D3D11, Vulkan, Count };
@@ -159,6 +166,9 @@ public:
     // (Config.ini [Keyboard] Enable; F9 in game). Missing key = enabled.
     bool GetKeyboardEnable() const { return m_KeyboardEnable; }
     void SetKeyboardEnable(bool enabled);
+    // MEAMU Train 13: esquema de control ([Controls] Scheme, ver arriba).
+    ControlScheme GetControlScheme() const { return m_ControlScheme; }
+    void SetControlScheme(ControlScheme scheme);
     int GetGamepadDeadzone() const { return m_GamepadDeadzone; }       // percent 5..60
     int GetGamepadCursorSpeed() const { return m_GamepadCursorSpeed; } // px/s 100..3000
     bool GetDeleteHealthBar() const { return m_Antilag[ANTILAG_HEALTH_BAR]; }
@@ -244,6 +254,8 @@ private:
     int  m_MusicLevel  = -1;
     bool m_GamepadEnable = true;
     bool m_KeyboardEnable = true;
+    ControlScheme m_ControlScheme = ControlScheme::Classic;
+
     int  m_GamepadDeadzone = 25;
     int  m_GamepadCursorSpeed = 900;
     bool m_Antilag[MAX_ANTILAG] = {};

@@ -29,7 +29,9 @@ enum class ClientTextId {
     InvasionAlive,
     CmdMenuTitle, CmdTrade, CmdParty, CmdGuild,
     ChatLogTitle, ChatLogEmpty,
+    ControlScheme, ControlClassic, ControlAction,
     Count
+
 };
 // Los textos salen del server (F3/F0, tabla 4, Data/Text/<idioma>/Client.txt).
 // Lo que el server no manda sale del inglés que trae el cliente.
