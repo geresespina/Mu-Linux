@@ -44,8 +44,8 @@ constexpr int   kBurstMedium     = 9;
 constexpr int   kBurstHeavy      = 18;
 constexpr int   kBurstDeath      = 26;
 constexpr uint32_t kThrottleMs   = 40;
-constexpr uint32_t kDeathSplatMs = 10000;
-constexpr uint32_t kHitSplatMs   = 6000;
+constexpr uint32_t kDeathSplatMs = 60000;  // MEAMU 2026-11-18 (Train 6-i): blood lasts longer — death splats 60 s (G's order)
+constexpr uint32_t kHitSplatMs   = 20000;   // MEAMU 2026-11-18 (Train 6-i): hit splats 20 s
 constexpr uint32_t kFlashMs      = 220;
 
 struct Splat {
