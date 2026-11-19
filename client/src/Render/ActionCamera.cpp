@@ -24,10 +24,16 @@ CActionCamera gActionCamera;
 // stock camera sits ~1312 units from the hero (1000 horizontal + 850 up).
 namespace {
     const float kFollowDistance = 620.0f;
-    const float kAimHeight      = 110.0f;   // aim point above the hero origin
+    const float kAimHeight      = 80.0f;    // aim point above the hero origin
+                                            // (Train 16: 110 -> 80; framing math
+                                            // in CAMFIX-REPORT — the hero now sits
+                                            // in the lower third across the band)
     const float kShoulderRight  = 55.0f;    // GTA-style right-shoulder offset
-    const float kPitchMin       = 8.0f;     // camera elevation band, degrees:
-    const float kPitchMax       = 60.0f;    //   look pitch is -60..-8
+    const float kPitchMin       = 4.0f;     // camera elevation band, degrees:
+    const float kPitchMax       = 38.0f;    //   look pitch is -38..-4
+                                            // (Train 16: was 8..60 — at 60 the
+                                            // camera went near-top-down and G
+                                            // lost his character in frame)
     const float kYawSens        = 0.22f;    // degrees per mouse pixel
     const float kPitchSens      = 0.18f;
     const float kFollowEase     = 0.12f;    // per 25 Hz step, shortest arc
@@ -167,7 +173,17 @@ void CActionCamera::OnMouseDelta(int dx, int dy)
     if (!m_Locked) return;
     if (dx == 0 && dy == 0) return;
     m_CamYaw = NormalizeDeg(m_CamYaw + (float)dx * kYawSens);
-    m_Pitch += (float)dy * kPitchSens;
+    // MEAMU Train 16 (Fix 1 — G's playtest: the shipped pitch response
+    // felt INVERTED): SDL reports dy > 0 when the mouse moves DOWN, and
+    // m_Pitch is the camera ELEVATION above the aim point. The shipped
+    // code did m_Pitch += dy*sens, so mouse-up (dy<0) sank the camera
+    // toward the ground and mouse-down raised it. Flipped: mouse-up now
+    // raises the elevation, mouse-down lowers it — the response G asked
+    // for. Yaw is unchanged on purpose: forward = (sin yaw, cos yaw),
+    // right = (cos yaw, -sin yaw), so dx > 0 (mouse right) grows the
+    // yaw and rotates the view toward the hero's right — already the
+    // standard direction (audit in CAMFIX-REPORT).
+    m_Pitch -= (float)dy * kPitchSens;
     if (m_Pitch < kPitchMin) m_Pitch = kPitchMin;
     if (m_Pitch > kPitchMax) m_Pitch = kPitchMax;
     m_LastLookStep = m_Step;

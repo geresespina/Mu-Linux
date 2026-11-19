@@ -526,7 +526,17 @@ static void HUD_HotkeyTick(void)
     // DESVIACION (DLL Controller.cpp): menú M con destinos recibidos del server.
     if (kM) gMoveList.Toggle();
     // DESVIACION: menú D de comandos sobre el objetivo (trade/party/guild).
-    if (kD) gCommandMenu.Toggle();
+    // MEAMU Train 16 (Fix 3): in the ACTION scheme D is strafe-right, not
+    // a menu key — while the scheme is live and WASD can drive (the same
+    // input terms as ActionMove's DriveGates: chat/text input closed —
+    // InputEnable!=0 has already returned above, so typing a "d" in chat
+    // is untouched — and no modal byte up), the binding is suppressed.
+    // W/A/S have no UI binding anywhere in this fork (audit in
+    // CAMFIX-REPORT; the only other hit is the Ctrl+W chord inside the
+    // inventory grid, a deliberate panel chord, not a bare-key binding).
+    // CLASSIC: the condition is false and D toggles exactly as stock.
+    if (kD && !(ActionMove_IsAction() && InputEnable == 0 && DAT_083a7c24 == 0))
+        gCommandMenu.Toggle();
     // DESVIACION: ventana L con el historial del chat.
     if (kL) gChatLogWindow.Toggle();
     // DESVIACION (DLL Controller.cpp): Tab abre el mapa.
@@ -1395,6 +1405,11 @@ void __cdecl Player_ProcessInput(void)
                     // heroe al lado y la ruta queda sin efecto. Este es el
                     // camino del click de mouse Y del latch de Space (su
                     // boton virtual corre por esta misma rama).
+                    // MEAMU Train 16 (Fix 4): el pathfind sigue corriendo,
+                    // pero el paquete de movimiento de abajo queda retenido
+                    // mientras el freno de dash esta activo (ver
+                    // ActionMove_DashBraking): ningun paso entre el envio
+                    // del blink y el aterrizaje del teletransporte.
                     {
                         const int chebNow = (abs(dstX - srcX) > abs(dstY - srcY))
                                           ? abs(dstX - srcX) : abs(dstY - srcY);
@@ -1431,7 +1446,17 @@ void __cdecl Player_ProcessInput(void)
                                           || (rh >= 128 && rh < 135)
                                           || (rh == 145);
                         if (!bRanged && AsCharacter(ent)->MonsterIndex != 9) {
-                            Combat_SendMovePathPacket(AsCharacter(ent), AsObject(ent));   // IDA: SendMove
+                            // MEAMU Train 16 (Fix 4): while a blink/dash
+                            // teleport is in flight, emit NO walk step —
+                            // the hero stands still from the send frame
+                            // until the teleport lands. The route still
+                            // computes every tick; when the brake clears
+                            // in range, the no-route branch above fires
+                            // the attack instead, and on a silent refusal
+                            // the brake lapses (600 ms) and this walk-in
+                            // resumes as Train 13's fallback designed.
+                            if (!ActionMove_DashBraking())
+                                Combat_SendMovePathPacket(AsCharacter(ent), AsObject(ent));   // IDA: SendMove
                             goto end_tick_inc;
                         }
                     }

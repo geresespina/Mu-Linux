@@ -21,6 +21,7 @@
 #include "stdafx.h"
 #include "Input/NavMove.h"
 #include "Input/Gamepad.h"       // Gamepad_IsDriving (mutual yield)
+#include "Input/ActionMove.h"    // ActionMove_DashBraking (Train 16 dash brake)
 #include "Platform/IInput.h"     // Platform::InputEvent, GetInput
 #include "Platform/Text.h"       // Platform::TextCompareIgnoreCase(N)
 #include "Core/Window.h"         // gWindow
@@ -231,7 +232,7 @@ void NavMove_Tick()
             NavLog("NAV: follow cancelled by real input");
         } else if (Gamepad_IsDriving()) {
             SetNavButton(false);   // pad is driving: pause, stay engaged
-        } else if (InputEnable == 0 && DAT_083a7c24 == 0) {
+        } else if (InputEnable == 0 && DAT_083a7c24 == 0 && !ActionMove_DashBraking()) {
             FollowDrive(now, winW, winH);
         } else {
             SetNavButton(false);
@@ -242,7 +243,8 @@ void NavMove_Tick()
     // In-world only, chat input closed, system menu closed. While the pad is
     // steering, arrows yield (Gamepad checks NavMove_ArrowsHeld and yields
     // its own stick in turn — the two never fight over the cursor).
-    const bool gates = inWorld && InputEnable == 0 && DAT_083a7c24 == 0;
+    const bool gates = inWorld && InputEnable == 0 && DAT_083a7c24 == 0 &&
+                       !ActionMove_DashBraking();   // Train 16: the dash brake kills this drive too
     if (gates && gArrowsHeldRaw && !Gamepad_IsDriving()) {
         const float dx = (KeyHeld(39) ? 1.0f : 0.0f) - (KeyHeld(37) ? 1.0f : 0.0f);
         const float dy = (KeyHeld(40) ? 1.0f : 0.0f) - (KeyHeld(38) ? 1.0f : 0.0f);
