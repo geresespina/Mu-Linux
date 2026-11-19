@@ -21,7 +21,9 @@ class CActionJump
 {
 public:
     // Per-step update, called beside gActionCamera.Update() from
-    // MoveMainCamera (Render_WorldHelpers.cpp).
+    // MoveMainCamera (Render_WorldHelpers.cpp). Owns the hero's render
+    // offsets: the Train 24 hop (Z) and the Train 28 smoothing spring
+    // (XY) — both restore-first, both render-only.
     void Update();
 
     bool Airborne() const { return m_Phase != 0; }
@@ -33,6 +35,13 @@ private:
     float    m_Applied = 0.0f;  // Z offset currently added to the hero
     bool     m_SpacePrev = false;
     unsigned m_LastTick = 0;
+
+    // MEAMU Train 28: XY smoothing spring (fluid WASD). The rendered
+    // position chases the logical one through a damped spring — see
+    // ActionJump.cpp. Action scheme only; Classic renders stock.
+    bool     m_SpringInit = false;
+    float    m_SmoothX = 0.0f, m_SmoothY = 0.0f;  // chased render position
+    float    m_AppliedX = 0.0f, m_AppliedY = 0.0f; // XY offset currently added
 };
 
 extern CActionJump gActionJump;
