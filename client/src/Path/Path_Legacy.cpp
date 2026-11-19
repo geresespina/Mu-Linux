@@ -556,7 +556,12 @@ static unsigned int MovePath_IDA_0043EA20(char *ent, char turn)
         // hero's facing belongs to the aim alone (ActionCamera owns it,
         // per frame) — the stock path turn must not fight it. Every other
         // entity, and Classic mode, keep the stock turn.
-        if (turn && !(ent == Hero && gActionCamera.PointerLocked())) {
+        // MEAMU TRAIN 34: gate on the SCHEME, not the lock state --
+        // the lock can flap for a frame (Train 30), and a flap frame
+        // used to ungate this turn mid-strafe: facing snapped to the
+        // movement direction until the pin resumed. In Action the
+        // camera owns the hero's facing, locked or between locks.
+        if (turn && !(ent == Hero && (gActionCamera.PointerLocked() || gActionCamera.SchemeIsAction()))) {
             const float angle = CreateAngle(AsCharacter(ent)->Object.Position[0], AsCharacter(ent)->Object.Position[1], targetX, targetY);
             const float delta = FarAngle(AsCharacter(ent)->Object.Angle[2], angle, 1);
             AsCharacter(ent)->Object.Angle[2] = (delta >= 45.0f) ? angle : TurnAngle2(AsCharacter(ent)->Object.Angle[2], angle, delta * 0.5f);

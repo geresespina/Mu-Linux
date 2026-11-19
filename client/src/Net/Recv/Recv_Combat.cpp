@@ -8,6 +8,7 @@
 #include "Net/Recv/NetRecv.h"
 #include "Model/Model_CustomAnim.h"
 #include "Render/BijuTransform.h"
+#include "Render/ActionCamera.h"   // MEAMU TRAIN 34: gActionCamera (0x18 hero stamp gate)
 #include "Sound/EmoteSound.h"
 #include "Sound/ModeSound.h"
 
@@ -477,12 +478,24 @@ void NetRecv_18(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
 
     // Update facing per IDA ReceiveAction:21:
     //   *(float*)(c + 36) = (dir - 1) * 45.0
-    AsCharacter(slot)->Object.Angle[2] = ((float)(int)dirByte - 1.0f) * 45.0f;
+    // MEAMU TRAIN 34 (2026-11-19): in Action mode the hero's facing
+    // belongs to the camera and his position to the local drive --
+    // this stamp carries the MOVEMENT direction, so on a strafe or
+    // backpedal (90/180 degrees off the aim) every action echo
+    // snapped him sideways and tile-centred his position: the
+    // A/S/D twitch (W agrees with the aim, so W never showed it).
+    // The action animation below still applies; Classic untouched.
+    const bool heroAction = isHero && gActionCamera.SchemeIsAction();
+    if (!heroAction) {
+        AsCharacter(slot)->Object.Angle[2] = ((float)(int)dirByte - 1.0f) * 45.0f;
+    }
     AsCharacter(slot)->Movement = 0;  // alive flag cleared (per IDA c+748=0)
     // ReceiveAction también aplica la grilla objetivo recibida antes
     // (+774/+775) a la posición de mundo, antes de la animación.
-    AsCharacter(slot)->Object.Position[0] = (float)AsCharacter(slot)->TargetX * 100.0f + 50.0f;
-    AsCharacter(slot)->Object.Position[1] = (float)AsCharacter(slot)->TargetY * 100.0f + 50.0f;
+    if (!heroAction) {
+        AsCharacter(slot)->Object.Position[0] = (float)AsCharacter(slot)->TargetX * 100.0f + 50.0f;
+        AsCharacter(slot)->Object.Position[1] = (float)AsCharacter(slot)->TargetY * 100.0f + 50.0f;
+    }
 
     // Helper: equivalente a SetAction — setea anim_state guardando el previo en cache
     auto SetAnim = [](BYTE* s, BYTE animId) {
