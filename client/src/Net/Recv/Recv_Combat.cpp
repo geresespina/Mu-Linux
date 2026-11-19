@@ -678,7 +678,18 @@ void NetRecv_1E(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         case 43: SetAction(AsObject(caster), 67); break;
         case 47: SetAction(AsObject(caster), 66); break;
         case 56: SetAction(AsObject(caster), 81); break;
-        default: SetPlayerMagic(AsCharacter(caster)); break;
+        default:
+            // MEAMU TRAIN 8 (2026-11-19): mode transforms (58-61,
+            // 73-75) never pose, on any channel. Train 7 pose-proofed
+            // the 0x19 arms and the local cast branches; this default
+            // arm was the one packet-driven pose call left taking its
+            // skill from the wire unguarded -- if a mode toggle ever
+            // arrives on the duration channel (0x1E), remote viewers
+            // would see the generic cast pose. Fall through pose-less,
+            // exactly like the hero branch above.
+            if (!BijuTransform::IsModeTransformSkill(skill))
+                SetPlayerMagic(AsCharacter(caster));
+            break;
         }
     } else {
         SetPlayerAttack(AsCharacter(caster), 0, 0, 0);

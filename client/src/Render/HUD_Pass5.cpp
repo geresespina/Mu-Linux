@@ -33,6 +33,7 @@
 #include "Render/Gfx.h"
 #include "Platform/Text.h"
 #include "Game/HeroVitals.h"
+#include "UI/RenaHud.h"
 #include "globals.h"
 #include "structs.h"
 #include "functions.h"
@@ -508,6 +509,11 @@ void __cdecl Render_HudPass_4BD650_(void)
             RenderNumber2D(x_pos, 447.0f, v81, 9.0f, 10.0f);
         }
     }
+
+    // ── MEAMU Train 8: Rena balance number (bottom-left corner of
+    // the bar; the matching item icon rides the hotbar 3D pass —
+    // see UI/RenaHud). No-op until the GS pushes a balance.
+    RenaHud::RenderNumber2D();
 
     GL_End2D();   // EndBitmap
 }
