@@ -1003,9 +1003,19 @@ void NetRecv_1A(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
     }
     if (caster) {
         CreateMagicShiny97k(caster, 0);
-        AsCharacter(caster)->Object.PriorAction = AsCharacter(caster)->Object.CurrentAction;
-        AsCharacter(caster)->Object.CurrentAction = 90;            // cast anim (action 90)
-        AsCharacter(caster)->Object.AnimationFrame = 0.0f;
+        // MEAMU TRAIN 19 (2026-11-19): the mode family {58,59,60,
+        // 61,72,73,74,75} never takes the cast anim, on any channel
+        // (G's verdict 13:37 EST -- instant, no pose, no lock).
+        // This 0x1A writer was the last ungated cast-anim call in
+        // the tree: action 90 for every caster, hero included, no
+        // skill check. Mode skills are not stock 0x1A skills, so
+        // the gate is inert unless a mode toggle ever lands here.
+        const int magicSkill = (int)(((WORD)Msg[5] << 8) | Msg[6]);
+        if (!BijuTransform::IsModeTransformSkill(magicSkill)) {
+            AsCharacter(caster)->Object.PriorAction = AsCharacter(caster)->Object.CurrentAction;
+            AsCharacter(caster)->Object.CurrentAction = 90;            // cast anim (action 90)
+            AsCharacter(caster)->Object.AnimationFrame = 0.0f;
+        }
         AsCharacter(caster)->Skill = Msg[5];           // ReceiveMagicPosition
         AsCharacter(caster)->SkillStage = 1;             // attack pending
         PlayBuffer(88, 0, 0);          // magic cast sound

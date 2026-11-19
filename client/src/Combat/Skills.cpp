@@ -407,10 +407,17 @@ void PacketHandler_0x19(BYTE* pkt)
 
     case 0x48:  // 72 Biju Bond (MEAMU 2026-11-18)
     {
-        // Remote cast pose only -- mirror of 0x3A. The bonded beast
-        // and the Jinchuriki ignition are driven by the synced
-        // state, not by this packet.
-        SetAction(AsObject(caster), 63);
+        // Remote cast (pose-less, Train 19) -- mirror of 0x3A. The
+        // bonded beast and the Jinchuriki ignition are driven by
+        // the synced state, not by this packet.
+        // MEAMU TRAIN 19 (2026-11-19): G's verdict 13:37 EST --
+        // Biju Bond joins the instant mode family {58,59,60,61,
+        // 72,73,74,75}; the SetAction(caster, 63) that used to sit
+        // here was the one 0x19 pose call the Train 7 gates never
+        // covered (72 was excluded from IsModeTransformSkill, and
+        // this handler also runs for the hero himself -- the GS
+        // echoes 0x19 to the caster). No pose, no lock: the cast
+        // still lands on common_tail exactly like its siblings.
         goto common_tail;
     }
 

@@ -352,9 +352,13 @@ bool IsModeTransformSkill(int skillType)
     // MEAMU TRAIN 7 (2026-11-19): ver el header -- exactamente los
     // siete toggles de modo; 57/72/76 comparten cuerpos de casteo
     // con ellos y NO estan: conservan su pose.
+    // MEAMU TRAIN 19 (2026-11-19): G's verdict 13:37 EST -- the
+    // WHOLE mode family fires instant, Biju Bond (72) included;
+    // Train 7's exclusion of 72 is superseded. 57/76 siguen
+    // fuera: conservan su pose.
     return skillType == 58 || skillType == 59 || skillType == 60 ||
-           skillType == 61 || skillType == 73 || skillType == 74 ||
-           skillType == 75;
+           skillType == 61 || skillType == 72 || skillType == 73 ||
+           skillType == 74 || skillType == 75;
 }
 
 bool JinchurikiTint(const CHARACTER* character, float out[3])

@@ -1206,7 +1206,10 @@ static void Attack_WarriorBranch97k(char* entity)
         // (58-61, 73-75) castean SIN pose -- ni accion 63 ni freno
         // de movimiento; el modo se enciende alrededor del
         // personaje en su accion actual (ruling de G). El resto
-        // del cuerpo compartido (48/57/72/76) conserva su pose.
+        // del cuerpo compartido (48/57/76) conserva su pose.
+        // MEAMU TRAIN 19 (2026-11-19): + 72 Biju Bond (verdict de
+        // G 13:37 EST) -- IsModeTransformSkill ahora cubre los
+        // ocho toggles {58,59,60,61,72,73,74,75}.
         if (!BijuTransform::IsModeTransformSkill(iType)) {
             SetAction(AsObject(entity), 63);             // IDA LABEL_811
             *(char *)&AsCharacter(entity)->Movement = 0;
