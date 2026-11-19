@@ -55,6 +55,13 @@ struct Stats {
     int32_t drainPct = 0;
     int32_t formCur = 0, formMax = 0;
     int32_t moveSpeed = 0;
+    // MEAMU Train 40 + Bounce 16: the multiplier pass. Defaults keep
+    // a 76-byte (pre-Bounce-16) GS honest: scale x1.000, finals 0
+    // (the sheet hides the FINAL rows, the slim line falls back to
+    // the base DMG).
+    int32_t scaleMulX1000 = 1000;
+    int32_t finalPhysiMin = 0, finalPhysiMax = 0;
+    int32_t finalMagicMin = 0, finalMagicMax = 0;
 };
 
 // Pure parser (header-inline so a proof harness exercises this
@@ -79,6 +86,11 @@ inline bool ParsePacket(const uint8_t* msg, int size, Stats& out)
     s.drainPct = rd(56);
     s.formCur = rd(60);   s.formMax = rd(64);
     s.moveSpeed = rd(68);
+    if (size >= 96) { // Bounce 16 extended frame
+        s.scaleMulX1000 = rd(76);
+        s.finalPhysiMin = rd(80); s.finalPhysiMax = rd(84);
+        s.finalMagicMin = rd(88); s.finalMagicMax = rd(92);
+    }
     out = s;
     return true;
 }
