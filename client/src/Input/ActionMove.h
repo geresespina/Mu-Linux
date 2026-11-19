@@ -115,3 +115,14 @@ bool ActionMove_CameraLocked();
 // the frame goes out through the dash choke point (Train 16 brake
 // discipline included). Returns true only when the frame was sent.
 bool ActionMove_TeleportToPoint(int tileX, int tileY);
+
+// MEAMU Train 20: ONE direct route issue toward an arbitrary tile —
+// the DirectDriveIssue tail (Path_FindRoute into the hero's path
+// buffer, MovementType = 0, Combat_SendMovePathPacket), exported for
+// the drives whose steering channel is the parked cursor and which
+// therefore cannot steer while the camera is pointer-locked (Train
+// 17 root cause): KbPlay's cast/AUTO/latch walk-in and NavMove's
+// /follow. Click-parity gate and Train 16 dash-brake discipline are
+// inside; the CALLER owns the re-issue cadence and the target choice.
+// Returns true only when a move packet actually went out.
+bool ActionMove_DirectRouteTo(int tileX, int tileY);

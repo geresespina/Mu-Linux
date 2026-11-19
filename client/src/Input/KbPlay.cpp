@@ -534,6 +534,46 @@ int ComputeAim()
     return t;
 }
 
+// ── Locked walk-in (MEAMU Train 20) ─────────────────────────────────────
+// Train 17's root cause, second family: while the Action Camera is
+// pointer-locked, the park that steers this module's drives is
+// swallowed (Input_OnEvent eats MouseMove as a camera delta) and the
+// cursor globals stay pinned to screen centre — so the held button's
+// stock pipeline walks toward the RETICLE hover (SelectedCharacter),
+// never toward this module's own aim, and its gap-closing is inert.
+// Fix, mirroring Train 17: while locked, an out-of-reach aim gets a
+// direct route to its own tile (ActionMove_DirectRouteTo). The step
+// stands down when the reticle already sits on the aim (the stock
+// click-attack branch routes to that target's tile itself) and when
+// the aim is inside reach. Re-issue mirrors hold-to-move: on target
+// change, or on the 400 ms refresh (NavMove's follow cadence) — the
+// target may have moved, or the route run out with the aim still
+// out of reach. Reachability: digit holds and AUTO drive in ACTION
+// directly; the Space latch engages CLASSIC-only (KbPlay_SpaceTap)
+// but survives a grave flip into ACTION — nothing releases it on
+// the flip and its drive has no scheme gate — so it is covered too
+// (reach 1, a basic attack).
+int      gLockWalkIdx = -1;   // aim the locked walk-in last routed toward
+unsigned gLockWalkT   = 0;    // last issue / attempt stamp (SDL ticks)
+constexpr unsigned kLockWalkRefreshMs = 400;
+
+void LockedWalkInStep(int targetIdx, int reachTiles)
+{
+    if (targetIdx < 0) return;
+    if (!ActionMove_CameraLocked()) return;   // not locked: the park rules
+    CHARACTER* hero = HeroC();
+    CHARACTER* tgt  = EntryAt(targetIdx);
+    if (Cheb(hero, tgt) <= reachTiles) return;
+    if (SelectedCharacter == targetIdx) return;   // pipeline already on it
+    const unsigned now = (unsigned)SDL_GetTicks();
+    if (targetIdx == gLockWalkIdx &&
+        (int)(now - gLockWalkT) < (int)kLockWalkRefreshMs)
+        return;
+    gLockWalkIdx = targetIdx;
+    gLockWalkT   = now;
+    ActionMove_DirectRouteTo((int)tgt->PositionX, (int)tgt->PositionY);
+}
+
 void AimAndPark()
 {
     CHARACTER* hero = HeroC();
@@ -546,6 +586,10 @@ void AimAndPark()
     // the helper's guard throttles it to a single attempt).
     if (t >= 0 && Cheb(hero, EntryAt(t)) > SelectedSkillDist())
         ActionMove_TryBlinkEngage(t, SelectedSkillDist());
+    // MEAMU Train 20: while pointer-locked the park below is swallowed
+    // and the held button's pipeline would walk toward the reticle
+    // hover instead — close on the aim by direct route.
+    LockedWalkInStep(t, SelectedSkillDist());
     ParkOnCharacter(t >= 0 ? EntryAt(t) : hero);
 }
 
@@ -694,6 +738,12 @@ void AutoDriveStep()
         gAutoParkIdx = -2;   // park fresh when the drive resumes
         return;
     }
+    // MEAMU Train 20: while pointer-locked, close on the aim by direct
+    // route — the park-and-hold steering below reads the pinned centre
+    // cursor and can only ever walk toward the reticle hover. (Placed
+    // after the physical-button yield above: a held physical button is
+    // the player's moment, and no steering of any kind fills it.)
+    LockedWalkInStep(t, SelectedSkillDist());
     const int cx = (int)DAT_083a427c, cy = (int)DAT_083a4278;   // MouseX / MouseY
     if (UiDist(cx, cy, ux, uy) <= kCursorAimPx) {
         AutoDriveButton();   // aim is under the cursor: hold, no park
@@ -1546,6 +1596,12 @@ void KbPlay_Tick()
             }
         } else {
             if (gAtkYielded) { gAtkYielded = false; KbLog("KB-ATK: latch re-engages"); }
+            // MEAMU Train 20: the latch can be live under the pointer
+            // lock (engaged in CLASSIC, then a scheme flip to ACTION).
+            // While locked, close on the locked target by direct route;
+            // the park discipline below reads the pinned centre cursor
+            // and cannot steer.
+            LockedWalkInStep(gAtkLatchIdx, 1);
             // Cursor freedom (Train 12): the latch's target is locked,
             // so the old per-tick park was pure seizure. Park only
             // when the target's screen position drifts materially and

@@ -156,6 +156,43 @@ void FollowDrive(unsigned now, float winW, float winH)
     const int cheb = (std::abs(dx) > std::abs(dy)) ? std::abs(dx) : std::abs(dy);
     if (cheb <= kFollowArrive) { SetNavButton(false); return; }
 
+    // MEAMU Train 20: while the Action Camera is pointer-locked, the
+    // park below is swallowed (Train 17 root cause) and the held button
+    // would route toward the pinned centre tile instead of the target.
+    // Drive by direct route: the target's own tile first (the stock
+    // NPC/monster branches route to entity tiles the same way), then
+    // the ring around it, nearest to the hero first. The virtual button
+    // stays UP so the input tick cannot interleave a centre route; the
+    // 400 ms cadence above re-routes as the target moves.
+    if (ActionMove_IsAction() && ActionMove_CameraLocked()) {
+        SetNavButton(false);
+        if (ActionMove_DirectRouteTo((int)tgt->PositionX, (int)tgt->PositionY)) return;
+        int ring[8][2];
+        int n = 0;
+        for (int oy = -1; oy <= 1; ++oy)
+            for (int ox = -1; ox <= 1; ++ox) {
+                if (ox == 0 && oy == 0) continue;
+                ring[n][0] = (int)tgt->PositionX + ox;
+                ring[n][1] = (int)tgt->PositionY + oy;
+                ++n;
+            }
+        bool tried[8] = {};
+        for (int k = 0; k < n; ++k) {
+            int best = -1, bestD = 0;
+            for (int m = 0; m < n; ++m) {
+                if (tried[m]) continue;
+                const int ax = std::abs(ring[m][0] - (int)hero->PositionX);
+                const int ay = std::abs(ring[m][1] - (int)hero->PositionY);
+                const int d = ax > ay ? ax : ay;
+                if (best < 0 || d < bestD) { best = m; bestD = d; }
+            }
+            if (best < 0) break;
+            tried[best] = true;
+            if (ActionMove_DirectRouteTo(ring[best][0], ring[best][1])) return;
+        }
+        return;
+    }
+
     // Direction: project hero + target to screen and steer along the delta —
     // robust to the camera angle without assuming an isometric mapping.
     int hsx = 0, hsy = 0, tsx = 0, tsy = 0;
