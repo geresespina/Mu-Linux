@@ -102,6 +102,57 @@ int main()
     ExpectForm(true,  -1, 228, "bit, NO pet = Susanoo");
     ExpectForm(true,  10, 228, "bit, beast OOB = Susanoo");
 
+    // ── MEAMU TRAIN 7 (2026-11-18): personal-form rig ─────────
+    // The REAL name-aware decision (BijuTransform::FormClassForNamed):
+    // the pet-off titan (228) becomes Crimson Karane (229) ONLY for
+    // Gloccy / M4D4R4; a known beast always wins over the name.
+    auto ExpectFormNamed = [](bool bit, int beast, const char* name, int want, const char* label) {
+        const int got = BijuTransform::FormClassForNamed(bit, beast, name);
+        if (got != want) {
+            std::printf("FAIL named %-28s bit=%d beast=%d name=%s want=%d got=%d\n", label, (int)bit, beast, name ? name : "(null)", want, got);
+            ++s_failures;
+        } else {
+            std::printf("ok   named %-28s bit=%d beast=%d name=%s -> %d\n", label, (int)bit, beast, name ? name : "(null)", got);
+        }
+    };
+    ExpectFormNamed(true,  -1, "Gloccy",     229, "bit, NO pet, Gloccy");
+    ExpectFormNamed(true,  -1, "M4D4R4",     229, "bit, NO pet, M4D4R4");
+    ExpectFormNamed(true,  -1, "AnyoneElse", 228, "bit, NO pet, other name");
+    ExpectFormNamed(true,  -1, "gloccy",     228, "bit, NO pet, lowercase");
+    ExpectFormNamed(true,  -1, nullptr,      228, "bit, NO pet, no name");
+    ExpectFormNamed(true,  10, "Gloccy",     229, "bit, beast OOB, Gloccy");
+    ExpectFormNamed(true,   9, "Gloccy",     164, "bit, Ten-Tails, Gloccy");
+    ExpectFormNamed(true,   0, "M4D4R4",     155, "bit, Shukaku, M4D4R4");
+    ExpectFormNamed(false, -1, "Gloccy",      -1, "no bit, Gloccy");
+
+    // ── MEAMU TRAIN 7 (2026-11-19): pose-less mode transforms ──
+    // The cast-pose guard (BijuTransform::IsModeTransformSkill):
+    // exactly the seven mode transforms cast with no pose; the
+    // shared-body neighbours (48 Greater Life, 57 Omni Buff, 72
+    // Biju Bond, 76 Biju Legion) and attack skills keep theirs.
+    auto ExpectModeSkill = [](int skill, bool want, const char* label) {
+        const bool got = BijuTransform::IsModeTransformSkill(skill);
+        if (got != want) {
+            std::printf("FAIL mode  %-28s skill=%d want=%d got=%d\n", label, skill, (int)want, (int)got);
+            ++s_failures;
+        } else {
+            std::printf("ok   mode  %-28s skill=%d -> %d\n", label, skill, (int)got);
+        }
+    };
+    ExpectModeSkill(58, true,  "Mangekyou Sharingan");
+    ExpectModeSkill(59, true,  "Sage Mode");
+    ExpectModeSkill(60, true,  "Jinchuriki Mode");
+    ExpectModeSkill(61, true,  "Biju Mode");
+    ExpectModeSkill(73, true,  "Chakra Cloak");
+    ExpectModeSkill(74, true,  "Perfect Susanoo");
+    ExpectModeSkill(75, true,  "Dragon Sage Mode");
+    ExpectModeSkill(48, false, "Greater Life keeps pose");
+    ExpectModeSkill(57, false, "Omni Buff keeps pose");
+    ExpectModeSkill(72, false, "Biju Bond keeps pose");
+    ExpectModeSkill(76, false, "Biju Legion keeps pose");
+    ExpectModeSkill(70, false, "Chakra Roar keeps pose");
+    ExpectModeSkill(41, false, "Twisting Slash keeps pose");
+
     if (s_failures) {
         std::printf("SKIN BODY FIX RIG: %d FAILURES\n", s_failures);
         return EXIT_FAILURE;
@@ -134,3 +185,8 @@ void BMD__RenderBody(void*, int, float, int, float, float, float, int, int) {}
 void Skeleton_Transform(void*, float*, float*, float*, float*, char) {}
 void Entity_GetLightScale(std::uintptr_t, std::uintptr_t) {}
 void operator_delete(void* ptr) { std::free(ptr); }
+
+// MEAMU TRAIN 7: BijuTransform.cpp's Resolve llama a EntityName::Get;
+// el rig no lo ejerce (solo llama a las decisiones puras), doble minimo.
+#include "Entity/EntityName.h"
+namespace EntityName { const char* Get(const void*) { return ""; } }

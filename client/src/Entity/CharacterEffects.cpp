@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "Entity/CharacterEffects.h"
 #include "Render/BijuTransform.h"
+#include "Entity/EntityName.h"
 #include "Render/EquipmentVisuals.h"
 #include "Item/ContentCatalog.h"
 #include "Config/UserSettings.h"
@@ -572,6 +573,147 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
                                      dsBody[2] };
                 Particle_Spawn(0x4ab, motePos, (float *)(puVar13 + 7),
                                moteLight, 0, 0.45f, 0);
+            }
+        }
+
+
+        // ── 0g. Aura Perfect Susanoo (DESVIACION, solo cliente;
+        // MEAMU 2026-11-18, Train 7) ─────────────────────────────
+        // G's order, verbatim: "give it a HUUUUUUUGE purple glow".
+        // Perfect Susanoo (GS skill 74, effect 71) rides the SHARED
+        // Biju form bit 0x2000, so a bit test alone would set every
+        // Biju Mode beast ablaze too. The gate therefore replays
+        // the render path's own decision -- BijuTransform::Resolve
+        // (BijuTransform.cpp) resolves the form through
+        // FormClassFor(formBit, beastBySlot): the aura fires ONLY
+        // when that resolution is class 228 (form bit on, NO soul
+        // pet known), i.e. exactly the entities DrawBody renders
+        // as the purple titan, hero and remotes alike. Biju Mode
+        // (beast known -> class 155-164) never enters here, and
+        // the Cloak (0e) / Dragon Sage (0f) blocks are untouched.
+        // Scale: the titan stands at catalog scale 2.0 (~450 world
+        // units of wingspan), so the shroud is built ~1.35x the
+        // Jinchuriki aura (0d: halo 34 / suelo 25.2 / halo 16.5),
+        // the biggest aura in the game: halo exterior 46.0 tenue,
+        // suelo 34.0, cuerpo 23.0, nucleo 11.0 aclarado a blanco.
+        // Colour: Susanoo chakra violet (0.60, 0.24, 1.00) que
+        // respira a morado profundo (0.40, 0.10, 0.78), pulso
+        // lento de 1500 ms -- pesado, amenazante, nunca fucsia.
+        // Coste: 4 sprites aditivos 0x47e + brasas 0x4ab en anillo
+        // con la misma cadencia de 120 ms que 0c-0f; el mismo coste
+        // por entidad que el aura Jinchuriki.
+        if (bVar7 == 0xFF && AsCharacter(puVar13)->Dead == 0 &&
+            !gUserSettings.GetAntilag(ANTILAG_GLOW) &&
+            (*(DWORD*)((BYTE*)puVar13 + 120) & 0x2000) != 0 &&
+            BijuTransform::FormClassForNamed(true,
+                BijuTransform::BeastFor((const CHARACTER*)puVar13),
+                EntityName::Get(puVar13)) == 228) {
+            const float st7 = 0.5f - 0.5f * cosf(WorldTime * (2.0f * 3.14159265f / 1500.0f));
+            float suBase[3] = { 0.40f + (0.60f - 0.40f) * st7,
+                                0.10f + (0.24f - 0.10f) * st7,
+                                0.78f + (1.00f - 0.78f) * st7 };
+            const float suPulse = 0.85f + 0.25f * st7;
+            float suLight[3] = { suBase[0] * suPulse,
+                                 suBase[1] * suPulse,
+                                 suBase[2] * suPulse };
+            float suPos[3] = { AsObject(puVar13)->Position[0],
+                               AsObject(puVar13)->Position[1],
+                               AsObject(puVar13)->Position[2] };
+            float suHalo[3] = { suBase[0] * 0.26f, suBase[1] * 0.26f, suBase[2] * 0.26f };
+            Equipment_AddSprite(0x47e, suPos, 46.0f, suHalo,
+                                (intptr_t)puVar13, 0.0f, 0);
+            float suGround[3] = { suLight[0] * 0.6f, suLight[1] * 0.6f, suLight[2] * 0.6f };
+            Equipment_AddSprite(0x47e, suPos, 34.0f, suGround,
+                                (intptr_t)puVar13, 0.0f, 0);
+            float suOff[3] = { 0.0f, 0.0f, 0.0f };
+            float suBody[3];
+            BMD_TransformPosition(pvVar23,
+                (float *)((intptr_t)AsObject(puVar13)->BoneMatrices + 0 * 0x30),
+                suOff, suBody, '\x01');
+            Equipment_AddSprite(0x47e, suBody, 23.0f, suLight,
+                                (intptr_t)puVar13, 0.0f, 0);
+            float suCore[3] = { suBase[0] + (1.0f - suBase[0]) * 0.40f,
+                                suBase[1] + (1.0f - suBase[1]) * 0.40f,
+                                suBase[2] + (1.0f - suBase[2]) * 0.40f };
+            Equipment_AddSprite(0x47e, suBody, 11.0f, suCore,
+                                (intptr_t)puVar13, 0.0f, 0);
+            const int suPhase = (int)(((intptr_t)puVar13 >> 5) & 0x3F);
+            if ((((int)WorldTime + suPhase) % 120) < 16) {
+                float suEmber[3] = { suBase[0], suBase[1], suBase[2] };
+                const float suAng = (WorldTime + (float)suPhase * 61.0f) *
+                                    (2.0f * 3.14159265f / 2400.0f);
+                const float suRad = 23.0f * 18.0f;
+                float emberPos[3] = { suBody[0] + cosf(suAng) * suRad,
+                                      suBody[1] + sinf(suAng) * suRad,
+                                      suBody[2] };
+                Particle_Spawn(0x4ab, emberPos, (float *)(puVar13 + 7),
+                               suEmber, 0, 0.6f, 0);
+            }
+        }
+
+
+        // ── 0h. Aura Crimson Karane (DESVIACION, solo cliente;
+        // MEAMU 2026-11-18, Train 7) ─────────────────────────────
+        // La gemela carmesi del 0g: la forma personal de G. El
+        // gate reproduce la decision con nombre de Resolve --
+        // FormClassForNamed == 229 solo ocurre para Gloccy /
+        // M4D4R4 con el bit de forma activo y SIN pet conocido,
+        // exactamente las entidades que DrawBody renderiza como
+        // KaraneCrimson. Mismo stack de 4 sprites 0x47e y la misma
+        // cadencia de brasas que el 0g (halo 46.0 / suelo 34.0 /
+        // cuerpo 23.0 / nucleo 11.0 -- sobre la figura Karane,
+        // mas pequena que el titan, el halo llena ~1.6x su altura,
+        // como el mock aprobado), pero en carmesi profundo
+        // (0.74, 0.08, 0.12) que respira a sangre oscura
+        // (0.50, 0.04, 0.07), pulso lento de 1500 ms y nucleo
+        // aclarado hacia brasa (1.00, 0.38, 0.18). El 228 sigue
+        // morado; el Cloak (0e) no se toca.
+        if (bVar7 == 0xFF && AsCharacter(puVar13)->Dead == 0 &&
+            !gUserSettings.GetAntilag(ANTILAG_GLOW) &&
+            (*(DWORD*)((BYTE*)puVar13 + 120) & 0x2000) != 0 &&
+            BijuTransform::FormClassForNamed(true,
+                BijuTransform::BeastFor((const CHARACTER*)puVar13),
+                EntityName::Get(puVar13)) == 229) {
+            const float ct7 = 0.5f - 0.5f * cosf(WorldTime * (2.0f * 3.14159265f / 1500.0f));
+            float kcBase[3] = { 0.50f + (0.74f - 0.50f) * ct7,
+                                0.04f + (0.08f - 0.04f) * ct7,
+                                0.07f + (0.12f - 0.07f) * ct7 };
+            const float kcPulse = 0.85f + 0.25f * ct7;
+            float kcLight[3] = { kcBase[0] * kcPulse,
+                                 kcBase[1] * kcPulse,
+                                 kcBase[2] * kcPulse };
+            float kcPos[3] = { AsObject(puVar13)->Position[0],
+                               AsObject(puVar13)->Position[1],
+                               AsObject(puVar13)->Position[2] };
+            float kcHalo[3] = { kcBase[0] * 0.26f, kcBase[1] * 0.26f, kcBase[2] * 0.26f };
+            Equipment_AddSprite(0x47e, kcPos, 46.0f, kcHalo,
+                                (intptr_t)puVar13, 0.0f, 0);
+            float kcGround[3] = { kcLight[0] * 0.6f, kcLight[1] * 0.6f, kcLight[2] * 0.6f };
+            Equipment_AddSprite(0x47e, kcPos, 34.0f, kcGround,
+                                (intptr_t)puVar13, 0.0f, 0);
+            float kcOff[3] = { 0.0f, 0.0f, 0.0f };
+            float kcBody[3];
+            BMD_TransformPosition(pvVar23,
+                (float *)((intptr_t)AsObject(puVar13)->BoneMatrices + 0 * 0x30),
+                kcOff, kcBody, '\x01');
+            Equipment_AddSprite(0x47e, kcBody, 23.0f, kcLight,
+                                (intptr_t)puVar13, 0.0f, 0);
+            float kcCore[3] = { kcBase[0] + (1.00f - kcBase[0]) * 0.45f,
+                                kcBase[1] + (0.38f - kcBase[1]) * 0.45f,
+                                kcBase[2] + (0.18f - kcBase[2]) * 0.45f };
+            Equipment_AddSprite(0x47e, kcBody, 11.0f, kcCore,
+                                (intptr_t)puVar13, 0.0f, 0);
+            const int kcPhase = (int)(((intptr_t)puVar13 >> 5) & 0x3F);
+            if ((((int)WorldTime + kcPhase) % 120) < 16) {
+                float kcEmber[3] = { kcBase[0], kcBase[1], kcBase[2] };
+                const float kcAng = (WorldTime + (float)kcPhase * 61.0f) *
+                                    (2.0f * 3.14159265f / 2400.0f);
+                const float kcRad = 23.0f * 18.0f;
+                float emberPos[3] = { kcBody[0] + cosf(kcAng) * kcRad,
+                                      kcBody[1] + sinf(kcAng) * kcRad,
+                                      kcBody[2] };
+                Particle_Spawn(0x4ab, emberPos, (float *)(puVar13 + 7),
+                               kcEmber, 0, 0.6f, 0);
             }
         }
 

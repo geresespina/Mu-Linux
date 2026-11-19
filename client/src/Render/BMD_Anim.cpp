@@ -65,7 +65,16 @@ bool __cdecl BMD__PlayAnimation(void *This, float *AnimationFrame, float *PriorA
         if (PriorAnimationFrame) *PriorAnimationFrame = (float)priorIntFrame;
     }
     if (*AnimationFrame <= 0.0f) {
-        *AnimationFrame = ((float)frameCount - 1.0f) + *AnimationFrame;
+        // Train 7 crash fix: real modulo. The old single adjustment could
+        // not recover a playhead more than one action length negative and
+        // stored the still-negative value into the model header (lines
+        // below), perpetuating the poisoned frame instead of healing it.
+        float wrapLen = (float)frameCount - 1.0f;
+        *AnimationFrame = fmodf(*AnimationFrame, wrapLen);
+        if (*AnimationFrame < 0.0f)
+            *AnimationFrame += wrapLen;
+        if (*AnimationFrame == 0.0f)
+            *AnimationFrame = wrapLen;
     }
     char* actFlags = (char*)pAction;
     if (actFlags[0] == '\0') {

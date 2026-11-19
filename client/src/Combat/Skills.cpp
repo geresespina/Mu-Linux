@@ -355,38 +355,47 @@ void PacketHandler_0x19(BYTE* pkt)
 
     case 0x3A:  // 58 Mangekyou Sharingan (MEAMU 2026-11-15)
     {
-        // Remote cast pose only (same buff-cast action as Greater
-        // Life). The crimson aura itself is NOT spawned here: it is
+        // Remote cast (pose-less since Train 7 -- it used to set
+        // the same buff-cast action as Greater Life). The crimson
+        // aura itself is NOT spawned here: it is
         // driven by the synced buff state (C1:07 bit 0x0400 ->
         // entity+120 -> CharacterEffects aura block), so it renders
         // for everyone in view for exactly the buff's lifetime.
-        SetAction(AsObject(caster), 63);
+        // MEAMU TRAIN 7 (2026-11-19): SIN pose de casteo -- el
+        // modo se enciende alrededor del personaje en su accion
+        // actual (ruling de G); aura/forma = estado sincronizado.
         goto common_tail;
     }
 
     case 0x3B:  // 59 Sage Mode (MEAMU 2026-11-17)
     {
-        // Remote cast pose only -- mirror of 0x3A. The green/gold
+        // Remote cast (pose-less, Train 7) -- mirror of 0x3A. The green/gold
         // aura is driven by the synced buff state (C1:07 bit
         // 0x0800 -> entity+120 -> CharacterEffects aura block).
-        SetAction(AsObject(caster), 63);
+        // MEAMU TRAIN 7 (2026-11-19): SIN pose de casteo -- el
+        // modo se enciende alrededor del personaje en su accion
+        // actual (ruling de G); aura/forma = estado sincronizado.
         goto common_tail;
     }
 
     case 0x3C:  // 60 Jinchuriki Mode (MEAMU 2026-11-17, Train 4)
     {
-        // Remote cast pose only -- mirror of 0x3A/0x3B. The BIG
+        // Remote cast (pose-less, Train 7) -- mirror of 0x3A/0x3B. The BIG
         // beast-tinted aura is driven by the synced buff state
         // (C1:07 bit 0x1000 -> entity+120 -> CharacterEffects).
-        SetAction(AsObject(caster), 63);
+        // MEAMU TRAIN 7 (2026-11-19): SIN pose de casteo -- el
+        // modo se enciende alrededor del personaje en su accion
+        // actual (ruling de G); aura/forma = estado sincronizado.
         goto common_tail;
     }
 
     case 0x3D:  // 61 Biju Mode (MEAMU 2026-11-17, Train 4)
     {
-        // Remote cast pose only -- mirror of 0x3A/0x3B. The form
+        // Remote cast (pose-less, Train 7) -- mirror of 0x3A/0x3B. The form
         // itself is the BijuTransform render (bit 0x2000 state).
-        SetAction(AsObject(caster), 63);
+        // MEAMU TRAIN 7 (2026-11-19): SIN pose de casteo -- el
+        // modo se enciende alrededor del personaje en su accion
+        // actual (ruling de G); aura/forma = estado sincronizado.
         goto common_tail;
     }
 
@@ -409,26 +418,32 @@ void PacketHandler_0x19(BYTE* pkt)
 
     case 0x49:  // 73 Chakra Cloak (MEAMU 2026-11-18)
     {
-        // Remote cast pose only -- mirror of 0x3A. The cloak aura
-        // is driven by the synced buff state (bit 0x4000).
-        SetAction(AsObject(caster), 63);
+        // Remote cast (pose-less, Train 7) -- mirror of 0x3A. The
+        // cloak aura is driven by the synced buff state (bit 0x4000).
+        // MEAMU TRAIN 7 (2026-11-19): SIN pose de casteo -- el
+        // modo se enciende alrededor del personaje en su accion
+        // actual (ruling de G); aura/forma = estado sincronizado.
         goto common_tail;
     }
 
     case 0x4A:  // 74 Perfect Susanoo (MEAMU 2026-11-18)
     {
-        // Remote cast pose only -- mirror of 0x3D. The form itself
-        // is the BijuTransform render (bit 0x2000 state, class 228
-        // when no soul pet is equipped).
-        SetAction(AsObject(caster), 63);
+        // Remote cast (pose-less, Train 7) -- mirror of 0x3D. The
+        // form itself is the BijuTransform render (bit 0x2000
+        // state, class 228 when no soul pet is equipped).
+        // MEAMU TRAIN 7 (2026-11-19): SIN pose de casteo -- el
+        // modo se enciende alrededor del personaje en su accion
+        // actual (ruling de G); aura/forma = estado sincronizado.
         goto common_tail;
     }
 
     case 0x4B:  // 75 Dragon Sage Mode (MEAMU 2026-11-18)
     {
-        // Remote cast pose only -- mirror of 0x3B. The aura is
-        // driven by the synced buff state (bit 0x8000).
-        SetAction(AsObject(caster), 63);
+        // Remote cast (pose-less, Train 7) -- mirror of 0x3B. The
+        // aura is driven by the synced buff state (bit 0x8000).
+        // MEAMU TRAIN 7 (2026-11-19): SIN pose de casteo -- el
+        // modo se enciende alrededor del personaje en su accion
+        // actual (ruling de G); aura/forma = estado sincronizado.
         goto common_tail;
     }
 

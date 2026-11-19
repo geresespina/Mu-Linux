@@ -335,6 +335,15 @@ void __cdecl Render_HudPass_4BD650_(void)
         // PlayBuffer(34, 0, 0) — soft skip; sound system not always wired.
     }
 
+    // MEAMU TRAIN 7 (2026-11-19): this pass's textured draws trust
+    // inherited GL state -- 2257 field defect: the bottom bar's
+    // centre slots/buttons rendered dark after mode casts (the
+    // world/sprite passes leave blend + colour state behind and
+    // this pass never normalized it). Normalize at the boundary,
+    // the same cure Train 6 applied at the chat-box exit.
+    GL_ResetState();
+    Gfx::Color4f(1.0f, 1.0f, 1.0f, 1.0f);
+
     // ── HP orb (left) ────────────────────────────────────────────────────────
     double v19 = hp_frac * 48.0;
     float va  = (float)(v19 * 0.015625);   // u offset into orb texture

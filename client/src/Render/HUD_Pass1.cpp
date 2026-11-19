@@ -473,6 +473,12 @@ void Render_HotbarItems3D_(void)
     GL_GetModelViewMatrix((unsigned int*)CameraMatrix);
     GL_EnableDepthTest();
     GL_EnableDepthWrites();
+    // MEAMU TRAIN 7 (2026-11-19): the hotbar item models below
+    // trust the state the earlier passes left behind -- 2257 field
+    // defect: quick-slot items rendered black after mode casts.
+    // Normalize before the item pass (Train 6's chat-box cure,
+    // applied at the victim's boundary).
+    GL_ResetState();
     // IDA sub_4BFDE0 L31: `sub_403150(g_csQuest, 1, 0)`.
     //
     // Aca habia un comentario que daba a sub_403150 por "refresco del estado

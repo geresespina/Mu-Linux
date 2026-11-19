@@ -152,12 +152,13 @@ static void AnimateWithScratch(void* this_, float* param_1, float param_2, unsig
         const ModelAnimationAction* actions = reinterpret_cast<const ModelAnimationAction*>(model.Actions);
         const ModelAnimationAction* animA = actions + param_4;
         if (animA->FrameCount <= v39) v39 = 0;
+        if (v39 < 0) v39 = 0;  // Train 7 crash fix: negative prior frame was never checked (rapid-cast AV)
         // IDA también clamp this[+0xA8] contra anim[this+0xA0]'s length:
         //   if ( v11 >= *(std::int16_t *)(16 * *(std::uint8_t*)(This+160) + v13 + 8) )
         //       *(_WORD *)&((BMD*)(uintptr_t)(This))->CurrentAnimationFrame = 0;
         int animBIdxClamp = model.CurrentAction;
         const ModelAnimationAction* animBHdr = actions + animBIdxClamp;
-        if (animBHdr->FrameCount <= model.CurrentAnimationFrame)
+        if (model.CurrentAnimationFrame < 0 || animBHdr->FrameCount <= model.CurrentAnimationFrame)
             model.CurrentAnimationFrame = 0;
         // per-bone loop: interpolate quaternions and build transforms
         for (int boneIdx = 0; boneIdx < (int)(short)model.NumBones; boneIdx++) {
