@@ -38,6 +38,7 @@
 #include <cstring>
 
 extern "C" void DbgLogPublic(const char* msg);
+extern void __cdecl SetPlayerStop(CHARACTER*);   // Entity/Character_Motion.cpp
 
 namespace Platform {
 void DeliverSDLInput(const InputEvent& event);   // SDLWindow.cpp
@@ -285,12 +286,34 @@ void ResetDirectDrive()
     gDirectTx = gDirectTy = -1;
 }
 
-// ReleaseDrive + forget the direct-drive route state. Used by the
-// tick's early-outs so a fresh press always issues immediately.
+// MEAMU Train 27: cancel the hero's issued path — the actual stop.
+// Releasing the virtual button never cancelled the route the engine
+// was already walking (the follower consumes CHARACTER::PathNum/
+// PathX/PathY), so on keyup he kept running to the last issued tile:
+// G's "why does it auto run?" — this is the cancel his release means.
+void CancelHeroMovement()
+{
+    CHARACTER* hero = HeroC();
+    if (!hero) return;
+    hero->PathNum = 0;
+    hero->PathCurrent = 0;
+    hero->Movement = 0;
+    SetPlayerStop(hero);
+}
+
+// ReleaseDrive + forget the direct-drive route state + (Train 27)
+// cancel the walked path when a drive was actually live. Every
+// Action-context early-out funnels here (no-keys, gates lost, dash
+// brake); the CLASSIC early-out below uses the plain release instead,
+// so Classic's click-to-move completion is untouched.
 void StopDrive()
 {
+    CHARACTER* hero = HeroC();
+    const bool wasDriving = gBtnDown || gDirectTx != -1
+        || (hero && hero->PathNum > 0);
     ReleaseDrive();
     ResetDirectDrive();
+    if (wasDriving) CancelHeroMovement();
 }
 
 void DirectDriveIssue(int ox, int oy, unsigned now)
@@ -666,7 +689,7 @@ void ActionMove_Tick()
         FlipScheme();
     gGravePrev = grave;
 
-    if (!ActionMove_IsAction()) { StopDrive(); return; }
+    if (!ActionMove_IsAction()) { ReleaseDrive(); ResetDirectDrive(); return; }
     if (!DriveGates() || Gamepad_IsDriving()) { StopDrive(); return; }
 
     // ── Held direction (screen space: x right, y down) ───────────────────────
