@@ -11,14 +11,21 @@
 //   1..9, 0   select the quick-slot skill AND cast it (hold = repeat-cast)
 //   Tab       cycle/lock a combat target (hooked from HUD_HotkeyTick)
 //   Enter     talk to the nearest NPC (virtual click; hero walks up)
-//   Space     attack latch first (MEAMU Train 8 addendum, G 2026-11-19):
-//             a tap locks the closest attackable monster and the hero
-//             basic-attacks it continuously with no key held; the latch
-//             releases the moment the target dies/despawns, and a second
-//             tap cancels it. Keyboard-only exception to the pad no-latch
-//             law, ordered by G; the gamepad and F8/F9 are untouched.
-//             Only when nothing is in range (or the latch declines) does
-//             Space keep its stock HUD pickup job (true-nearest pick).
+//   Space     attack latch first (MEAMU Train 8 addendum, G 2026-11-19;
+//             Train 9, same day: standalone + widened): a tap locks the
+//             closest attackable monster ON SCREEN (the whole visible
+//             viewport, no range cap; walk-in closes the distance) and
+//             the hero basic-attacks it continuously with no key held;
+//             the latch releases the moment the target dies/despawns,
+//             and a second tap cancels it. STANDALONE: it works with
+//             the F9 keyboard master switch ON or OFF (Train 8 gated
+//             it on the switch and mouse-first players got a dead
+//             key). Keyboard-only exception to the pad no-latch law,
+//             ordered by G; the gamepad and F8/F9 are untouched. Only
+//             when no attackable target is on screen (or the world
+//             gates are closed) does Space keep its stock HUD pickup
+//             job (true-nearest pick with the switch on, stock pick
+//             with it off).
 //   F8        AUTO mode: keep casting the selected skill until toggled
 //             off, the mouse is grabbed, a modal opens, the scene changes
 //             or the hero dies. Chat does NOT stop it — while the chat
@@ -37,7 +44,9 @@
 //             2026-11-13): flips the keyboard feature ON/OFF in-world
 //             and persists Config.ini [Keyboard] Enable. OFF silences
 //             every KbPlay KEYBOARD input path at once (digits, Tab
-//             cycle, Enter, the Space nearest-pick upgrade). AUTO is
+//             cycle, Enter, the Space nearest-pick upgrade). The Space
+//             attack latch is decoupled from the switch (Train 9):
+//             it engages and runs with the switch on or off. AUTO is
 //             decoupled from the switch (2026-11-15): F8 toggles it
 //             with the switch on or off, an F9 flip mid-AUTO leaves
 //             AUTO running, and the cast-streak latch arms either way.
@@ -56,7 +65,7 @@ bool KbPlay_TabCycle();
 // Space hook called by HUD_HotkeyTick on the Space press edge (same
 // pattern as KbPlay_TabCycle): true when the tap latched a target or
 // cancelled the latch (Space consumed), false when Space keeps its
-// stock pickup job.
+// stock pickup job. NOT gated on the keyboard master switch (Train 9).
 bool KbPlay_SpaceTap();
 
 // The keyboard-controls master state (boot config + F9 flips). Read by the

@@ -87,8 +87,11 @@
 // * Master toggle (MEAMU kb-toggle, 2026-11-13): Config.ini [Keyboard]
 //   Enable (default 1 when missing) decides the boot state; F9 flips it
 //   in game under the AUTO toggle's gate discipline and persists the new
-//   value. OFF folds into the shared Gates() so digits/Tab/Enter/Space
-//   all revert to stock behavior at once. AUTO is NOT part of the
+//   value. OFF folds into the shared Gates() so digits/Tab/Enter (and
+//   the Space pickup upgrade) revert to stock behavior at once. The
+//   Space ATTACK LATCH is not part of the switch either (MEAMU
+//   Train 9 decouple, 2026-11-19 - see KbPlay_SpaceTap). AUTO is
+//   NOT part of the
 //   switch (MEAMU decouple, 2026-11-15, G's order): F8 toggles AUTO
 //   with the switch on or off, a flip mid-AUTO leaves AUTO running,
 //   and the cast-streak latch arms either way — AUTO's drive runs on
@@ -515,7 +518,12 @@ void AutoDriveButton()
 // legality is ValidMonster, the same test Tab cycling and AUTO aim use;
 // the server enforces the rest (own summons, safe zones) exactly as it
 // does for mouse attacks.
-constexpr int kAtkRadius = 12;   // tiles (Chebyshev) for latch acquisition
+//
+// MEAMU Train 9 widen (G's order, 2026-11-19): acquisition is NO longer
+// capped at 12 tiles - the scan covers the whole client character
+// table, i.e. every attackable entity on the visible screen (the table
+// holds exactly the entities the client has in view), and the
+// click-attack pipeline's walk-in closes the distance to a far lock.
 
 void SetLeftButton(bool down)
 {
@@ -536,7 +544,10 @@ void AtkDriveButton()
 
 // Closest-first acquisition (the AcquireTarget scan with the spec's
 // order: no Tab-lock / last-target preference — G's spec locks the
-// closest attackable enemy).
+// closest attackable enemy). Train 9: the scan is screen-wide -
+// every entry of the client character table (the viewport list)
+// competes; closest = smallest Chebyshev tile distance, the
+// facing arc breaks ties.
 int AcquireNearestBasic()
 {
     CHARACTER* hero = HeroC();
@@ -546,7 +557,6 @@ int AcquireNearestBasic()
         if (!ValidMonster(i)) continue;
         CHARACTER* c = EntryAt(i);
         const int d = Cheb(hero, c);
-        if (d > kAtkRadius) continue;
         typedef float (__cdecl *CreateAngleFn)(float, float, float, float);
         const float ang = ((CreateAngleFn)&CreateAngle)(
             hero->Object.Position[0], hero->Object.Position[1],
@@ -674,7 +684,9 @@ void LatchFrame(bool chat)
 
 // ── Keyboard controls master switch (F9 / boot config) ──────────────────────
 // OFF silences every KbPlay KEYBOARD input path at once (digit casts,
-// Tab cycle, Enter talk, the Space nearest-pick). AUTO is decoupled
+// Tab cycle, Enter talk, the Space nearest-pick). The Space attack
+// latch is decoupled from the switch as of Train 9 (a standalone
+// feature, not keyboard play). AUTO is decoupled
 // from the switch (MEAMU 2026-11-15, G's order): a flip in either
 // direction leaves a running AUTO untouched — AUTO's drive runs on
 // AutoGates(), not the keyboard gates. A hand-held digit cast still
@@ -690,7 +702,8 @@ void KbSet(bool on, const char* why)
     if (!on) {
         StopCast("keyboard controls off");
         gLockIdx = -1;   // the Tab lock belongs to the feature
-        AtkLatchRelease("keyboard controls off", false);
+        // The Space attack latch is NOT released here: it is
+        // decoupled from this switch (Train 9), exactly like AUTO.
     }
     gUserSettings.SetKeyboardEnable(on);
     if (SceneFlag == 5) Say("KEYBOARD CONTROLS: %s", on ? "ON" : "OFF");
@@ -977,13 +990,23 @@ bool KbPlay_TabCycle()
 // pattern: true = the tap was consumed by the attack latch, false = Space
 // keeps its stock job (pick up the nearest ground item). Space's new job
 // wins whenever there is something to attack — the latch engages on the
-// closest attackable monster in range, or cancels a running latch — and
-// the pickup keeps the key only when no target exists, the keyboard
-// master switch is OFF, or the world gates are closed (chat included:
+// closest attackable monster on screen, or cancels a running latch —
+// and the pickup keeps the key only when no attackable target exists
+// on screen, or the world gates are closed (chat included:
 // HUD_HotkeyTick never reaches here while typing).
+//
+// MEAMU Train 9 (2026-11-19): the latch is STANDALONE — decoupled from
+// the keyboard master switch, the same treatment AUTO got 2026-11-15.
+// Train 8 gated the engage on KbEnabled(), so any player with keyboard
+// controls OFF (a mouse-first player; the switch persists in
+// Config.ini) got a silently dead Space: every tap declined to the
+// pickup fallback and nothing happened near mobs (G's field report on
+// v20261119-0203: "it doesnt work"). Gates() alone is the right
+// bound — its InputEnable term keeps Space out of the chat line — and
+// the drive in the tick already ran switch-free on AutoGates().
 bool KbPlay_SpaceTap()
 {
-    if (!Gates() || !KbEnabled()) return false;
+    if (!Gates()) return false;
     if (gAtkLatchIdx >= 0) {
         AtkLatchRelease("space tap", true);
         return true;
