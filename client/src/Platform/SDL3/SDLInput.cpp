@@ -25,9 +25,8 @@ int VirtualKey(SDL_Scancode key) {
     case SDL_SCANCODE_TAB: return 9;
     case SDL_SCANCODE_RETURN: case SDL_SCANCODE_KP_ENTER: return 13;
     case SDL_SCANCODE_ESCAPE: return 27;
-    case SDL_SCANCODE_GRAVE: return 0xC0;   // MEAMU Train 14: backtick (VK_OEM_3) — scheme toggle
     case SDL_SCANCODE_SPACE: return 32;
-    case SDL_SCANCODE_GRAVE: return 0xC0;   // MEAMU Train 13: VK_OEM_3 — scheme toggle (ActionMove)
+    case SDL_SCANCODE_GRAVE: return 0xC0;   // MEAMU Trains 13+14: VK_OEM_3 — the ONE grave route (ActionMove scheme toggle)
 
     case SDL_SCANCODE_LSHIFT: return 0xa0;
     case SDL_SCANCODE_RSHIFT: return 0xa1;

@@ -30,6 +30,7 @@
 #include "Entity/EntityName.h"    // EntityName::Get
 #include "functions.h"            // Camera_ProjectWorldToScreen, CreateAngle
 #include "Net/Net.h"              // gNetwork
+#include "Render/ActionCamera.h"  // Train 15: strafe facing law (gActionCamera)
 #include <SDL3/SDL.h>             // SDL_GetTicks
 #include <cmath>
 #include <cstdarg>
@@ -67,16 +68,18 @@ constexpr unsigned kTapMaxMs     = 350; // longest first press still a tap
 constexpr unsigned kAimGraceMs   = 500; // park yield after the player
                                         // moves the real mouse
 
-// ── Bounce 13 dash wire — STUB ───────────────────────────────────────────────
-// GG INTEGRATION POINT: the GS worker's census owns the final packet
-// code (DASH-WIRE.md, builds/bounce13-dash-2026-11-19 — not landed when
-// this was built). Set kDashWireCode to the final C1 code and the two
-// request shapes below go live unchanged:
-//   direction dash: [C1][05][code][0][dir]        dir = world octant 0..7
-//   blink-to-target:[C1][06][code][1][keyHi][keyLo]
-// While kDashWireCode == 0 the requests are detected and logged but NO
-// packet leaves the client (dash/blink are inert, movement is not).
-constexpr unsigned char kDashWireCode = 0;
+// ── Bounce 13 dash wire — LIVE (Train 15 integration) ────────────────────────
+// Authoritative spec: builds/bounce13-dash-2026-11-19/DASH-WIRE.md.
+// One C1 frame, 7 bytes: [C1][07][F3][FD][mode][b5][b6] — head 0xF3,
+// subcode 0xFD (census-proven free both directions; the F3 wildcard in
+// HackPacketCheck.txt passes it with no data change).
+//   mode 0 (direction):     b5 = engine Dir 0..7, b6 = 0
+//   mode 1 (dash-to-target): b5/b6 = target server index HB/LB
+// The GS answers with the stock teleport notification (C3 1C) on success
+// and silence on refusal; the client falls back to walking (blink) or
+// simply does not move (direction dash). NO cooldown, no mana, all classes.
+constexpr unsigned char kDashHead = 0xF3;
+constexpr unsigned char kDashSub  = 0xFD;
 constexpr unsigned char kDashModeDirection = 0;
 constexpr unsigned char kDashModeTarget    = 1;
 
@@ -188,44 +191,52 @@ bool DriveGates()
            InputEnable == 0 && DAT_083a7c24 == 0 && !HeroDead();
 }
 
-// ── Dash / blink wire (STUB — see kDashWireCode) ─────────────────────────────
+// ── Dash / blink wire (LIVE — DASH-WIRE.md) ──────────────────────────────────
+// Emits exactly: C1 07 F3 FD <mode> <b5> <b6>. For mode 1, keyOrDir is the
+// target's server object index (CHARACTER.Key, the viewport/attack-packet
+// index) split MAKE_NUMBERW-style: b5 = HB, b6 = LB. For mode 0, keyOrDir
+// is the engine Dir byte (see OctantOf) and b6 = 0.
 bool SendDashRequest(unsigned char mode, int keyOrDir)
 {
-    if (kDashWireCode == 0) {
-        ActLog("ACTION-WIRE: %s request (arg %d) — wire code TBD (Bounce 13), dropped",
-               mode == kDashModeTarget ? "blink-to-target" : "dash", keyOrDir);
-        return false;
-    }
+    BYTE b5, b6;
     if (mode == kDashModeTarget) {
-        const BYTE pkt[6] = { 0xC1, 0x06, kDashWireCode, kDashModeTarget,
-                              (BYTE)((keyOrDir >> 8) & 0xFF), (BYTE)(keyOrDir & 0xFF) };
-        gNetwork.SendC1(pkt, sizeof(pkt));
+        b5 = (BYTE)((keyOrDir >> 8) & 0xFF);   // target index HB
+        b6 = (BYTE)(keyOrDir & 0xFF);          // target index LB
     } else {
-        const BYTE pkt[5] = { 0xC1, 0x05, kDashWireCode, kDashModeDirection,
-                              (BYTE)(keyOrDir & 0xFF) };
-        gNetwork.SendC1(pkt, sizeof(pkt));
+        b5 = (BYTE)(keyOrDir & 0xFF);          // engine Dir 0..7
+        b6 = 0;
     }
+    const BYTE pkt[7] = { 0xC1, 0x07, kDashHead, kDashSub, mode, b5, b6 };
+    gNetwork.SendC1(pkt, sizeof(pkt));
+    ActLog("ACTION-WIRE: %s sent — C1 07 F3 FD %02X %02X %02X",
+           mode == kDashModeTarget ? "blink-to-target" : "dash",
+           (unsigned)mode, (unsigned)pkt[5], (unsigned)pkt[6]);
     return true;
 }
 
-// World octant index (0..7) of a tile delta, for the dash wire byte.
-// Convention: 0 = +Y, then clockwise in 45° steps viewed with +X right /
-// +Y up (1 = +X+Y, 2 = +X, 3 = +X−Y, 4 = −Y, 5 = −X−Y, 6 = −X, 7 = −X+Y).
-// GG/GS agree the final mapping when kDashWireCode is wired (the request
-// is inert until then). NOTE: Movement.h's Entity_GetDirCode is a
-// declared-but-never-defined decompile stub (and returns an FPU angle
-// code, not an octant) — the engine's real, defined angle helper is
-// CreateAngle (functions.h), used for the facing write in the drive.
+// World octant of a tile delta, in the ENGINE's Dir numbering — the value
+// that, assigned to lpObj->Dir, faces the character that way (DASH-WIRE.md,
+// Bounce 13; precedent CustomTrain.cpp kSparDirX/Y). Train 15 VERIFIED this
+// table against the wire spec line by line: Train 13's draft table was the
+// same cycle rotated one step (its 0 = (0,+1)); the engine's 0 = (−1,+1),
+// so every value here is the draft's +1 mod 8. Table (dx,dy) -> Dir:
+//   (−1,+1)=0  (0,+1)=1  (+1,+1)=2  (+1,0)=3
+//   (+1,−1)=4  (0,−1)=5  (−1,−1)=6  (−1,0)=7
+// NOTE: Movement.h's Entity_GetDirCode is a declared-but-never-defined
+// decompile stub (and returns an FPU angle code, not an octant) — the
+// engine's real, defined angle helper is CreateAngle (functions.h), used
+// for the facing write in the drive. OctantOf's only other consumer is
+// the drive's best-octant validity check (>= 0), which is numbering-blind.
 int OctantOf(int dx, int dy)
 {
-    if (dx == 0 && dy > 0)  return 0;
-    if (dx > 0  && dy > 0)  return 1;
-    if (dx > 0  && dy == 0) return 2;
-    if (dx > 0  && dy < 0)  return 3;
-    if (dx == 0 && dy < 0)  return 4;
-    if (dx < 0  && dy < 0)  return 5;
-    if (dx < 0  && dy == 0) return 6;
-    return 7;   // dx<0, dy>0
+    if (dx < 0  && dy > 0)  return 0;
+    if (dx == 0 && dy > 0)  return 1;
+    if (dx > 0  && dy > 0)  return 2;
+    if (dx > 0  && dy == 0) return 3;
+    if (dx > 0  && dy < 0)  return 4;
+    if (dx == 0 && dy < 0)  return 5;
+    if (dx < 0  && dy < 0)  return 6;
+    return 7;   // dx<0, dy==0
 }
 
 // Feed the four direction slots; returns true when a double-tap fired
@@ -248,7 +259,7 @@ bool DashScan(unsigned now, int wantX, int wantY)
                 if (dx == 0 && dy == 0) { dx = (s == 3) - (s == 2); dy = (s == 1) - (s == 0); }
                 const int oct = OctantOf(dx, dy);
                 SendDashRequest(kDashModeDirection, oct);
-                ActLog("ACTION: dash (slot %d, octant %d)", s, oct);
+                ActLog("ACTION: dash (slot %d, engine dir %d)", s, oct);
                 t.consumed = true;
                 t.releaseT = 0;                      // no triple-tap chain
                 fired = true;
@@ -305,7 +316,7 @@ bool ActionMove_TryBlinkEngage(int targetIdx, int attackRangeTiles)
     const bool sent = SendDashRequest(kDashModeTarget, key);
     ActLog("ACTION: blink-engage %s (key %d, dist %d > range %d) %s",
            EntityName::Get((char*)tgt), key, Cheb(hero, tgt),
-           attackRangeTiles, sent ? "sent" : "— wire pending");
+           attackRangeTiles, sent ? "sent" : "NOT SENT");
     return sent;
 }
 
@@ -405,6 +416,20 @@ void ActionMove_Tick()
         typedef float (__cdecl *CreateAngleFn)(float, float, float, float);
         hero->Object.Angle[2] = ((CreateAngleFn)&CreateAngle)(hx, hy,
             hx + (float)bestOx * 100.0f, hy + (float)bestOy * 100.0f);
+        // MEAMU Train 15 (strafe facing law, G 2026-11-19 12:37 — Vice City
+        // TPS): while the action camera is pointer-locked, the hero ALWAYS
+        // faces the camera yaw. WASD then strafes / backpedals around the
+        // aim instead of turning him into the movement direction. The
+        // movement step above is unchanged — only the facing is overridden,
+        // with the camera's own convention (facing = 180 - camYaw, the same
+        // value ActionCamera's idle ease targets). Camera not locked
+        // (Classic, kill switch, cursor UI up) = face-movement stands.
+        if (gActionCamera.PointerLocked()) {
+            float face = 180.0f - gActionCamera.GetYaw();
+            while (face > 180.0f) face -= 360.0f;
+            while (face <= -180.0f) face += 360.0f;
+            hero->Object.Angle[2] = face;
+        }
     } else {
         // Projection degenerate (should not happen): NavMove's screen park.
         parkX = winW * 0.5f + wx * radius;

@@ -49,12 +49,11 @@
 // changes); callers keep their normal walk-in in the same frame, so a
 // refused or unanswered blink degrades to the exact stock walk-in.
 //
-// WIRE STUB: the Bounce 13 dash packet code is NOT final yet (the GS
-// worker's census owns it; DASH-WIRE.md had not landed when this was
-// built). Sends are built behind kDashWireCode in ActionMove.cpp — while
-// it is 0, requests are detected, logged and dropped (no packet leaves
-// the client). GG wires the final code at integration; nothing else
-// changes.
+// WIRE (LIVE, Train 15 integration): the Bounce 13 dash packet is final
+// (builds/bounce13-dash-2026-11-19/DASH-WIRE.md) — one C1 frame, 7 bytes:
+// [C1][07][F3][FD][mode][b5][b6]; mode 0 = direction dash (b5 = engine
+// Dir 0..7, b6 = 0), mode 1 = dash-to-target (b5/b6 = target server
+// index HB/LB). Sends live in SendDashRequest() in ActionMove.cpp.
 
 void ActionMove_Tick();
 

@@ -10,15 +10,14 @@
 // idle; aim is the screen centre (a small reticle is drawn and the stock
 // hover picker, fed a centred cursor, resolves targets through it).
 //
-// SEAM (Train 13 owns the control-scheme state): Train 13 owns the scheme
-// toggle (backtick) and the shared scheme accessor. This module keeps a
-// LOCAL stand-in flag with the same shape — SchemeIsAction() /
-// SetSchemeAction(bool) — and ALL engage/disengage logic keys off it, so
-// at integration GG only has to (a) delete the local backtick driver in
-// Player_InputTick + ToggleSchemeLocal(), and (b) call SetSchemeAction()
-// from Train 13's scheme change (or re-point SchemeIsAction() at their
-// accessor). SetSchemeAction(false) releases the pointer lock
-// SYNCHRONOUSLY — flipping to Classic frees the cursor the same frame.
+// SEAM (Train 15 integration, WIRED): Train 13's ActionMove owns the
+// control-scheme state (backtick toggle + Options selector). This module
+// keeps its seam flag — SchemeIsAction() / SetSchemeAction(bool) — and
+// Update() mirrors it from ActionMove_IsAction() EVERY sim step (a state
+// compare, so every flip path — backtick, Options menu — is picked up
+// with no extra call sites). SetSchemeAction(false) releases the pointer
+// lock SYNCHRONOUSLY in that call, so flipping to Classic frees the
+// cursor within the same sim step the camera sees the flip (<=40 ms).
 //
 // Master availability gate: Config.ini [Game] ActionCamera (UserSettings,
 // default 1). The camera itself is OFF until the scheme engages it.
@@ -31,8 +30,6 @@ public:
     // ── Scheme seam (Train 13 at integration) ──────────────────────────
     bool SchemeIsAction() const { return m_SchemeAction; }
     void SetSchemeAction(bool on);
-    // Local stand-in driver for this branch only (backtick). Settings-gated.
-    void ToggleSchemeLocal();
 
     bool FeatureEnabled() const;                 // [Game] ActionCamera
     bool Engaged() const;                        // feature + scheme + in world
@@ -77,11 +74,11 @@ private:
     void EngageLock();
     void ReleaseLock();
 
-    bool  m_SchemeAction = false;   // LOCAL stand-in for Train 13's scheme
+    bool  m_SchemeAction = false;   // mirrored from ActionMove_IsAction() each step
     bool  m_Locked       = false;
     bool  m_HasYaw       = false;
     float m_CamYaw       = -45.0f;  // degrees, CameraAngle[2] convention
-    float m_Pitch        = 22.0f;   // camera elevation above the aim point
+    float m_Pitch        = 15.0f;   // camera elevation above the aim point (default 15° — Vice City TPS, G 2026-11-19 12:37; band 8–60°)
     float m_LastHeroX    = 0.0f;
     float m_LastHeroY    = 0.0f;
     unsigned m_Step      = 0;

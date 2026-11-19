@@ -3,6 +3,7 @@
 #include "Render/Camera3D.h"
 #include "Render/Gfx.h"
 #include "Config/UserSettings.h"
+#include "Input/ActionMove.h"   // Train 15: scheme state owner (ActionMove_IsAction)
 #include "Platform/IInput.h"
 #include "Platform/IWindow.h"
 #include "Entity/EntityTypes.h"
@@ -115,20 +116,6 @@ void CActionCamera::SetSchemeAction(bool on)
     if (!on) ReleaseLock();
 }
 
-void CActionCamera::ToggleSchemeLocal()
-{
-    // LOCAL stand-in driver (backtick) for this branch. Train 13 owns the
-    // real scheme toggle; at integration this function and its
-    // Player_InputTick hook go away and SetSchemeAction() is driven by
-    // Train 13's scheme accessor instead.
-    if (!FeatureEnabled()) {
-        UI_AddNotice((char*)"Action camera disabled ([Game] ActionCamera=0)", 1);
-        return;
-    }
-    SetSchemeAction(!m_SchemeAction);
-    UI_AddNotice((char*)(m_SchemeAction ? "ACTION camera: ON" : "ACTION camera: OFF"), 1);
-}
-
 // ── Pointer lock ────────────────────────────────────────────────────────
 
 void CActionCamera::EngageLock()
@@ -190,6 +177,11 @@ void CActionCamera::OnMouseDelta(int dx, int dy)
 
 void CActionCamera::Update()
 {
+    // Train 15 integration: mirror Train 13's scheme state into the seam
+    // flag (state compare every sim step — covers the backtick toggle AND
+    // the Options-menu selector; SetSchemeAction(false) releases the lock
+    // synchronously, so a flip to Classic frees the cursor this step).
+    SetSchemeAction(ActionMove_IsAction());
     ++m_Step;
     if (!Engaged()) {
         ReleaseLock();
