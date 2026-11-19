@@ -404,6 +404,7 @@ set(MU_SOURCES
     src/Core/DataPrefetch.cpp
     src/UI/MiniMap.cpp
     src/Render/Camera3D.cpp
+    src/Render/ActionCamera.cpp
     src/UI/OptionsMenu.cpp
     src/UI/MoveList.cpp
     src/UI/CommandMenu.cpp

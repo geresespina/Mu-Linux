@@ -17,6 +17,7 @@
 #include "UI/BuffBar.h"
 #include "UI/BoostStrip.h"
 #include "UI/ExactStatsHud.h" // MEAMU Train 11: exact stats slim line + sheet
+#include "Render/ActionCamera.h" // MEAMU Train 14: reticle + lock state
 #include "Model/SmdImport.h"
 #include "Physics/ClothTypes.h"
 #include "Text/TextCore.h"
@@ -85,7 +86,11 @@ void __cdecl RenderInformation(void) {
     // DESVIACION: menú D y ventana de historial de chat, sobre los paneles DLL.
     gCommandMenu.Render();
     gChatLogWindow.Render();
-    Cursor_Render(); // RenderCursor
+    // MEAMU Train 14: centre reticle while pointer-locked; the software
+    // cursor is suppressed (the lock hides the OS cursor and the logical
+    // cursor is parked at the centre, under the reticle).
+    gActionCamera.RenderReticle();
+    if (!gActionCamera.PointerLocked()) Cursor_Render(); // RenderCursor
     RenderInfomation3D(); // RenderInfomation3D
 }
 

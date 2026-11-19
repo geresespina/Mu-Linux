@@ -3,6 +3,9 @@
 #include "Platform/Win32/Win32Window.h"
 #include "Input/Input.h"
 #include <windowsx.h>
+// MEAMU Train 14: pointer-lock state shared with Input_OnWindowMessage
+// (deltas are computed there from absolute moves while the mode is on).
+static bool g_Win32RelativeMouse = false;
 namespace Platform {
 class Win32Input final : public IInput {
 public:
@@ -12,6 +15,26 @@ public:
         if (capture) SetCapture(GetWin32Window().GetHwnd());
         else ReleaseCapture();
     }
+    // MEAMU Train 14: best-effort pointer lock on the native path (the
+    // shipping builds use SDL3): confine the cursor to the client rect
+    // and hide it; motion deltas are derived in Input_OnWindowMessage.
+    void SetRelativeMouseMode(bool enabled) override {
+        if (enabled == g_Win32RelativeMouse) return;
+        g_Win32RelativeMouse = enabled;
+        const HWND hwnd = GetWin32Window().GetHwnd();
+        if (enabled) {
+            RECT rc; GetClientRect(hwnd, &rc);
+            POINT tl{rc.left, rc.top}, br{rc.right, rc.bottom};
+            ClientToScreen(hwnd, &tl); ClientToScreen(hwnd, &br);
+            RECT clip{tl.x, tl.y, br.x, br.y};
+            ClipCursor(&clip);
+            ShowCursor(FALSE);
+        } else {
+            ClipCursor(nullptr);
+            ShowCursor(TRUE);
+        }
+    }
+    bool RelativeMouseMode() const override { return g_Win32RelativeMouse; }
     // IDA: CheckIME_Status (0x0047EDC0), misma adquisición/consulta/cierre del contexto.
     ImeState ReadImeState(bool clearActive) override {
         const HWND window = GetWin32Window().GetHwnd();
@@ -71,6 +94,14 @@ void Input_OnWindowMessage(UINT message, WPARAM wParam, LPARAM lParam)
     }
     event.x = GET_X_LPARAM(lParam);
     event.y = GET_Y_LPARAM(lParam);
+    // MEAMU Train 14: while pointer-locked, derive per-event deltas from
+    // the absolute moves (the cursor is clipped to the client rect).
+    if (message == WM_MOUSEMOVE && g_Win32RelativeMouse) {
+        static int lastX = 0, lastY = 0;
+        static bool hasLast = false;
+        if (hasLast) { event.relX = event.x - lastX; event.relY = event.y - lastY; }
+        lastX = event.x; lastY = event.y; hasLast = true;
+    }
     event.wheel = GET_WHEEL_DELTA_WPARAM(wParam);
     // DESVIACION (Fase 4, texto Unicode): la ventana es Unicode, así que
     // WM_CHAR trae UTF-16 y los caracteres fuera del BMP llegan como dos

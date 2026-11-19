@@ -3,7 +3,7 @@
 #include <string>
 namespace Platform {
 enum class InputEventType { MouseMove, LeftDown, LeftUp, LeftDoubleClick, RightDown, RightUp, Wheel, MiddleDown, MiddleUp, ImeStart, ImeEnd, Text };
-struct InputEvent { InputEventType type; int x = 0; int y = 0; int wheel = 0; uint32_t character = 0; };
+struct InputEvent { InputEventType type; int x = 0; int y = 0; int wheel = 0; uint32_t character = 0; int relX = 0; int relY = 0; };
 struct ImeState { uint32_t conversion = 0; uint32_t sentence = 0; };
 class IInput {
 public:
@@ -12,6 +12,11 @@ public:
     virtual bool HasImeModeIndicator() const = 0;
     virtual int16_t KeyState(int key) = 0;
     virtual void CaptureMouse(bool capture) = 0;
+    // MEAMU Train 14: pointer lock for the Action Camera. While enabled
+    // the cursor is hidden/confined and MouseMove events carry per-event
+    // deltas in relX/relY (absolute x/y stop being meaningful).
+    virtual void SetRelativeMouseMode(bool enabled) = 0;
+    virtual bool RelativeMouseMode() const = 0;
     virtual ImeState ReadImeState(bool clearActive = false) = 0;
     virtual void PositionIme(int x, int y, int width, int height) = 0;
     // Texto del portapapeles en UTF-8 (vacío si no hay texto). Lo usa Ctrl+V.

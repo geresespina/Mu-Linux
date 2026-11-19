@@ -6,6 +6,7 @@
 #include "Platform/IInput.h"
 #include "Item/ContentCatalog.h"
 #include "Render/Camera3D.h"
+#include "Render/ActionCamera.h"
 #include "UI/MiniMap.h"
 #include "Input/KbPlay.h"
 #include "Input/Gamepad.h"
@@ -493,6 +494,7 @@ static void HUD_HotkeyTick(void)
     int kSpace = PressKey(VK_SPACE);
     int kF10 = PressKey(VK_F10);
     int kF11 = PressKey(VK_F11);
+    int kBacktick = PressKey(0xC0);   // MEAMU Train 14: '`' (VK_OEM_3) scheme toggle, local driver
 
     if (GuildInputEnable != '\0') return;  // g_ChatMode
     if (DAT_00559c84 != '\0') return;  // g_TextMode (login / dialog text)
@@ -543,6 +545,11 @@ static void HUD_HotkeyTick(void)
     // DESVIACION (DLL Controller.cpp): F10 activa la cámara 3D, F11 la restaura.
     if (kF10) gCamera3D.Toggle();
     if (kF11) gCamera3D.Restore();
+    // MEAMU Train 14 (Amendment 2): backtick flips the control scheme.
+    // LOCAL stand-in driver — Train 13 owns the real scheme toggle and
+    // its shared accessor; at integration this line is replaced by a
+    // call from their scheme change into gActionCamera.SetSchemeAction().
+    if (kBacktick) gActionCamera.ToggleSchemeLocal();
 
     // IDA Chat_InputTick L4921-6414.  Al abrir con tecla, si la ventana del
     // NPC no se pudo cerrar (baul con EquipmentItem, Chaos con items) el panel

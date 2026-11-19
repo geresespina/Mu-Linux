@@ -8,6 +8,7 @@
 #include "Text/TextCore.h"
 #include "Platform/Text.h"
 #include "Render/Camera3D.h"
+#include "Render/ActionCamera.h"
 #include "Input/Input.h"
 
 // Helper de src/UI/Chat_InputTick.cpp — envía una línea de chat
@@ -72,6 +73,13 @@ void Input_OnEvent(const Platform::InputEvent& event)
     switch (event.type)
     {
     case Platform::InputEventType::MouseMove:     // 0x200
+        // MEAMU Train 14: pointer-locked (Action Camera) — the motion is
+        // pure look delta. The logical cursor stays centred (the camera
+        // module owns it) and Camera3D drag never sees the event.
+        if (gActionCamera.PointerLocked()) {
+            gActionCamera.OnMouseDelta(event.relX, event.relY);
+            break;
+        }
         // g_MouseX = LOWORD(lParam) * 640 / g_ScreenW  → DAT_083a427c
         // g_MouseY = HIWORD(lParam) * 480 / g_ScreenH  → DAT_083a4278
         {

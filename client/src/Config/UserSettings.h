@@ -193,6 +193,13 @@ public:
     // [Game] MoveMarker 1/0, default 1. Ver Net/MoveMarkers.h.
     bool GetMoveMarker() const { return m_MoveMarker; }
     void SetMoveMarker(bool enabled) { m_MoveMarker = enabled; }
+    // MEAMU Train 14: Action Camera (pointer-lock follow camera for the
+    // ACTION control scheme) — Config.ini [Game] ActionCamera 1/0,
+    // default 1: the feature is AVAILABLE, but the camera itself stays
+    // off until the ACTION scheme engages it (see Render/ActionCamera.h).
+    // 0 is a kill switch: no backtick toggle, no lock, no camera.
+    bool GetActionCamera() const { return m_ActionCamera; }
+    void SetActionCamera(bool enabled) { m_ActionCamera = enabled; }
     const char* GetUsername() const { return m_Username; }
     int GetLanguage() const { return m_Language; }
     // DESVIACION (Fase 4, Config.ini [Font] TextShadow / TextOutline): sombra
@@ -263,6 +270,7 @@ private:
     bool m_BloodGore = true;
     bool m_HideWings = true;
     bool m_MoveMarker = true;
+    bool m_ActionCamera = true;
     int  m_Language = USER_LANG_DEFAULT;
     bool m_TextShadow = false;
     bool m_TextOutline = false;

@@ -134,6 +134,9 @@ void CUserSettings::Load(const char* iniPath)
     m_HideWings = ReadRange("Game", "HideWings", iniPath, 0, 1, 1) != 0;
     // MEAMU (2026-11-18): click/teleport markers — Config.ini [Game] MoveMarker 1/0.
     m_MoveMarker = ReadRange("Game", "MoveMarker", iniPath, 0, 1, 1) != 0;
+    // MEAMU Train 14: Action Camera kill switch — missing key reads as 1
+    // (feature available; engagement is the scheme's job, not this key's).
+    m_ActionCamera = ReadRange("Game", "ActionCamera", iniPath, 0, 1, 1) != 0;
 
     // MEAMU kb-toggle (2026-11-13): keyboard-only play master switch
     // ([Keyboard] Enable). Missing section/key reads as 1, so existing
