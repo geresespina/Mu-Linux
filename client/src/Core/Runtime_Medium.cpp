@@ -16,6 +16,7 @@
 #include "Input/KbPlay.h"   // MEAMU auto-attack: AUTO indicator
 #include "UI/BuffBar.h"
 #include "UI/BoostStrip.h"
+#include "UI/ExactStatsHud.h" // MEAMU Train 11: exact stats slim line + sheet
 #include "Model/SmdImport.h"
 #include "Physics/ClothTypes.h"
 #include "Text/TextCore.h"
@@ -75,6 +76,9 @@ void __cdecl RenderInformation(void) {
     // MEAMU (2026-11-17): boost strip -- headline multiplier +
     // factor chips above the HP orb, fed by the F3/F8 snapshot.
     gBoostStrip.Render();
+    // MEAMU Train 11: exact stats slim line (above the strip) +
+    // F6 full sheet, fed by the F3/FB snapshot.
+    ExactStatsHud::Render();
     // DESVIACION (DLL Interface.cpp, hook 0x00525CEC): mapa (Tab) y menú M.
     gMiniMap.Render();
     gMoveList.Render();
