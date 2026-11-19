@@ -24,13 +24,13 @@ namespace ServerConfig {
 // ConnectServer: lista de servers y ocupación (F4/02), redirect al GameServer
 // (F4/03). Con puerto 0 no se usa: el cliente conecta directo al GameServer y el
 // select-server muestra una entrada fija.
-constexpr char           ConnectServerIP[]   = "mu.exmco.com";
+constexpr char           ConnectServerIP[]   = "mu.meamu.ca";
 constexpr unsigned short ConnectServerPort   = 44405;
 
 // GameServer: destino directo cuando no hay ConnectServer, y fallback si el
 // ConnectServer no responde. Con ConnectServer, el GameServer al que se salta lo
 // manda el server en el redirect F4/03 (sale de su ServerList.dat).
-constexpr char           GameServerIP[]      = "mu.exmco.com";
+constexpr char           GameServerIP[]      = "mu.meamu.ca";
 constexpr unsigned short GameServerPort      = 55901;
 
 // Identidad del server (ver arriba). ClientVersion acepta "0.97.11" o "09711".
@@ -42,6 +42,6 @@ constexpr char           ClientVersion[]     = "0.97.40";
 // (Scene_Login_ServerSelect) so the running build is identifiable at a
 // glance (G's requirement, 2026-11-12). This is NOT the protocol
 // ClientVersion above — never bump that one for a release.
-constexpr char           BuildVersionLabel[] = "v20261118-2110"; // MEAMU release (format vYYYYMMDD-HHMM, America/Toronto, set at build freeze)
+constexpr char           BuildVersionLabel[] = "v20261118-2151"; // MEAMU release (format vYYYYMMDD-HHMM, America/Toronto, set at build freeze)
 
 } // namespace ServerConfig
