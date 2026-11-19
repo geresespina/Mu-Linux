@@ -127,6 +127,8 @@ set(MU_SOURCES
     src/Item/ChaosMixRates.cpp
     src/UI/HealthBar.cpp
     src/UI/RenaHud.cpp
+    src/Net/ExactStats.cpp
+    src/UI/ExactStatsHud.cpp
     src/Net/Recv/Recv_Account.cpp
     src/Net/Recv/Recv_Character.cpp
     src/Net/Recv/Recv_Chat.cpp
