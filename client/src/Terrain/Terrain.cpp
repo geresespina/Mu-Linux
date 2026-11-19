@@ -657,17 +657,10 @@ float10 __cdecl CharacterMoveSpeed(CHARACTER* c)
   }
   result = 15.0;
 LABEL_12:
-  // MEAMU NINJA RUN: player ground step rate x1.75 (walk 12->21, run 15->26.25,
-  // winged 16->28 units/tick). The C3/0E PhysiSpeed report scales by the
-  // same factor (Game_MainLoop) under the GS NinjaRun 200% allowance.
-  if ( isPlayer )
-  {
-    // MEAMU Train 37: the HERO steps at the active factor (dash burst
-    // = kDashFactor); everyone else on screen keeps the base factor —
-    // their own clients report their own bursts.
-    result *= ((void*)c == (void*)Hero) ? NinjaRun::ActiveFactor()
-                                        : NinjaRun::kSpeedFactor;
-  }
+  // MEAMU Train 51 ROLLBACK (2026-11-19): the Ninja Run step-rate
+  // scaling is REMOVED — stock step rate for every player, exactly
+  // the pre-Nov-15 baseline. The movespeed increase was convicted
+  // as the desync's root; see NinjaRun.h for the rollback record.
   if ( (*(const BYTE *)(reinterpret_cast<const BYTE*>(c) + 120) & 2) == 2 )
   {
     return result * 0.5;

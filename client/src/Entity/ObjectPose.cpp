@@ -52,10 +52,8 @@ void ObjectPose_PrepareBones(OBJECT* entity, void* model, float* bones, char tra
     // the model's up axis toward its facing-forward (Matrix_BuildFromEuler:
     // up -> sin(a0)*forward + cos(a0)*up), so +kLeanDegrees leans INTO the run.
     float angleBuf[3] = { entity->Angle[0], entity->Angle[1], entity->Angle[2] };
-    if (AsObject(entity)->Type == 390 && AsObject(entity)->Kind == 1 &&
-        NinjaRun::IsLocomotionAction(AsObject(entity)->CurrentAction)) {
-        angleBuf[0] += NinjaRun::kLeanDegrees;
-    }
+    // MEAMU Train 51 ROLLBACK: the Ninja Run forward lean is REMOVED
+    // with the rest of the Nov 15 module (stock pose).
     BMD_Animation(model, bones, AsObject(entity)->AnimationFrame, priorFrame,
                   AsObject(entity)->PriorAction, reinterpret_cast<unsigned int*>(angleBuf),
                   entity->HeadAngle, '\0', translate == '\0');
@@ -334,8 +332,7 @@ void PrepareRange(void*,std::size_t begin,std::size_t end) {
         // entity Angle keeps matching (the cached model BodyAngle retains
         // the lean, which is what the replay consumes).
         const float savedAngle0=o->Angle[0];
-        if (o->Type == 390 && NinjaRun::IsLocomotionAction(o->CurrentAction))
-            o->Angle[0] += NinjaRun::kLeanDegrees;
+        // MEAMU Train 51 ROLLBACK: lean removed (see above).
         AnimateWithScratch(p.model.data(),p.bones.data(),o->AnimationFrame,priorFrame,
             o->PriorAction,(unsigned int*)o->Angle,o->HeadAngle,0,0,
             p.quaternions.data(),p.parent.data());

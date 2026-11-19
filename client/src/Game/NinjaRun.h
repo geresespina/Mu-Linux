@@ -1,5 +1,14 @@
 #pragma once
 
+// ── MEAMU Train 51 ROLLBACK (2026-11-19, G's final order) ───────────────────
+// "Put it back to what it was BEFORE we broke it." The movespeed
+// increase is REMOVED wholesale: no call site scales speed any
+// more (Terrain step rate, BMD_Anim cadence and the C3/0E report
+// are stock; the lean is gone; the GS allowance is disabled and
+// Bounce 20's walk-sync is retired). This header survives only as
+// the record + the inert dash-burst flag the detector still sets
+// (it drives nothing). The baseline restored is Nov 14, 2026 —
+// the last day before the module below landed.
 // ── MEAMU NINJA RUN (2026-11-15, G's order: "Ninja Run for everyone") ────────
 // Always-on run replacement for every player character: the ground step rate
 // (CharacterMoveSpeed), the walk/run animation cadence (CharacterAnimation)
