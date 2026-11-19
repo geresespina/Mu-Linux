@@ -16,7 +16,6 @@
 #include "Net/Reconnect.h"
 #include "Game/HeroVitals.h"
 #include "Net/MoveMarkers.h"
-extern "C" void __cdecl CreateTeleportEnd(OBJECT* entity);   // 0x00474310 (Entity_LegacyTeleport.cpp) — MEAMU Train 43
 #include "UI/EventTimer.h"
 #include "UI/MoveList.h"
 #include "UI/HealthBar.h"
@@ -1687,16 +1686,25 @@ void NetRecv_1C(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         *(BYTE*)&DAT_07eaa138 = 0;         // RepairEnable
     } else {
         // El server usa gate=0 para el teleport de skill.
-        // MEAMU Train 43 (2026-11-19): G REVERSED Train 23 — the
-        // arrival package is BACK. He played the no-animation
-        // version and wants the teleport to READ as a teleport:
-        // CreateTeleportEnd restores the cast pose 87 + fade-in +
-        // sparkle 1176 + chime 88 (and fires the landing marker
-        // itself). The instant FIRE and the latency cuts (Trains
-        // 25/26/32) are untouched — the blink still leaves and
-        // lands with zero wind-up delay; only the arrival visual
-        // returns.
-        CreateTeleportEnd(AsObject(hero));
+        // MEAMU Train 45 (2026-11-19): the arrival dressing, DECOUPLED
+        // from every gating machine — G's law after Train 43's
+        // regression: the teleport fires instantly (~65 ms) and the
+        // visual is dressing ONLY, it can never gate the move.
+        // CreateTeleportEnd is NOT called: its SetAction(87) pose
+        // sits in the input tick's blocking action range (0x22..0x5B)
+        // for ~1.85 s, and its Teleport=3 state + Alpha fade feed
+        // the same click gates (Alpha < 0.7 discards clicks) — the
+        // package made every teleport feel ~2 s late. What remains
+        // is the pure read of a teleport: sparkle 1176 + chime 88 +
+        // the landing marker, Alpha pinned fully opaque, no action,
+        // no state, no fade.
+        CreateEffect(1176, AsObject(hero)->Position, AsObject(hero)->Angle,
+                     AsObject(hero)->Light, nullptr, nullptr,
+                     (float*)(uintptr_t)0xFFFFFFFFu, nullptr, 0);
+        PlayBuffer(88, 0, 0);
+        AsObject(hero)->Alpha = 1.0f;
+        AsObject(hero)->AlphaTarget = 1.0f;
+        MoveMarkers::OnTeleportArrival(AsObject(hero));
         Teleport = 0;                 // IDA L508: Teleport = 0 (0x05826D14)
     }
 
