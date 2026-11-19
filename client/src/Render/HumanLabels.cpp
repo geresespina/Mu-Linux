@@ -34,6 +34,7 @@
 #include "Entity/EntityTypes.h"
 #include "Entity/EntityView.h"
 #include "Render/PhantomNames.h"
+#include "Net/Recv/OwnedSummonMark.h"
 #include "globals.h"
 #include "functions.h"
 
@@ -111,6 +112,12 @@ void Render_HumanLabels(void)
         if (!kIncludeHero && ent == hero) continue;
         const EntityView view(ent);
         if (!view.IsActive() || view.Kind() != EntityView::PlayerKind) continue;
+        // MEAMU (Train 8 addendum, G 2026-11-19): owned summons arrive via
+        // the 0x1F packet with the player kind — they are followers, not
+        // people, and get no nameplate. Keyed on the creation route (see
+        // OwnedSummonMark.h), never on the name text. Real players are
+        // never marked and keep their labels.
+        if (OwnedSummonMark::Is(ent)) continue;
         const char* name = view.Name();
         if (!name || !name[0]) continue;
         if (Phantom_IsPhantomName(name)) continue;

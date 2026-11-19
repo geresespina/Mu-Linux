@@ -9,6 +9,7 @@
 #include "Item/ContentCatalog.h"
 #include "Item/ItemDefines.h"
 #include "Render/BijuTransform.h"
+#include "Net/Recv/OwnedSummonMark.h"
 #include "Net/Recv/NetRecv.h"
 
 // ---------------------------------------------------------------------------
@@ -811,6 +812,46 @@ static float SummonRenderScale97k(BYTE type)
     }
 }
 
+// ── OwnedSummonMark (Train 8 addendum; see Net/Recv/OwnedSummonMark.h) ─────
+// Per-pool-slot flag: this slot's current body arrived through the 0x1F
+// summon viewport packet, i.e. it is an owned summon/follower. Keyed on the
+// creation route (the packet carries the owner's name as a structured
+// field), never on name text. Cleared by CreateCharacterPointer for every
+// slot (re)creation, so the mark can never outlive the body it describes.
+namespace {
+bool s_ownedSummonBySlot[400] = {};
+
+int OwnedSummonSlotOf(const void* character)
+{
+    if (!character || !DAT_07abf5d0) return -1;
+    const std::uintptr_t base = (std::uintptr_t)DAT_07abf5d0;
+    const std::uintptr_t addr = (std::uintptr_t)character;
+    if (addr < base) return -1;
+    const std::uintptr_t off = addr - base;
+    if ((off % CHARACTER_STRIDE) != 0) return -1;
+    const std::uintptr_t slot = off / CHARACTER_STRIDE;
+    return slot < 400 ? (int)slot : -1;
+}
+} // namespace
+
+namespace OwnedSummonMark {
+void Set(void* entity)
+{
+    const int slot = OwnedSummonSlotOf(entity);
+    if (slot >= 0) s_ownedSummonBySlot[slot] = true;
+}
+void Clear(void* entity)
+{
+    const int slot = OwnedSummonSlotOf(entity);
+    if (slot >= 0) s_ownedSummonBySlot[slot] = false;
+}
+bool Is(const void* entity)
+{
+    const int slot = OwnedSummonSlotOf(entity);
+    return slot >= 0 && s_ownedSummonBySlot[slot];
+}
+} // namespace OwnedSummonMark
+
 // 0x1F
 void NetRecv_1F(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
 {
@@ -889,6 +930,11 @@ void NetRecv_1F(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         NetText::FromServer(owner, sizeof(owner), e + 11, NAME);
         const std::string label = std::string(owner) + "'s " + oldName;
         EntityName::Set(summon, label.c_str());
+        // MEAMU (Train 8 addendum, G 2026-11-19): this body is an owned
+        // summon — the nameplate pass must not bubble it (see
+        // OwnedSummonMark.h). The composed name itself stays: party
+        // matching, the hover banner and the combat target line read it.
+        OwnedSummonMark::Set(summon);
         AsCharacter(summon)->Object.Live = 1;
         ApplyPersistentSkillEffect97k(summon, viewSkillState, 1);
 
