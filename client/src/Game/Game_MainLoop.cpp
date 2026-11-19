@@ -476,7 +476,7 @@ void __cdecl Game_MainLoop(HDC param_1)
             // ground step rate, under the GS NinjaRun allowance (report <=
             // server x200% + tolerance is legitimate; MagicSpeed untouched —
             // its GS check has no allowance).
-            pkt.PhysiSpeed = NinjaRun::ScaleReportedSpeed(pkt.PhysiSpeed);
+            pkt.PhysiSpeed = NinjaRun::ScaleReportedSpeed(pkt.PhysiSpeed, NinjaRun::ActiveFactor());  // Train 37: dash bursts report at the dash factor
             gPing.RecordSend(pkt.TickCount);
             gNetwork.Send((const BYTE*)&pkt, sizeof(pkt));
         }

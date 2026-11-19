@@ -662,7 +662,11 @@ LABEL_12:
   // same factor (Game_MainLoop) under the GS NinjaRun 200% allowance.
   if ( isPlayer )
   {
-    result *= NinjaRun::kSpeedFactor;
+    // MEAMU Train 37: the HERO steps at the active factor (dash burst
+    // = kDashFactor); everyone else on screen keeps the base factor —
+    // their own clients report their own bursts.
+    result *= ((void*)c == (void*)Hero) ? NinjaRun::ActiveFactor()
+                                        : NinjaRun::kSpeedFactor;
   }
   if ( (*(const BYTE *)(reinterpret_cast<const BYTE*>(c) + 120) & 2) == 2 )
   {

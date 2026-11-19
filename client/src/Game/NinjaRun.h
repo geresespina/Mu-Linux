@@ -38,9 +38,29 @@ namespace NinjaRun
     }
 
     // C3/0E report scaling, clamped to the WORD the packet carries.
-    inline unsigned short ScaleReportedSpeed(unsigned short serverSpeed)
+    inline unsigned short ScaleReportedSpeed(unsigned short serverSpeed, float factor)
     {
-        const unsigned int scaled = (unsigned int)((float)serverSpeed * kSpeedFactor);
+        const unsigned int scaled = (unsigned int)((float)serverSpeed * factor);
         return (unsigned short)(scaled > 0xFFFFu ? 0xFFFFu : scaled);
     }
+    inline unsigned short ScaleReportedSpeed(unsigned short serverSpeed)
+    {
+        return ScaleReportedSpeed(serverSpeed, kSpeedFactor);
+    }
+
+    // MEAMU Train 37 (2026-11-19): PURE DASH — G's ruling: double-tap
+    // WASD is a fast movement burst, the teleport stripped out. During
+    // the burst window the HERO's step rate (Terrain), locomotion
+    // cadence (BMD_Anim) and C3/0E report (Game_MainLoop) all scale by
+    // kDashFactor instead of kSpeedFactor, so the system stays in
+    // sync against itself exactly like the base run. GS contract:
+    // Bounce 15 raises NinjaRun.txt SpeedFactorPercent 200 -> 340, so
+    // the burst report (300%) keeps the same under-cap margin as
+    // 1.75 under 200. The window end is written by ActionMove's
+    // DashScan (SDL ticks); the live flag is refreshed per frame by
+    // ActionJump::Update and per step by the drive tick.
+    inline constexpr float kDashFactor = 3.0f;
+    inline unsigned gDashBurstEndMs = 0;   // SDL tick the burst ends (0 = none)
+    inline bool     gDashBurst = false;    // derived live flag
+    inline float ActiveFactor() { return gDashBurst ? kDashFactor : kSpeedFactor; }
 }
