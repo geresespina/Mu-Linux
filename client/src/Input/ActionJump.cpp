@@ -12,7 +12,8 @@
 #include "Platform/IInput.h"      // Platform::GetInput (physical key state)
 #include "Entity/EntityTypes.h"   // CHARACTER
 #include "Render/ActionCamera.h"  // gActionCamera (lock + scheme state)
-#include "Input/ActionMove.h"     // ActionMove_TeleportToPoint (Train 35 blink)
+#include "Input/ActionMove.h"
+#include "Input/AnimTrace.h"   // MEAMU Train 39 diagnostic     // ActionMove_TeleportToPoint (Train 35 blink)
 #include "Game/NinjaRun.h"        // Train 37: dash burst flag refresh
 #include "globals.h"              // Hero, InputEnable, DAT_083a7c24
 #include <SDL3/SDL.h>             // SDL_GetTicks
@@ -52,6 +53,27 @@ void CActionJump::Update()
     if (!hero) { m_SpacePrev = false; m_LastTick = 0; m_SpringInit = false; return; }
 
     const unsigned now = (unsigned)SDL_GetTicks();
+    // MEAMU Train 39 (ANIMTRACE watcher): log every hero animation
+    // transition with the state around it + the writer tag.
+    {
+        AnimTrace::gFrame++;
+        CHARACTER* hc = HeroC();
+        if (hc) {
+            static int sLastAction = -1, sLastSkill = -1, sLastStage = -1, sLastCur = -1;
+            const int act = (int)hc->Object.CurrentAction;
+            const int skl = (int)hc->Skill, stg = (int)hc->SkillStage, cur = (int)hc->CurrentSkill;
+            if (sLastAction >= 0 && (act != sLastAction || skl != sLastSkill || stg != sLastStage || cur != sLastCur)) {
+                const char* w = (AnimTrace::gSetActionMark == AnimTrace::gFrame) ? "SetAction"
+                              : (AnimTrace::gDirectWriter[0] ? AnimTrace::gDirectWriter : "UNKNOWN");
+                char tb[224];
+                snprintf(tb, sizeof(tb), "ANIMTRACE: action %d->%d skill %d->%d stage %d->%d cur %d->%d writer=%s",
+                    sLastAction, act, sLastSkill, skl, sLastStage, stg, sLastCur, cur, w);
+                DbgLogPublic(tb);
+                AnimTrace::gDirectWriter = "";
+            }
+            sLastAction = act; sLastSkill = skl; sLastStage = stg; sLastCur = cur;
+        }
+    }
     // MEAMU Train 37: the pure-dash burst flag is derived here per
     // frame (the drive tick refreshes it per step too) so it can
     // never stick on across a scheme flip or a closed UI.

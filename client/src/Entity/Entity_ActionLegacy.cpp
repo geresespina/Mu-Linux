@@ -1,6 +1,7 @@
 // Entity_ActionLegacy.cpp
 
 #include "stdafx.h"
+#include "Input/AnimTrace.h"   // MEAMU Train 39 diagnostic
 void __fastcall FUN_0045aaa0_impl(void *_this, char flags);
 void __cdecl    FUN_00408680(void *_this, char flags);
 #include "globals.h"
@@ -68,6 +69,8 @@ void* __cdecl SetAction(OBJECT* entity_ptr, int anim_id)
 
     BYTE curAction = AsObject(entity_ptr)->CurrentAction; // OBJECT.CurrentAction
     if ((int)(unsigned int)curAction != anim_id) {
+        // MEAMU Train 39 (ANIMTRACE): tag hero writes for the watcher.
+        if ((void*)entity_ptr == (void*)(uintptr_t)Hero) AnimTrace::NoteSetAction();
         AsObject(entity_ptr)->PriorAction = curAction;             // PriorAction
         AsObject(entity_ptr)->PriorAnimationFrame = AsObject(entity_ptr)->AnimationFrame; // PriorAnimationFrame = AnimationFrame
         AsObject(entity_ptr)->CurrentAction = (BYTE)anim_id;         // CurrentAction

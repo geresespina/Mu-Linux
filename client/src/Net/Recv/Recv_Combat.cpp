@@ -8,6 +8,7 @@
 #include "Net/Recv/NetRecv.h"
 #include "Model/Model_CustomAnim.h"
 #include "Render/BijuTransform.h"
+#include "Input/AnimTrace.h"   // MEAMU Train 39 diagnostic
 #include "Render/ActionCamera.h"   // MEAMU TRAIN 34: gActionCamera (0x18 hero stamp gate)
 #include "Sound/EmoteSound.h"
 #include "Sound/ModeSound.h"
@@ -499,6 +500,8 @@ void NetRecv_18(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
 
     // Helper: equivalente a SetAction — setea anim_state guardando el previo en cache
     auto SetAnim = [](BYTE* s, BYTE animId) {
+        // MEAMU Train 39 (ANIMTRACE): tag hero writes from this lambda.
+        if ((void*)s == (void*)(uintptr_t)Hero) AnimTrace::NoteDirect("net-0x18");
         AsObject(s)->PriorAction = AsObject(s)->CurrentAction;
         AsObject(s)->CurrentAction = animId;
         AsObject(s)->AnimationFrame = 0.0f;
@@ -1050,6 +1053,8 @@ void NetRecv_1A(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         const bool modeSkill = BijuTransform::IsModeTransformSkill(magicSkill)
                             || BijuTransform::IsModeTransformSkill((int)Msg[5]);
         if (!modeSkill) {
+            // MEAMU Train 39 (ANIMTRACE): tag hero writes from this block.
+            if ((void*)caster == (void*)(uintptr_t)Hero) AnimTrace::NoteDirect("net-0x1a");
             AsCharacter(caster)->Object.PriorAction = AsCharacter(caster)->Object.CurrentAction;
             AsCharacter(caster)->Object.CurrentAction = 90;            // cast anim (action 90)
             AsCharacter(caster)->Object.AnimationFrame = 0.0f;
