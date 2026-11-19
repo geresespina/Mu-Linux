@@ -46,7 +46,7 @@ void __cdecl CreateSocket(const char *param_1,unsigned int param_2)
     CWsctlc_Startup(reinterpret_cast<uintptr_t>(SocketClient));
   }
   CWsctlc_Create(&SocketClient,(int)(uintptr_t)gWindow.GetHwnd());
-  iVar2 = Net_Connect(&SocketClient,(char*)param_1,(u_short)param_2,0x400);
+  iVar2 = Net_Connect(&SocketClient,(char*)param_1,(unsigned short)param_2,0x400);
   {
     char dbg[64];
     Platform::TextFormat(dbg, "NET: CreateSocket Net_Connect returned %d", iVar2);
