@@ -116,6 +116,10 @@ bool ActionMove_CameraLocked();
 // discipline included). Returns true only when the frame was sent.
 bool ActionMove_TeleportToPoint(int tileX, int tileY);
 
+// MEAMU Train 25: shared double-click pairing (event-path instant fire).
+bool ActionMove_TickDoubleClick(int tileX, int tileY, int uiX, int uiY, unsigned serial);
+bool ActionMove_TryEventTeleport(int uiX, int uiY);
+
 // MEAMU Train 20: ONE direct route issue toward an arbitrary tile —
 // the DirectDriveIssue tail (Path_FindRoute into the hero's path
 // buffer, MovementType = 0, Combat_SendMovePathPacket), exported for
