@@ -42,46 +42,89 @@
 //   digit casts (Gates), no arrow movement (NavMove's own InputEnable
 //   gate), no Tab changes (HUD_HotkeyTick's gates), and F8 does not
 //   toggle — and closing chat hands control back with AUTO untouched.
-//   AUTO ends on: F8 again (chat closed), a NEW physical mouse-button
-//   press (the player taking over; releasing the hold that armed AUTO is
-//   not one — its RightUp clears the shared hold flag the Attack gate
-//   reads, so the drive re-asserts the hold, see AutoDriveButton), an
-//   error modal, leaving the world scene,
-//   or the hero's death. A hand-held digit cast and the gamepad both
-//   outrank AUTO while they drive; AUTO resumes when they stop.
+//   AUTO ends on: F8 again (chat closed), a manual recast of the very
+//   skill AUTO is casting (Train 12 OFF rule, below), an error modal,
+//   leaving the world scene, or the hero's death. A hand-held digit
+//   cast and the gamepad both outrank AUTO while they drive; AUTO
+//   resumes when they stop.
+//   CURSOR FREEDOM (MEAMU Train 12, G's law 2026-11-19): the cursor
+//   stays the player's while AUTO runs. The old drive parked the
+//   virtual cursor on the aim target EVERY tick and kept the virtual
+//   right button permanently held, so the player's physical cursor
+//   was stomped back onto the target each frame and any click-to-move
+//   was overridden by the held button's attack-walk on the next
+//   tick — the mouse was unusable with AUTO on, and a fresh physical
+//   press was treated as a takeover that cancelled AUTO. All of that
+//   is gone: a physical mouse press no longer cancels AUTO, the
+//   drive parks only when its aim target changes or the target's
+//   screen position drifts materially, it never parks while the
+//   player is moving the mouse or holding a physical button, and it
+//   asserts its virtual hold only while the cursor actually sits on
+//   the aim — the player's input wins every moment it is given, and
+//   AUTO's steering merely fills the gaps (see AutoDriveStep).
 //
-// * Cast-streak AUTO latch (MEAMU, G's ask 2026-11-13, design revised
-//   same night): casting the selected skill continuously for 2.0 s --
-//   casts never more than ~0.6 s apart -- latches AUTO on through the
-//   same AutoSet path as F8 (same banner + indicator). The trigger is
-//   the cast itself, not any one input: held digit keys and repeated
-//   clicks count, because every
-//   source funnels into Combat_DispatchHeroSkillAttack, whose
-//   branches stamp SkillStage = 1 at the cast-commit point; the
-//   tick polls that stamp for rising edges. TWO sources are excluded
-//   since 2026-11-16 (RMB law + pad law, below): casts made while the
-//   physical right mouse button is held, and casts driven by a held
-//   gamepad skill button. The streak builds only
-//   while AUTO is off, chat is closed and the world gates pass — the
-//   keyboard master switch does NOT gate it (decouple, 2026-11-15:
-//   a gamepad/click streak is not keyboard input); chat, a scene
-//   change, an error modal or the hero's death resets it.
-//   Anti-re-latch: when AUTO turns off (say a mouse press stops it
-//   mid-hold), no new streak can arm until casting has fully stopped
+// * Cast-streak AUTO trigger (MEAMU, G's ask 2026-11-13; REWORKED by
+//   Train 12, G's design locked 2026-11-19): casting the SAME
+//   offensive skill continuously for 5.0 s latches AUTO on WITH that
+//   skill, through the same AutoSet path as F8 (same banner +
+//   indicator, same gAutoOn state — no parallel machine).
+//   "Continuously" is cycle-relative: a gap between two casts of the
+//   tracked skill breaks the span only when it exceeds ~1.5x the
+//   skill's own cycle as this hero actually casts it — the observed
+//   interval between the span's casts, clamped to [0.8 s, 3.0 s],
+//   with 1.5 s before the first interval is measured.
+//   GetSkillInformation exposes only mana, distance and AG in this
+//   fork (no delay accessor exists), and the measured interval
+//   already includes the hero's attack speed, which a static table
+//   delay would not. A cast of a different offensive skill restarts
+//   the span under the new skill. Self/buff/mode skills (IsSelfSkill:
+//   heals, buffs, the 58-76 mode toggles) are invisible to the
+//   tracker: they never build, break or count.
+//   The trigger is the cast itself, not any one input: every source
+//   funnels into Combat_DispatchHeroSkillAttack, whose branches
+//   stamp SkillStage = 1 at the cast-commit point; the tick polls
+//   that stamp for rising edges and reads the cast skill from the
+//   hero's CurrentSkill selection at the edge (every cast source —
+//   digit, pad mirror, skill-bar click — selects before it casts).
+//   TWO sources are excluded from BUILDING a span since 2026-11-16
+//   (RMB law + pad law, below): casts made while the physical right
+//   mouse button is held, and casts driven by a held gamepad skill
+//   button. The span builds only while AUTO is off, chat is closed
+//   and the world gates pass — the keyboard master switch does NOT
+//   gate it (decouple, 2026-11-15); chat, a scene change, an error
+//   modal or the hero's death resets it.
+//   While AUTO is ON, the same cast edges run G's OFF/SWITCH rules
+//   (Train 12): a MANUAL cast — digit cast-hold, pad skill button or
+//   a physical mouse button, anything but AUTO's own drive — of the
+//   skill AUTO is casting turns AUTO OFF, and that manual cast still
+//   fires: control simply returns to the player's hand. A manual
+//   cast of a DIFFERENT offensive skill keeps AUTO on and switches
+//   AUTO's skill to it. AUTO's own casts are recognised by the
+//   absence of every manual source flag (no digit cast-hold, no pad
+//   skill button, no physical mouse button) and can never cancel or
+//   switch themselves. Self-skill casts are invisible here too:
+//   buffing or toggling a mode mid-AUTO changes nothing.
+//   Anti-re-latch: when AUTO turns off (say the OFF rule fires
+//   mid-hold), no new span can arm until casting has fully stopped
 //   for ~0.8 s, so the same hold that was interrupted can never
 //   instantly re-latch.
 //   RMB law (MEAMU 2026-11-16, G's order): the mouse is OUT of the
-//   streak — a cast observed while the physical right button is held
+//   span — a cast observed while the physical right button is held
 //   stamps the beat clock but kills the span, so holding RMB can
 //   never latch AUTO. Stock hold-to-attack (the Combat gate on the
 //   shared MouseRButton flag) is a different path and is untouched;
-//   digit holds and clicks streak exactly as before.
+//   digit holds and clicks streak exactly as before. (While AUTO is
+//   ON, an RMB-held cast is a manual cast and the OFF/SWITCH rules
+//   above apply to it — the law only ever governed latching.)
 //   Pad law (MEAMU 2026-11-16, G's order): gamepad skill-button casts
-//   are OUT of the streak too — a cast observed while any pad skill
+//   are OUT of the span too — a cast observed while any pad skill
 //   button is held (Gamepad_PadCastHeld: A/X/Y/B/RB/LB/RT/LT/L3/R3,
 //   all digit mirrors since PADCAST) stamps the beat clock but kills
 //   the span, so holding a pad button to repeat-cast can never latch
 //   AUTO, and casting still stops the moment the button is released.
+//   STATED LIMITATION (Train 12): a pad hold therefore cannot ARM
+//   AUTO either — PADCAST holds stay pure manual casts by G's
+//   standing order; the 5 s trigger arms from keyboard/mouse casting.
 //   Real-keyboard digit holds are untouched and latch as before.
 //
 // * Master toggle (MEAMU kb-toggle, 2026-11-13): Config.ini [Keyboard]
@@ -146,9 +189,14 @@ constexpr int kToggleVk      = 0x78; // VK_F9 — keyboard controls ON/OFF
                                      // published releases never define it.
                                      // (F10/F11 = camera, F12 = FPS counter,
                                      // so the F-key fallbacks are all taken.)
-constexpr Uint64 kLatchSpanMs  = 2000; // continuous casting that latches AUTO
-constexpr Uint64 kLatchGapMs   = 600;  // max silence between casts in a streak
+constexpr Uint64 kLatchSpanMs  = 5000; // same-skill casting that latches AUTO (Train 12; was 2000)
+constexpr Uint64 kTrigGapDefMs = 1500; // gap tolerance before the first cycle is measured
+constexpr Uint64 kTrigGapMinMs = 800;  // gap tolerance floor (fast skills, jitter)
+constexpr Uint64 kTrigGapMaxMs = 3000; // gap tolerance ceiling (slow skills)
 constexpr Uint64 kLatchRearmMs = 800;  // cast silence required after AUTO off
+constexpr Uint64 kCursorIdleMs = 600;  // cursor stillness that reads as a gap AUTO may fill
+constexpr int kParkDriftPx     = 14;   // aim drift (UI px) that earns a re-park
+constexpr int kCursorAimPx     = 12;   // cursor within this of the aim = sitting on it
 
 // ── State ────────────────────────────────────────────────────────────────────
 bool gDigitPrev[10] = {};        // raw held state last frame, per digit
@@ -166,6 +214,7 @@ bool gNpcClickUp    = false;     // Enter NPC click: LeftUp due next tick
 bool gEnterPrev     = false;
 float gCurX = 0.0f, gCurY = 0.0f;   // last parked cursor (window px)
 bool gAutoOn        = false;     // AUTO mode (F8) master state
+int  gAutoSkill     = 0;         // skill AUTO is committed to (Train 12 OFF/SWITCH reference)
 bool gF8Prev        = false;     // toggle key last frame
 bool gKbEnabled     = true;      // keyboard controls master switch
                                  // ([Keyboard] Enable at boot, F9 in game)
@@ -175,6 +224,15 @@ bool gMouseRPrev    = false;
 bool gAutoYielded   = false;     // AUTO on, gamepad owns the right button
 Uint64 gStreakStart = 0;         // cast-streak latch: first cast of the span
 Uint64 gLastCastT   = 0;         // cast-streak latch: most recent cast stamp
+int    gTrigSkill   = 0;         // Train 12 trigger: skill the current span builds on
+Uint64 gTrigLastT   = 0;         // Train 12 trigger: last counted cast of gTrigSkill
+Uint64 gTrigGapMs   = kTrigGapDefMs; // Train 12 trigger: live gap tolerance (1.5x measured cycle)
+int    gParkUiX     = -1;        // last synthetic park point, UI space (640x480)
+int    gParkUiY     = -1;
+int    gMouseUiX    = -1;        // game cursor pos at the end of last tick (UI space)
+int    gMouseUiY    = -1;
+Uint64 gCursorChangeT = 0;       // last time the game cursor position changed
+int    gAutoParkIdx = -2;        // aim index the AUTO drive last parked on (-2 = none)
 BYTE gSkillStagePrev = 0;        // hero SkillStage last tick (edge detect)
 bool gLatchSuppress = false;     // anti-re-latch: waiting out the silence beat
 Uint64 gSuppressT   = 0;         // when the current suppression engaged
@@ -183,6 +241,8 @@ Uint64 gLatchSimT   = 0;         // self-test: simulated latch clock (0 = real)
 bool gChatPrev      = false;     // chat focus last frame (transition logs)
 
 // ── Self-test state ──────────────────────────────────────────────────────────
+constexpr int kTestSkillA = 41;   // self-test offensive skill (not in IsSelfSkill)
+constexpr int kTestSkillB = 42;   // self-test second offensive skill
 bool   gSelfTest   = false;
 bool   gInitTried  = false;
 Uint64 gSelfT0     = 0;
@@ -228,15 +288,46 @@ void ParkCursor(float x, float y)
     SendMouse(Platform::InputEventType::MouseMove, x, y);
 }
 
+// Project a character's world position to 640x480 UI space (the
+// space MouseX/MouseY — DAT_083a427c/278 — live in).
+void ProjectUi(CHARACTER* c, int& ux, int& uy)
+{
+    ux = 0; uy = 0;
+    Camera_ProjectWorldToScreen((float*)c->Object.Position, &ux, &uy);
+}
+
 // Project a character's world position to window pixels (the projection
 // returns 640x480 UI space; DeliverSDLInput takes real window pixels).
+// The UI-space point is recorded in gParkUiX/Y: the drives compare the
+// live game cursor and the aim's current projection against it to
+// steer without seizing the player's cursor (Train 12).
 void ParkOnCharacter(CHARACTER* c)
 {
     int sx = 0, sy = 0;
-    Camera_ProjectWorldToScreen((float*)c->Object.Position, &sx, &sy);
+    ProjectUi(c, sx, sy);
+    gParkUiX = sx; gParkUiY = sy;
     const float winW = (float)gWindow.GetRealWidth();
     const float winH = (float)gWindow.GetRealHeight();
     ParkCursor(sx * winW / 640.0f, sy * winH / 480.0f);
+}
+
+// Chebyshev distance between two UI-space points (the module's tile
+// metric, at screen scale).
+int UiDist(int ax, int ay, int bx, int by)
+{
+    const int dx = std::abs(ax - bx), dy = std::abs(ay - by);
+    return dx > dy ? dx : dy;
+}
+
+// True when the game cursor has moved since the end of last tick —
+// i.e. the player (or another input path) is moving the mouse right
+// now. Synthetic parks land in MouseX/MouseY synchronously
+// (DeliverSDLInput calls the input sink directly), and the tick
+// refreshes gMouseUiX/Y after every drive, so our own parks never
+// read as player movement.
+bool PlayerMovingMouse()
+{
+    return (int)DAT_083a427c != gMouseUiX || (int)DAT_083a4278 != gMouseUiY;
 }
 
 void SetRightButton(bool down)
@@ -295,7 +386,8 @@ bool ValidMonster(int idx)
     return true;
 }
 
-// Space-latch legality (MEAMU Train 10 + Bounce 11): ValidMonster, plus
+// Latch/AUTO-aim legality (MEAMU Train 10 + Bounce 11; AUTO aim
+// adopted it in Train 12): ValidMonster, plus
 // fabricated player-kind bodies the GS flagged through F3:FC (see
 // Net/Recv/FabricatedMark.h) — phantoms/KAGE, companions, roamers,
 // ambushers, dancers, and other players' clan summons/tames. The
@@ -319,8 +411,15 @@ bool ValidLatchTarget(int idx)
     return true;
 }
 
-// Acquire the aim monster for a cast: Tab lock, then last target, then
-// nearest (tile distance, facing-arc tie-break) within acquisition range.
+// Acquire the aim target for a cast: Tab lock, then last target, then
+// nearest (tile distance, facing-arc tie-break) within acquisition
+// range. Train 12: the scan and the last-target preference use
+// ValidLatchTarget — monsters plus GS-flagged fabricated bodies,
+// minus the hero's own followers — so a digit hold or AUTO can hunt
+// in the Stadium exactly like the Space latch (Train 10 widened only
+// the latch; G's Train 12 spec defines AUTO's acquisition by the
+// same test). The Tab lock itself still only ever holds a monster
+// (Tab cycling is unchanged), so its check stays ValidMonster.
 int AcquireTarget(int skillDist)
 {
     CHARACTER* hero = HeroC();
@@ -330,13 +429,13 @@ int AcquireTarget(int skillDist)
 
     if (ValidMonster(gLockIdx) && Cheb(hero, EntryAt(gLockIdx)) <= acq + 2)
         return gLockIdx;
-    if (ValidMonster(gLastIdx) && Cheb(hero, EntryAt(gLastIdx)) <= acq)
+    if (ValidLatchTarget(gLastIdx) && Cheb(hero, EntryAt(gLastIdx)) <= acq)
         return gLastIdx;
 
     int   best = -1, bestDist = 0;
     float bestArc = 0.0f;
     for (int i = 0; i < 400; ++i) {
-        if (!ValidMonster(i)) continue;
+        if (!ValidLatchTarget(i)) continue;
         CHARACTER* c = EntryAt(i);
         const int d = Cheb(hero, c);
         if (d > acq) continue;
@@ -418,18 +517,26 @@ void StopCast(const char* why)
     SetRightButton(false);
 }
 
-void AimAndPark()
+// Maintain the shared cast aim and return its table index (-1 = the
+// hero: self skill selected, or no target in acquisition range).
+int ComputeAim()
 {
     CHARACTER* hero = HeroC();
     if (IsSelfSkill(SelectedSkillType())) {
         gAimIdx = -1;
-        ParkOnCharacter(hero);
-        return;
+        return -1;
     }
     int t = gAimIdx;
-    if (!ValidMonster(t) || Cheb(hero, EntryAt(t)) > SelectedSkillDist() + 16)
+    if (!ValidLatchTarget(t) || Cheb(hero, EntryAt(t)) > SelectedSkillDist() + 16)
         t = AcquireTarget(SelectedSkillDist());
     gAimIdx = t;
+    return t;
+}
+
+void AimAndPark()
+{
+    CHARACTER* hero = HeroC();
+    const int t = ComputeAim();
     ParkOnCharacter(t >= 0 ? EntryAt(t) : hero);
 }
 
@@ -497,9 +604,21 @@ void AutoSet(bool on, const char* why, bool announce)
     if (on == gAutoOn) return;
     gAutoOn = on;
     gAutoYielded = false;
+    // Train 12: snapshot the skill AUTO commits to (the OFF/SWITCH
+    // reference). The streak trigger re-stamps it with the tracked
+    // skill right after engaging.
+    if (on) gAutoSkill = SelectedSkillType();
+    if (!on) gAutoParkIdx = -2;   // the next engage parks fresh
     // A hand-held digit cast owns the shared right button otherwise; its
-    // maintenance block keeps it held without help from here.
-    if (!on && !gCastVk) SetRightButton(false);
+    // maintenance block keeps it held without help from here. If the
+    // player is physically holding RMB, the shared flag is theirs:
+    // forget our hold instead of sending a RightUp that would clear
+    // the flag under their press (the AutoDriveButton clobber, from
+    // the other side).
+    if (!on && !gCastVk) {
+        if (KeyHeld(2)) gRightDown = false;
+        else SetRightButton(false);
+    }
     if (announce && SceneFlag == 5) Say("Auto-attack %s", on ? "ON" : "OFF");
     KbLog("KB-AUTO: %s (%s)", on ? "ON" : "OFF", why);
 }
@@ -527,6 +646,62 @@ void AutoDriveButton()
     SetRightButton(true);
 }
 
+// ── AUTO drive step (Train 12 cursor freedom) ────────────────────────────────
+// The drive's per-tick step, replacing the old unconditional
+// AimAndPark() + AutoDriveButton(). The old code parked the virtual
+// cursor on the aim target EVERY tick: the synthetic MouseMove lands
+// in the game's MouseX/MouseY synchronously, so the player's physical
+// cursor was overwritten every frame, and the permanently-held
+// virtual right button turned that parked point into a continuous
+// attack/move command that overrode any click-to-move on the next
+// tick. The cursor is the player's now; this step only fills gaps:
+//
+// * A physical button is held -> the moment is the player's: no park,
+//   no synthetic hold. Ours is released — or simply forgotten when
+//   the physical RMB owns the shared flag, so no synthetic RightUp
+//   clears the flag under their press.
+// * The cursor already sits on the aim (our park still lines up, or
+//   the player is hovering the target themselves) -> hold, no park.
+// * The aim changed / drifted materially, or the cursor has sat
+//   still off the aim for kCursorIdleMs, and the player is not
+//   moving the mouse this tick -> park once on the aim and hold.
+// * Anything else (player mid-move, cursor freshly elsewhere) ->
+//   release the hold and idle the steering. AUTO stays ON; when the
+//   player click-moves away, the hero completes the move and the
+//   drive re-acquires from the new position by the normal rule.
+void AutoDriveStep()
+{
+    CHARACTER* hero = HeroC();
+    const int t = ComputeAim();
+    CHARACTER* aimC = t >= 0 ? EntryAt(t) : hero;
+    int ux = 0, uy = 0;
+    ProjectUi(aimC, ux, uy);
+
+    if (KeyHeld(1) || KeyHeld(2)) {
+        if (gRightDown) {
+            if (KeyHeld(2)) gRightDown = false;   // physical RMB owns the shared flag
+            else SetRightButton(false);
+        }
+        gAutoParkIdx = -2;   // park fresh when the drive resumes
+        return;
+    }
+    const int cx = (int)DAT_083a427c, cy = (int)DAT_083a4278;   // MouseX / MouseY
+    if (UiDist(cx, cy, ux, uy) <= kCursorAimPx) {
+        AutoDriveButton();   // aim is under the cursor: hold, no park
+        return;
+    }
+    const bool aimMoved = t != gAutoParkIdx || gAutoParkIdx == -2 ||
+                          UiDist(ux, uy, gParkUiX, gParkUiY) > kParkDriftPx;
+    const bool cursorIdle = (SDL_GetTicks() - gCursorChangeT) >= kCursorIdleMs;
+    if (!PlayerMovingMouse() && (aimMoved || cursorIdle)) {
+        ParkOnCharacter(aimC);
+        gAutoParkIdx = t;
+        AutoDriveButton();
+        return;
+    }
+    if (gRightDown) SetRightButton(false);   // cursor is the player's: steer nothing
+}
+
 // ── Space attack latch (MEAMU Train 8 addendum, G's ruling 2026-11-19) ──────
 // G's model, ordered explicitly as a KEYBOARD-ONLY exception to the pad
 // no-latch law (PADCAST still never latches; F8/F9 AUTO is untouched):
@@ -539,10 +714,11 @@ void AutoDriveButton()
 // stock click-attack pipeline (Player_InputTick: v32 = MouseLButtonPush ||
 // MouseLButton -> hover -> attack stage -> basic-attack packet, walk-in
 // included) — exactly a manual click-attack held down, parked on the
-// locked target each tick like every other drive in this module. Target
-// legality is ValidMonster, the same test Tab cycling and AUTO aim use;
-// the server enforces the rest (own summons, safe zones) exactly as it
-// does for mouse attacks.
+// locked target under the same cursor-freedom discipline as the AUTO
+// drive (Train 12: park on drift only, hold only while the cursor
+// sits on the target). Target legality is ValidLatchTarget (Train
+// 10); the server enforces the rest (own summons, safe zones) exactly
+// as it does for mouse attacks.
 //
 // MEAMU Train 9 widen (G's order, 2026-11-19): acquisition is NO longer
 // capped at 12 tiles - the scan covers the whole client character
@@ -553,10 +729,11 @@ void AutoDriveButton()
 // MEAMU Train 10 (2026-11-19): legality is ValidLatchTarget — ValidMonster
 // plus the fabricated player-kind bodies the Bounce 11 GS flags through
 // F3:FC (phantoms/KAGE/companions/roamers/ambushers/dancers and other
-// players' followers), minus the hero's own followers. Tab cycling and
-// AUTO aim keep plain ValidMonster; only the Space latch widened, so
-// Space can finally hunt in the Stadium. Real players are never
-// flagged and stay manual-only.
+// players' followers), minus the hero's own followers. Train 10 widened
+// only the Space latch, so Space could hunt in the Stadium; Train 12
+// adopted the same test for AUTO aim and digit-hold aim (AcquireTarget),
+// so AUTO hunts there too. Tab cycling keeps plain ValidMonster. Real
+// players are never flagged and stay manual-only.
 
 void SetLeftButton(bool down)
 {
@@ -637,34 +814,82 @@ Uint64 LatchNow()
     return (gSelfTest && gLatchSimT != 0) ? gLatchSimT : SDL_GetTicks();
 }
 
-// One observed cast of the player's selected skill. In the real path
-// this is fed by the SkillStage rising edge in LatchFrame; the
-// self-test feeds synthetic stamps through the same entry. mouseHeld
-// marks a cast excluded from the streak: made while the physical
-// right mouse button is held (RMB law), or while a gamepad skill
-// button drives the cast (pad law — the caller ORs Gamepad_PadCastHeld()
-// in; the parameter keeps its original name for the self-test's sake).
-void LatchNoteCast(Uint64 now, bool mouseHeld = false)
+// One observed cast. In the real path this is fed by the SkillStage
+// rising edge in LatchFrame; the self-test feeds synthetic casts
+// through the same entry. skillType is the cast skill (the hero's
+// CurrentSkill selection at the commit edge — every cast source
+// selects before it casts). excludedSource marks a cast the standing
+// laws keep out of the span: made while the physical right mouse
+// button is held (RMB law), or while a gamepad skill button drives
+// the cast (pad law). manualSource marks a cast the player issued by
+// hand — digit cast-hold, pad skill button, or a physical mouse
+// button — as opposed to AUTO's own drive casts, which carry no
+// manual flag at all; that absence is what keeps AUTO's own casts
+// from ever cancelling or switching AUTO (Train 12's core rule).
+void LatchNoteCast(Uint64 now, int skillType, bool excludedSource, bool manualSource)
 {
-    const Uint64 prev = gLastCastT;
+    // Every cast stamps the beat clock first: the anti-re-latch beat
+    // keeps measuring from the player's last cast of ANY source,
+    // exactly as before (decouple note: the span was never gated on
+    // the keyboard master switch, MEAMU 2026-11-15).
     gLastCastT = now;
-    // Decoupled from the keyboard master switch (MEAMU 2026-11-15):
-    // the streak is fed by digit holds, gamepad casts and clicks, so
-    // the F9 switch never gated it legitimately.
-    if (gAutoOn || gLatchSuppress) { gStreakStart = 0; return; }
-    // RMB law (MEAMU 2026-11-16, G's order): a mouse-held cast never
-    // builds the streak — it kills the span outright, so no mixture
-    // of mouse casting can ever latch AUTO. The gLastCastT stamp
-    // above still lands, so the anti-re-latch beat keeps measuring
-    // from the player's last cast of ANY source, exactly as before.
-    if (mouseHeld) { gStreakStart = 0; return; }
-    if (gStreakStart == 0 || prev == 0 || now - prev > kLatchGapMs) {
-        gStreakStart = now;   // first cast, or the gap broke the old span
+    // Self/buff/mode skills are invisible to the trigger and to the
+    // OFF/SWITCH rules (Train 12): they never build or break a span,
+    // never switch AUTO, never cancel it.
+    if (skillType == 0 || IsSelfSkill(skillType)) return;
+
+    if (gAutoOn) {
+        gStreakStart = 0; gTrigSkill = 0;
+        if (!manualSource) return;   // AUTO's own cast: hands off itself
+        if (skillType == gAutoSkill) {
+            // OFF rule: the player recast AUTO's skill by hand. The
+            // cast already committed — nothing is swallowed; AUTO
+            // simply lets go and the hand cast plays out manually.
+            AutoSet(false, "manual recast of the AUTO skill", true);
+        } else {
+            // SWITCH rule: AUTO stays on and adopts the new skill.
+            gAutoSkill = skillType;
+            char name[64] = {};
+            GetSkillInformation(skillType, 1, name, nullptr, nullptr, nullptr);
+            if (SceneFlag == 5) Say("AUTO skill: %s", name[0] ? name : "?");
+            KbLog("KB-AUTO: skill switched to type %d (%s) by manual cast",
+                  skillType, name[0] ? name : "?");
+        }
         return;
     }
+    if (gLatchSuppress) { gStreakStart = 0; gTrigSkill = 0; return; }
+    // RMB law + pad law (MEAMU 2026-11-16, G's orders): an excluded
+    // cast never builds the span — it kills the span outright, so no
+    // mixture of mouse/pad casting can ever latch AUTO.
+    if (excludedSource) { gStreakStart = 0; gTrigSkill = 0; return; }
+
+    if (skillType != gTrigSkill || gStreakStart == 0) {
+        gTrigSkill = skillType;         // first cast — or a different
+        gStreakStart = now;             // offensive skill restarts the
+        gTrigLastT = now;               // span under its own name
+        gTrigGapMs = kTrigGapDefMs;
+        return;
+    }
+    const Uint64 interval = now - gTrigLastT;
+    if (interval > gTrigGapMs) {        // the gap broke the span
+        gStreakStart = now;
+        gTrigLastT = now;
+        gTrigGapMs = kTrigGapDefMs;
+        return;
+    }
+    gTrigLastT = now;
+    // The gap tolerance tracks the skill's own cycle as this hero
+    // casts it: 1.5x the observed interval, clamped.
+    Uint64 gap = (interval * 3) / 2;
+    if (gap < kTrigGapMinMs) gap = kTrigGapMinMs;
+    if (gap > kTrigGapMaxMs) gap = kTrigGapMaxMs;
+    gTrigGapMs = gap;
+
     if (now - gStreakStart >= kLatchSpanMs) {
-        gStreakStart = 0;
-        AutoSet(true, "cast-streak latch", true);
+        const int trig = gTrigSkill;
+        gStreakStart = 0; gTrigSkill = 0;
+        AutoSet(true, "cast-streak latch (5 s same skill)", true);
+        gAutoSkill = trig;   // AUTO engages WITH the tracked skill
     }
 }
 
@@ -679,21 +904,37 @@ void LatchFrame(bool chat)
     // SDL device events write (synthetic buttons from this module,
     // NavMove and the gamepad travel via DeliverSDLInput and never
     // appear there) — it is the physical right mouse button, exactly
-    // as the press-edge cancel in the tick samples it. Casts observed
-    // while it is held are mouse casts: the RMB law excludes them
-    // from the streak (see LatchNoteCast).
+    // as the latch's press-edge cancel in the tick samples it. Casts
+    // observed while it is held are mouse casts: the RMB law excludes
+    // them from the span (see LatchNoteCast).
     // Gamepad_PadCastHeld() is the pad twin of that sample: it reports
     // the gamepad module's own mirror state (any of the ten skill
     // buttons held), which the key table cannot distinguish from a
     // physical digit hold. Casts observed while it is set are pad
     // casts: the pad law excludes them the same way. A real-keyboard
     // digit hold sets neither flag and streaks exactly as before.
-    if (stage == 1 && gSkillStagePrev != 1)
-        LatchNoteCast(now, KeyHeld(2) || Gamepad_PadCastHeld());
+    // Train 12 adds the manual-source classification the OFF/SWITCH
+    // rules run on: a cast is manual when a digit cast-hold is
+    // driving it, a pad skill button is held, or a physical mouse
+    // button is down. AUTO's own drive casts set NONE of these (its
+    // buttons are synthetic and never enter the key table, its aim
+    // needs no digit, and the pad is idle while it drives) — that
+    // absence is the distinguisher, sampled in this same tick before
+    // the drive runs.
+    if (stage == 1 && gSkillStagePrev != 1) {
+        const bool padHeld = Gamepad_PadCastHeld();
+        const bool excluded = KeyHeld(2) || padHeld;
+        const bool manual = (gCastVk != 0) || padHeld || KeyHeld(2) || KeyHeld(1);
+        // The Space latch's basic attacks are not skill casts: while
+        // the latch drives and no manual source is active, an edge is
+        // the latch's own doing and feeds nothing.
+        if (!(gAtkLatchIdx >= 0 && !manual))
+            LatchNoteCast(now, SelectedSkillType(), excluded, manual);
+    }
     gSkillStagePrev = stage;
 
     const bool world = AutoGates() || (gSelfTest && gSelfWorldSim);
-    if (chat || !world || HeroDead()) gStreakStart = 0;
+    if (chat || !world || HeroDead()) { gStreakStart = 0; gTrigSkill = 0; }
 
     if (gAutoPrevLatch && !gAutoOn) {
         gLatchSuppress = true;   // AUTO just turned off: arm the beat
@@ -836,22 +1077,21 @@ void SelfTestDrive()
         gSelfForced = true;
         gSelfWorldSim = true;
         gLatchSimT = 500000;
-        LatchNoteCast(gLatchSimT);            // streak opens
-        gLatchSimT += 400; LatchNoteCast(gLatchSimT);
-        gLatchSimT += 400; LatchNoteCast(gLatchSimT);
+        LatchNoteCast(gLatchSimT, kTestSkillA, false, true);            // span opens
+        gLatchSimT += 400; LatchNoteCast(gLatchSimT, kTestSkillA, false, true);
+        gLatchSimT += 400; LatchNoteCast(gLatchSimT, kTestSkillA, false, true);
         KbLog("KB-LATCH-SELFTEST: 3 casts over 800 ms: streaking=%d AUTO=%d (expect 1/0)",
               gStreakStart != 0 ? 1 : 0, gAutoOn ? 1 : 0);
         break;
-    case 23: gLatchSimT += 400; LatchNoteCast(gLatchSimT);
-        gLatchSimT += 400; LatchNoteCast(gLatchSimT);
-        gLatchSimT += 400; LatchNoteCast(gLatchSimT);   // span reaches 2000 ms
-        KbLog("KB-LATCH-SELFTEST: span 2000 ms reached: AUTO=%d (expect 1 - latched)",
-              gAutoOn ? 1 : 0);
+    case 23: for (int k = 0; k < 11; ++k) { gLatchSimT += 400; LatchNoteCast(gLatchSimT, kTestSkillA, false, true); }
+        // span reaches 5200 ms of the SAME skill (Train 12: 5 s trigger)
+        KbLog("KB-LATCH-SELFTEST: span 5200 ms reached: AUTO=%d skill=%d (expect 1/%d - latched with the tracked skill)",
+              gAutoOn ? 1 : 0, gAutoSkill, kTestSkillA);
         break;
     case 24: AutoSet(false, "self-test streak exercise", false);
         LatchFrame(false);   // the off transition must engage suppression
-        gLatchSimT += 300; LatchNoteCast(gLatchSimT);   // player keeps casting
-        gLatchSimT += 300; LatchNoteCast(gLatchSimT);
+        gLatchSimT += 300; LatchNoteCast(gLatchSimT, kTestSkillA, false, true);   // player keeps casting
+        gLatchSimT += 300; LatchNoteCast(gLatchSimT, kTestSkillA, false, true);
         KbLog("KB-LATCH-SELFTEST: AUTO killed mid-hold: suppress=%d streaking=%d AUTO=%d (expect 1/0/0)",
               gLatchSuppress ? 1 : 0, gStreakStart != 0 ? 1 : 0, gAutoOn ? 1 : 0);
         break;
@@ -860,46 +1100,83 @@ void SelfTestDrive()
         KbLog("KB-LATCH-SELFTEST: after 900 ms silence: suppress=%d (expect 0 - re-armed)",
               gLatchSuppress ? 1 : 0);
         break;
-    case 26: for (int k = 0; k < 6; ++k) { gLatchSimT += 400; LatchNoteCast(gLatchSimT); }
-        KbLog("KB-LATCH-SELFTEST: fresh 2000 ms streak: AUTO=%d (expect 1 - latched again)",
+    case 26: for (int k = 0; k < 14; ++k) { gLatchSimT += 400; LatchNoteCast(gLatchSimT, kTestSkillA, false, true); }
+        KbLog("KB-LATCH-SELFTEST: fresh 5200 ms streak: AUTO=%d (expect 1 - latched again)",
               gAutoOn ? 1 : 0);
         break;
     case 27: AutoSet(false, "self-test streak exercise", false);
         LatchFrame(false);
         gLatchSimT += 900; LatchFrame(false);   // serve the beat again
-        gStreakStart = 0; gLastCastT = 0;       // clean slate for the gap test
-        gLatchSimT += 100; LatchNoteCast(gLatchSimT);
-        gLatchSimT += 400; LatchNoteCast(gLatchSimT);
-        gLatchSimT += 700; LatchNoteCast(gLatchSimT);   // 700 ms gap: span restarts
-        gLatchSimT += 400; LatchNoteCast(gLatchSimT);
-        gLatchSimT += 400; LatchNoteCast(gLatchSimT);
-        gLatchSimT += 400; LatchNoteCast(gLatchSimT);
-        KbLog("KB-LATCH-SELFTEST: gap-broken span at 1200 ms: AUTO=%d (expect 0)",
-              gAutoOn ? 1 : 0);
+        gStreakStart = 0; gTrigSkill = 0; gTrigLastT = 0; gLastCastT = 0;   // clean slate for the gap test
+        gLatchSimT += 100; LatchNoteCast(gLatchSimT, kTestSkillA, false, true);    // span opens
+        gLatchSimT += 1000; LatchNoteCast(gLatchSimT, kTestSkillA, false, true);   // cycle 1000 ms -> tolerance 1500 ms
+        gLatchSimT += 1000; LatchNoteCast(gLatchSimT, kTestSkillA, false, true);
+        gLatchSimT += 2000; LatchNoteCast(gLatchSimT, kTestSkillA, false, true);   // 2000 ms gap > tolerance: span restarts
+        gLatchSimT += 1000; LatchNoteCast(gLatchSimT, kTestSkillA, false, true);
+        gLatchSimT += 1000; LatchNoteCast(gLatchSimT, kTestSkillA, false, true);   // restarted span at 2000 ms
+        KbLog("KB-LATCH-SELFTEST: gap-broken span at 2000 ms: streaking=%d AUTO=%d (expect 1/0)",
+              gStreakStart != 0 ? 1 : 0, gAutoOn ? 1 : 0);
         break;
-    case 28: gLatchSimT += 400; LatchNoteCast(gLatchSimT);
-        gLatchSimT += 400; LatchNoteCast(gLatchSimT);   // restarted span hits 2000 ms
-        KbLog("KB-LATCH-SELFTEST: restarted span reaches 2000 ms: AUTO=%d (expect 1)",
+    case 28: gLatchSimT += 1000; LatchNoteCast(gLatchSimT, kTestSkillA, false, true);
+        gLatchSimT += 1000; LatchNoteCast(gLatchSimT, kTestSkillA, false, true);
+        gLatchSimT += 1000; LatchNoteCast(gLatchSimT, kTestSkillA, false, true);   // restarted span hits 5000 ms
+        KbLog("KB-LATCH-SELFTEST: restarted span reaches 5000 ms: AUTO=%d (expect 1)",
               gAutoOn ? 1 : 0);
         AutoSet(false, "self-test streak exercise", false);
-        gLatchSimT = 0;
+        KbLog("KB-LATCH-SELFTEST: segment complete (AUTO on=%d, expect 0) - AUTOSWITCH segment follows", gAutoOn ? 1 : 0);
+        break;
+    case 29: KbLog("KB-AUTOSWITCH-SELFTEST: segment starts - OFF/SWITCH rules under a forced AUTO (Train 12)");
+        gSelfForced = true;
+        gSelfWorldSim = true;
+        AutoSet(true, "self-test autoswitch exercise", false);
+        gAutoSkill = kTestSkillA;   // title screen has no selection to snapshot; stamp the test skill directly
+        LatchNoteCast(gLatchSimT, kTestSkillA, false, false);            // AUTO's own cast
+        gLatchSimT += 400; LatchNoteCast(gLatchSimT, kTestSkillA, false, false);
+        KbLog("KB-AUTOSWITCH-SELFTEST: AUTO's own casts: AUTO=%d skill=%d (expect 1/%d - never self-cancels)",
+              gAutoOn ? 1 : 0, gAutoSkill, kTestSkillA);
+        gLatchSimT += 400; LatchNoteCast(gLatchSimT, 59, false, true);   // manual self skill (Sage Mode)
+        KbLog("KB-AUTOSWITCH-SELFTEST: manual self-skill cast: AUTO=%d skill=%d (expect 1/%d - invisible)",
+              gAutoOn ? 1 : 0, gAutoSkill, kTestSkillA);
+        break;
+    case 30: gLatchSimT += 400; LatchNoteCast(gLatchSimT, kTestSkillB, false, true);   // manual cast of a different offensive skill
+        KbLog("KB-AUTOSWITCH-SELFTEST: manual cast of skill B: AUTO=%d skill=%d (expect 1/%d - switched)",
+              gAutoOn ? 1 : 0, gAutoSkill, kTestSkillB);
+        gLatchSimT += 400; LatchNoteCast(gLatchSimT, kTestSkillB, false, false);       // AUTO's own cast of the new skill
+        KbLog("KB-AUTOSWITCH-SELFTEST: AUTO's own cast of B: AUTO=%d skill=%d (expect 1/%d)",
+              gAutoOn ? 1 : 0, gAutoSkill, kTestSkillB);
+        break;
+    case 31: gLatchSimT += 400; LatchNoteCast(gLatchSimT, kTestSkillB, false, true);   // manual recast of AUTO's skill
+        KbLog("KB-AUTOSWITCH-SELFTEST: manual recast of B: AUTO=%d (expect 0 - OFF rule)",
+              gAutoOn ? 1 : 0);
+        break;
+    case 32: LatchFrame(false);   // serve the anti-re-latch beat opened by the OFF
+        gLatchSimT += 900; LatchFrame(false);
+        gStreakStart = 0; gTrigSkill = 0; gTrigLastT = 0;   // clean slate
+        LatchNoteCast(gLatchSimT, kTestSkillA, false, true);            // span opens on A
+        gLatchSimT += 400; LatchNoteCast(gLatchSimT, kTestSkillA, false, true);
+        gLatchSimT += 400; LatchNoteCast(gLatchSimT, kTestSkillB, false, true);   // B restarts the span
+        gLatchSimT += 400; LatchNoteCast(gLatchSimT, kTestSkillB, false, true);
+        KbLog("KB-AUTOSWITCH-SELFTEST: A-span abandoned for B: trigSkill=%d streaking=%d AUTO=%d (expect %d/1/0)",
+              gTrigSkill, gStreakStart != 0 ? 1 : 0, gAutoOn ? 1 : 0, kTestSkillB);
+        break;
+    case 33: gLatchSimT = 0;
         gSelfWorldSim = false;
         gSelfForced = false;
-        KbLog("KB-LATCH-SELFTEST: segment complete (AUTO on=%d, expect 0)", gAutoOn ? 1 : 0);
+        KbLog("KB-AUTOSWITCH-SELFTEST: segment complete (AUTO on=%d, expect 0)", gAutoOn ? 1 : 0);
         break;
-    case 29: KbLog("KB-CLOBBER-SELFTEST: segment starts - physical RMB hold simulated (RMB-law hold: its casts must never latch)");
+    case 34: KbLog("KB-CLOBBER-SELFTEST: segment starts - physical RMB hold simulated (RMB-law hold: its casts must never latch)");
         gSelfForced = true;
         gSelfWorldSim = true;
         gLatchSimT = 700000;
-        gLatchSuppress = false; gStreakStart = 0; gLastCastT = 0;   // clean slate
+        gLatchSuppress = false; gStreakStart = 0; gTrigSkill = 0; gTrigLastT = 0; gLastCastT = 0;   // clean slate
         Platform::InjectVirtualKey(2, true);    // physical RMB goes down
         DAT_083a42ac = 1;                        // WndProc state from that real press
         KbLog("KB-CLOBBER-SELFTEST: RMB held=%d shared-flag=%d (expect 1/1)",
               KeyHeld(2) ? 1 : 0, (int)DAT_083a42ac);
         break;
-    case 30: for (int k = 0; k < 6; ++k) { LatchNoteCast(gLatchSimT, KeyHeld(2)); gLatchSimT += 400; }
+    case 35: for (int k = 0; k < 6; ++k) { LatchNoteCast(gLatchSimT, kTestSkillA, KeyHeld(2), KeyHeld(2)); gLatchSimT += 400; }
         // casts at T..T+2000 under the held RMB, fed through the same
-        // mouse-aware entry the real tick uses: the RMB law (2026-11-16)
+        // source-aware entry the real tick uses: the RMB law (2026-11-16)
         // says the span can never complete — AUTO must stay off.
         KbLog("KB-CLOBBER-SELFTEST: 2 s of casts under a held RMB: AUTO=%d RMB held=%d (expect 0/1 - no latch from mouse casting)",
               gAutoOn ? 1 : 0, KeyHeld(2) ? 1 : 0);
@@ -908,7 +1185,7 @@ void SelfTestDrive()
         KbLog("KB-CLOBBER-SELFTEST: drive button step: synth-held=%d shared-flag=%d (expect 1/1)",
               gRightDown ? 1 : 0, (int)DAT_083a42ac);
         break;
-    case 31: Platform::InjectVirtualKey(2, false);   // player lets go of the mouse
+    case 36: Platform::InjectVirtualKey(2, false);   // player lets go of the mouse
         DAT_083a42ac = 0;   // the real RightUp clears the shared flag (Input_WndProc)
         KbLog("KB-CLOBBER-SELFTEST: RMB released: held=%d AUTO=%d (expect 0/1 - the pre-existing hold's release is not an off input)",
               KeyHeld(2) ? 1 : 0, gAutoOn ? 1 : 0);
@@ -916,19 +1193,20 @@ void SelfTestDrive()
         KbLog("KB-CLOBBER-SELFTEST: after drive step: shared-flag=%d synth-held=%d (expect 1/1 - hold re-asserted, AUTO keeps casting)",
               (int)DAT_083a42ac, gRightDown ? 1 : 0);
         break;
-    case 32: KbLog("KB-CLOBBER-SELFTEST: injecting a NEW physical RMB press - AUTO must cancel (standing rule)");
+    case 37: KbLog("KB-CLOBBER-SELFTEST: injecting a NEW physical RMB press - AUTO must STAY ON (Train 12 cursor freedom: a press yields the drive for its moment, it no longer cancels)");
         Platform::InjectVirtualKey(2, true);
         DAT_083a42ac = 1;   // WndProc state from the real press (already 1 via the synth hold)
         break;
-    case 33: KbLog("KB-CLOBBER-SELFTEST: after new press: AUTO=%d (expect 0 - cancelled by fresh mouse input)",
+    case 38: KbLog("KB-CLOBBER-SELFTEST: after new press: AUTO=%d (expect 1 - no mouse-takeover cancel since Train 12)",
               gAutoOn ? 1 : 0);
         Platform::InjectVirtualKey(2, false);
+        AutoSet(false, "self-test clobber exercise", false);   // the test takes AUTO down itself
         gLatchSimT = 0;
         gSelfWorldSim = false;
         gSelfForced = false;
         KbLog("KB-CLOBBER-SELFTEST: segment complete (AUTO on=%d, expect 0)", gAutoOn ? 1 : 0);
         break;
-    case 34: KbLog("KB-DECOUPLE-SELFTEST: segment starts - AUTO with keyboard controls OFF (KB on=%d, AUTO on=%d, expect AUTO 0)",
+    case 39: KbLog("KB-DECOUPLE-SELFTEST: segment starts - AUTO with keyboard controls OFF (KB on=%d, AUTO on=%d, expect AUTO 0)",
                gKbEnabled ? 1 : 0, gAutoOn ? 1 : 0);
         gSelfForced = true;
         gSelfWorldSim = true;
@@ -937,24 +1215,23 @@ void SelfTestDrive()
               gKbEnabled ? 1 : 0);
         Platform::InjectVirtualKey(kAutoVk, true);
         break;
-    case 35: Platform::InjectVirtualKey(kAutoVk, false);
+    case 40: Platform::InjectVirtualKey(kAutoVk, false);
         KbLog("KB-DECOUPLE-SELFTEST: after F8: AUTO on=%d (expect 1 - engaged with KB off)",
               gAutoOn ? 1 : 0);
         AutoSet(false, "self-test decouple exercise", false);
         LatchFrame(false);   // the off transition engages the anti-re-latch beat...
         gLatchSimT = 900000;
         gLatchSimT += 900; LatchFrame(false);   // ...which a 900 ms silence then serves
-        gLatchSuppress = false; gStreakStart = 0; gLastCastT = 0;   // clean slate regardless
-        LatchNoteCast(gLatchSimT);            // streak opens with KB off
-        gLatchSimT += 400; LatchNoteCast(gLatchSimT);
-        gLatchSimT += 400; LatchNoteCast(gLatchSimT);
+        gLatchSuppress = false; gStreakStart = 0; gTrigSkill = 0; gTrigLastT = 0; gLastCastT = 0;   // clean slate regardless
+        LatchNoteCast(gLatchSimT, kTestSkillA, false, true);            // span opens with KB off
+        gLatchSimT += 400; LatchNoteCast(gLatchSimT, kTestSkillA, false, true);
+        gLatchSimT += 400; LatchNoteCast(gLatchSimT, kTestSkillA, false, true);
         KbLog("KB-DECOUPLE-SELFTEST: 3 casts over 800 ms with KB off: streaking=%d AUTO=%d (expect 1/0)",
               gStreakStart != 0 ? 1 : 0, gAutoOn ? 1 : 0);
         break;
-    case 36: gLatchSimT += 400; LatchNoteCast(gLatchSimT);
-        gLatchSimT += 400; LatchNoteCast(gLatchSimT);
-        gLatchSimT += 400; LatchNoteCast(gLatchSimT);   // span reaches 2000 ms
-        KbLog("KB-DECOUPLE-SELFTEST: span 2000 ms with KB off: AUTO=%d (expect 1 - streak latched with KB off)",
+    case 41: for (int k = 0; k < 11; ++k) { gLatchSimT += 400; LatchNoteCast(gLatchSimT, kTestSkillA, false, true); }
+        // span reaches 5200 ms with KB off (Train 12: 5 s trigger)
+        KbLog("KB-DECOUPLE-SELFTEST: span 5200 ms with KB off: AUTO=%d (expect 1 - streak latched with KB off)",
               gAutoOn ? 1 : 0);
         KbSet(true, "self-test decouple exercise");    // flip ON mid-AUTO
         KbLog("KB-DECOUPLE-SELFTEST: F9 flip ON mid-AUTO: KB on=%d AUTO on=%d (expect 1/1)",
@@ -963,7 +1240,7 @@ void SelfTestDrive()
         KbLog("KB-DECOUPLE-SELFTEST: F9 flip OFF mid-AUTO: KB on=%d AUTO on=%d (expect 0/1)",
               gKbEnabled ? 1 : 0, gAutoOn ? 1 : 0);
         break;
-    case 37: AutoSet(false, "self-test decouple exercise", false);
+    case 42: AutoSet(false, "self-test decouple exercise", false);
         KbSet(true, "self-test decouple restore");
         gLatchSimT = 0;
         gSelfWorldSim = false;
@@ -1071,6 +1348,14 @@ void KbPlay_Tick()
     // cast stops, and no digit/Enter press is ever acted on.
     const bool gates = Gates() && KbEnabled();
 
+    // Cursor tracking (Train 12): a game-cursor position change since
+    // last tick means the player is moving the mouse now; the stamp
+    // feeds the stillness test the drives use before they may park.
+    // Our own parks never trip this — they land synchronously and the
+    // end-of-tick refresh below records the parked point.
+    if ((int)DAT_083a427c != gMouseUiX || (int)DAT_083a4278 != gMouseUiY)
+        gCursorChangeT = SDL_GetTicks();
+
     // Chat focus transitions. Chat is tracked apart from Gates(): AUTO
     // keeps running while the chat input is open (G's amendment) — only
     // the keyboard changes hands.
@@ -1094,7 +1379,7 @@ void KbPlay_Tick()
     // here, which ValidMonster essentially never accepts, so the mouse
     // path's target preference silently never landed and AUTO fell back
     // to the nearest scan instead of the player's current target.
-    if (AutoGates() && Attacking == 1 && ValidMonster(DAT_00559c70))
+    if (AutoGates() && Attacking == 1 && ValidLatchTarget(DAT_00559c70))
         gLastIdx = DAT_00559c70;
     // A dead/gone lock clears silently.
     if (gLockIdx >= 0 && (!AutoGates() || !ValidMonster(gLockIdx)))
@@ -1175,16 +1460,18 @@ void KbPlay_Tick()
     }
     gF9Prev = f9;
 
-    // A physical mouse press is the player taking control back. The key
-    // table's button bits are written only by real SDL device events (pad
-    // key pulses never use buttons 1/2); virtual buttons from this module,
-    // NavMove and the gamepad travel via DeliverSDLInput and never appear
-    // here, so this cannot misfire on synthesized input.
+    // Physical mouse buttons. The key table's button bits are written
+    // only by real SDL device events (pad key pulses never use buttons
+    // 1/2); virtual buttons from this module, NavMove and the gamepad
+    // travel via DeliverSDLInput and never appear here, so this cannot
+    // misfire on synthesized input.
+    // Train 12 (cursor freedom): a physical press NO LONGER cancels
+    // AUTO — the mouse belongs to the player, and the AUTO drive
+    // yields to it per-tick instead (AutoDriveStep: no park and no
+    // synthetic hold while a physical button is down). The Space
+    // attack latch keeps its own takeover rule: a fresh physical
+    // press is the player taking the latch back.
     const bool mL = KeyHeld(1), mR = KeyHeld(2);
-    if (gAutoOn && ((mL && !gMouseLPrev) || (mR && !gMouseRPrev)))
-        AutoSet(false, "manual mouse input", true);
-    // The Space attack latch follows the same takeover rule: a fresh
-    // physical mouse press is the player taking control back.
     if (gAtkLatchIdx >= 0 && ((mL && !gMouseLPrev) || (mR && !gMouseRPrev)))
         AtkLatchRelease("manual mouse input", true);
     gMouseLPrev = mL; gMouseRPrev = mR;
@@ -1210,7 +1497,7 @@ void KbPlay_Tick()
             }
         } else if (!gCastVk) {   // a hand-held digit cast outranks AUTO
             if (gAutoYielded) { gAutoYielded = false; KbLog("KB-AUTO: re-engages"); }
-            if (SelectedSkillType() != 0) { AimAndPark(); AutoDriveButton(); }
+            if (SelectedSkillType() != 0) { AutoDriveStep(); }
             else SetRightButton(false);   // empty slot selected: stand + scan
         }
     }
@@ -1245,8 +1532,22 @@ void KbPlay_Tick()
             }
         } else {
             if (gAtkYielded) { gAtkYielded = false; KbLog("KB-ATK: latch re-engages"); }
-            ParkOnCharacter(EntryAt(gAtkLatchIdx));
-            AtkDriveButton();
+            // Cursor freedom (Train 12): the latch's target is locked,
+            // so the old per-tick park was pure seizure. Park only
+            // when the target's screen position drifts materially and
+            // the player is not moving the mouse; hold the virtual
+            // button only while the cursor sits on the target.
+            CHARACTER* tgt = EntryAt(gAtkLatchIdx);
+            int ux = 0, uy = 0;
+            ProjectUi(tgt, ux, uy);
+            if (UiDist(ux, uy, gParkUiX, gParkUiY) > kParkDriftPx && !PlayerMovingMouse()) {
+                ParkOnCharacter(tgt);
+                AtkDriveButton();
+            } else if (UiDist((int)DAT_083a427c, (int)DAT_083a4278, ux, uy) <= kCursorAimPx) {
+                AtkDriveButton();
+            } else if (gAtkLeftDown) {
+                SetLeftButton(false);
+            }
         }
     }
 
@@ -1258,6 +1559,12 @@ void KbPlay_Tick()
             KbLog("KB-SELFTEST: Enter press ignored (gates closed, scene=%d)", SceneFlag);
     }
     gEnterPrev = enter;
+
+    // End-of-tick cursor record (Train 12): where the game cursor
+    // ended this tick, after every drive — the reference the next
+    // tick's player-movement and stillness tests compare against.
+    gMouseUiX = (int)DAT_083a427c;
+    gMouseUiY = (int)DAT_083a4278;
 }
 
 // HUD indicator (RenderInformation, next to the gamepad's "PAD"): lit for
