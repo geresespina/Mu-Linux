@@ -27,7 +27,14 @@
 // Arms-pinned-back is baked model animation and is out of scope by design.
 namespace NinjaRun
 {
-    inline constexpr float kSpeedFactor = 1.75f;
+    // Train 50 (2026-11-19): G's FINAL speed ruling — speeds NORMAL.
+    // The base movespeed increase comes OUT entirely: at x1.75 the
+    // client still desynced with the server walk fully synced
+    // (Bounce 20), and at x1.9 players were pulled back on long
+    // runs. The increase is convicted as the desync's root; stock
+    // is the base, and any future speed-up must be rebuilt on a
+    // proven sync. (Supersedes Train 49's test build.)
+    inline constexpr float kSpeedFactor = 1.0f;   // Train 50: STOCK (was 1.75f)
     inline constexpr float kLeanDegrees = 18.0f;
 
     // Player locomotion actions (the walk/run family). Same set the footstep
@@ -59,7 +66,7 @@ namespace NinjaRun
     // 1.75 under 200. The window end is written by ActionMove's
     // DashScan (SDL ticks); the live flag is refreshed per frame by
     // ActionJump::Update and per step by the drive tick.
-    inline constexpr float kDashFactor = 4.0f;   // Train 47 (2026-11-19): G CANCELLED the revert — x4.0 STAYS (Train 46 superseded)   // Train 44 (2026-11-19): G's x4.0 dash tune (Bounce 18 ceiling x4.60)
+    inline constexpr float kDashFactor = 3.0f;   // Train 50 (2026-11-19): G's FINAL speed ruling — dash x3.0, server ceiling x3.40 (was x4.0 / x4.60)
     inline unsigned gDashBurstEndMs = 0;   // SDL tick the burst ends (0 = none)
     inline bool     gDashBurst = false;    // derived live flag
     inline float ActiveFactor() { return gDashBurst ? kDashFactor : kSpeedFactor; }
