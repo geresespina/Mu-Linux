@@ -31,6 +31,7 @@
 #include "functions.h"            // Camera_ProjectWorldToScreen, CreateAngle
 #include "Net/Net.h"              // gNetwork
 #include "Render/ActionCamera.h"  // Train 15: strafe facing law (gActionCamera)
+#include "Input/ActionJump.h"     // Train 29: air-dash glide / teleport air-cancel (gActionJump)
 #include <SDL3/SDL.h>             // SDL_GetTicks
 #include <cmath>
 #include <cstdarg>
@@ -395,8 +396,16 @@ bool SendDashRequest(unsigned char mode, int keyOrDir)
         b5 = (BYTE)(keyOrDir & 0xFF);          // engine Dir 0..7
         b6 = 0;
     }
-    return EmitDashFrame(mode, b5, b6,
+    const bool sent = EmitDashFrame(mode, b5, b6,
         mode == kDashModeTarget ? "blink-to-target" : "dash");
+    // MEAMU Train 29: a direction dash in the air becomes an air-dash
+    // (the jump converts to a glide; chains refresh it). A blink is a
+    // teleport-class arrival — the air state ends.
+    if (sent) {
+        if (mode == kDashModeTarget) gActionJump.CancelAir();
+        else gActionJump.OnAirDash();
+    }
+    return sent;
 }
 
 // World octant of a tile delta, in the ENGINE's Dir numbering — the value
@@ -584,6 +593,7 @@ bool ActionMove_TeleportToPoint(int tileX, int tileY)
     if (tx < 0 || ty < 0 || tx > 255 || ty > 255) return false;
     const bool sent = EmitDashFrame(kDashModeClickTp, (BYTE)tx, (BYTE)ty,
                                     "click-teleport");
+    if (sent) gActionJump.CancelAir();   // Train 29: teleports land grounded
     ActLog("ACTION: click-teleport to (%d,%d)%s", tx, ty,
            clamped ? " (clamped: click was beyond range)" : "");
     return sent;

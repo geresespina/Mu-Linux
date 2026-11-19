@@ -27,7 +27,13 @@ public:
     void Update();
 
     bool Airborne() const { return m_Phase != 0; }
-    int  Phase() const { return m_Phase; }  // 0 grounded · 1 airborne · 2 landing
+    int  Phase() const { return m_Phase; }  // 0 grounded · 1 airborne · 2 landing · 3 air-dash glide
+
+    // MEAMU Train 29: a direction dash fired mid-air converts the arc
+    // into a glide from the current height (chains refresh it); a
+    // teleport-class move (blink / click-teleport) ends the air state.
+    void OnAirDash();
+    void CancelAir();
 
 private:
     int      m_Phase = 0;
@@ -35,6 +41,8 @@ private:
     float    m_Applied = 0.0f;  // Z offset currently added to the hero
     bool     m_SpacePrev = false;
     unsigned m_LastTick = 0;
+
+    float    m_GlideFrom = 0.0f;  // Train 29: height the glide started at
 
     // MEAMU Train 28: XY smoothing spring (fluid WASD). The rendered
     // position chases the logical one through a damped spring — see
