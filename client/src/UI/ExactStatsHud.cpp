@@ -138,7 +138,7 @@ void RunSelfTestOnce()
 
 void RenderSheet(const ExactStats::Stats& s)
 {
-    constexpr int kW = 304, kH = 268;
+    constexpr int kW = 304, kH = 322; // Train 40: +3 rows (FINAL x2, SCALE)
     const int ox = gWindow.PanelOrigin(Ui::WindowLeft) + (640 - kW) / 2;
     const int oy = 96;
     DrawBox((float)ox, (float)oy, (float)kW, (float)kH);
@@ -168,9 +168,24 @@ void RenderSheet(const ExactStats::Stats& s)
     Platform::TextFormatSecure(v, sizeof(v), "%s - %s", a, b);
     line("DMG", v);
 
+    // MEAMU Train 40: the FINAL rows — base x the FULL multiplier
+    // product (modes x war x skill-scale), computed by the GS.
+    // This is the accurate exact damage G asked to see.
+    if (s.finalPhysiMax > 0) {
+        FormatNum(s.finalPhysiMin, a, sizeof(a)); FormatNum(s.finalPhysiMax, b, sizeof(b));
+        Platform::TextFormatSecure(v, sizeof(v), "%s - %s", a, b);
+        line("FINAL DMG", v);
+    }
+
     FormatNum(s.magicMin, a, sizeof(a)); FormatNum(s.magicMax, b, sizeof(b));
     Platform::TextFormatSecure(v, sizeof(v), "%s - %s", a, b);
     line("MAGIC DMG", v);
+
+    if (s.finalMagicMax > 0) {
+        FormatNum(s.finalMagicMin, a, sizeof(a)); FormatNum(s.finalMagicMax, b, sizeof(b));
+        Platform::TextFormatSecure(v, sizeof(v), "%s - %s", a, b);
+        line("FINAL MAGIC", v);
+    }
 
     FormatNum(s.physiSpeed, a, sizeof(a));
     line("ATK SPD", a);
@@ -196,8 +211,17 @@ void RenderSheet(const ExactStats::Stats& s)
     FormatMulPct(s.totalMulPct, a, sizeof(a));
     line("TOTAL", a);
 
-    Platform::TextFormatSecure(v, sizeof(v), "+%d%%", (int)s.clanBonusPct);
-    line("CLAN BONUS %", v);
+    // Train 40: the skill-scale factor gets its own row (it was
+    // invisible on the old sheet — up to x21 of silent damage).
+    {
+        const int sx = (int)s.scaleMulX1000;
+        Platform::TextFormatSecure(v, sizeof(v), "\xC3\x97%d.%03d", sx / 1000, sx % 1000);
+        line("SCALE", v);
+    }
+
+    // Train 40: clan war bonus in multiplier language (was "+%d%%").
+    FormatMulPct(100 + s.clanBonusPct, a, sizeof(a));
+    line("CLAN WAR", a);
 
     Platform::TextFormatSecure(v, sizeof(v), "%d%%/s", (int)s.drainPct);
     line("DRAIN %/s", v);
@@ -237,7 +261,11 @@ void Render()
     const int lineLeft = x;
     char label[96], a[32], b[32];
 
-    FormatNum(s.physiMin, a, sizeof(a)); FormatNum(s.physiMax, b, sizeof(b));
+    // Train 40: the slim chip shows the FINAL damage when the GS
+    // sends it (Bounce 16) — the number he actually deals — and
+    // falls back to the base DMG on an older GS.
+    FormatNum(s.finalPhysiMax > 0 ? s.finalPhysiMin : s.physiMin, a, sizeof(a));
+    FormatNum(s.finalPhysiMax > 0 ? s.finalPhysiMax : s.physiMax, b, sizeof(b));
     Platform::TextFormatSecure(label, sizeof(label), "DMG %s-%s", a, b);
     x += DrawSlimChip(x, kLineBottom, label, 0xFFFFFFFFu) + kChipGap;
 
