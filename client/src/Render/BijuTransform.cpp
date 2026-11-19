@@ -78,6 +78,12 @@ namespace
     // slot de armadura, por slot del pool (1 = puesta). Tabla hermana de
     // la del pet: mismos feeds, mismo Clear.
     signed char s_skinBySlot[400];
+    // MEAMU TRAIN 8 ADDENDUM (2026-11-19): que skill produjo la forma
+    // de cada slot (61 = Biju Mode, 74 = Perfect Susanoo, 0 = nunca
+    // presenciado). Tabla hermana de la del pet: la alimentan el
+    // paquete de casteo 0x19 (eco del heroe + remotos) y el feed de
+    // efectos F3/F1 del heroe; la limpia el mismo Clear.
+    unsigned char s_formSourceBySlot[400];
     bool        s_init = false;
 
     void EnsureInit()
@@ -85,6 +91,7 @@ namespace
         if (!s_init) {
             std::memset(s_beastBySlot, -1, sizeof(s_beastBySlot));
             std::memset(s_skinBySlot, 0, sizeof(s_skinBySlot));
+            std::memset(s_formSourceBySlot, 0, sizeof(s_formSourceBySlot));
             s_init = true;
         }
     }
@@ -129,8 +136,8 @@ namespace
         EnsureInit();
         const int slot = SlotOf(character);
         if (slot < 0) return false;
-        // MEAMU TRAIN 3 (2026-11-18): tie-break on the shared form bit
-        // (see FormClassFor in the header): pet known -> that beast's
+        // MEAMU TRAIN 3 (2026-11-18): tie-break on the shared form
+        // bit (see FormClassFor in the header): pet known -> that beast's
         // class (existing behaviour, byte-identical); no pet known ->
         // Perfect Susanoo, class 228. A missing/unloaded 228 catalog
         // model falls back to the normal player render below, exactly
@@ -138,8 +145,12 @@ namespace
         // MEAMU TRAIN 7 (2026-11-18): la decision pasa por la variante
         // con nombre -- Gloccy/M4D4R4 sin pet resuelven a la clase
         // 229 (Crimson Karane) en vez de la 228; el resto, identico.
-        const int formClass = FormClassForNamed(formBit, (int)s_beastBySlot[slot],
-                                                EntityName::Get(character));
+        // MEAMU TRAIN 8 ADDENDUM (2026-11-19): la decision pasa por
+        // FormClassForEntity -- la misma que usan las auras de forma
+        // (CharacterEffects 0g/0h) -- que ademas conoce la skill de
+        // origen: Susanoo (74) con pet rinde el titan (228/229),
+        // nunca la bestia; Biju Mode (61) sigue con la bestia.
+        const int formClass = FormClassForEntity(character);
         if (formClass < 0) return false;
         const CatalogMonster* cm = gContentCatalog.GetMonster(formClass);
         if (!cm || cm->Model < 0) return false;
@@ -228,7 +239,19 @@ void Clear(void* character)
     if (slot >= 0) {
         s_beastBySlot[slot] = -1;
         s_skinBySlot[slot] = 0;
+        s_formSourceBySlot[slot] = 0;
     }
+}
+
+void NoteFormSource(void* character, int skillType)
+{
+    // Solo las dos skills de forma comparten el bit 0x2000; cualquier
+    // otro valor no es un origen de forma y se ignora.
+    if (skillType != 61 && skillType != 74) return;
+    EnsureInit();
+    const int slot = SlotOf(character);
+    if (slot < 0) return;
+    s_formSourceBySlot[slot] = (unsigned char)skillType;
 }
 
 bool IsFullBodySkinItem(int itemType)
@@ -285,6 +308,43 @@ int FormClassForNamed(bool formBit, int beastIndex, const char* name)
         std::strcmp(name, "M4D4R4") == 0)
         return kKaraneCrimsonClass;
     return base;
+}
+
+int FormClassForSource(bool formBit, int beastIndex, const char* name,
+                       int sourceSkill)
+{
+    // MEAMU TRAIN 8 ADDENDUM (2026-11-19, G's ruling: "Susanoo =
+    // always the titan"): con la skill de origen conocida, el pet
+    // deja de ser el desempate. Susanoo (74) ignora el slot de pet
+    // por completo -- el camino del titan es FormClassForNamed con
+    // la bestia forzada a desconocida (228, o 229 para los dos
+    // nombres). Biju Mode (61) es exactamente FormClassFor: la
+    // bestia conocida manda, y sin bestia conocida cae al 228 de
+    // respaldo, como hoy. Sin origen conocido (0 u otro), la
+    // decision heredada de Train 3/7 queda byte-identica.
+    if (!formBit) return -1;
+    if (sourceSkill == 74)
+        return FormClassForNamed(true, -1, name);
+    if (sourceSkill == 61)
+        return FormClassFor(true, beastIndex);
+    return FormClassForNamed(true, beastIndex, name);
+}
+
+int FormClassForEntity(const CHARACTER* character)
+{
+    // La decision completa de render de forma para una entidad:
+    // bit compartido 0x2000 + tablas laterales (pet, origen) +
+    // nombre visible. Resolve() y las auras 0g/0h pasan por aca.
+    if (!character) return -1;
+    const bool formBit =
+        (*(const DWORD*)((const BYTE*)character + 120) & 0x2000) != 0;
+    if (!formBit) return -1;
+    EnsureInit();
+    const int slot = SlotOf(character);
+    const int beast = (slot >= 0) ? (int)s_beastBySlot[slot] : -1;
+    const int source = (slot >= 0) ? (int)s_formSourceBySlot[slot] : 0;
+    return FormClassForSource(true, beast, EntityName::Get(character),
+                              source);
 }
 
 bool IsModeTransformSkill(int skillType)

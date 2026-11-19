@@ -114,6 +114,44 @@ namespace BijuTransform
     // back to the normal player render like any missing model.
     int FormClassForNamed(bool formBit, int beastIndex, const char* name);
 
+    // MEAMU TRAIN 8 ADDENDUM (2026-11-19, G's tapped ruling):
+    // "Susanoo = always the titan". The pet-slot tie-break above
+    // cannot tell skill 61 (Biju Mode) from skill 74 (Perfect
+    // Susanoo) -- both ride the one form bit -- so a Susanoo cast
+    // with a soul pet equipped rendered the BEAST. The client now
+    // records WHICH form skill produced the form, per pool slot,
+    // from the two feeds that carry the distinction: the 0x19 cast
+    // packet (hero echo + remote casts, Skills.cpp cases
+    // 0x3D/0x4A) and the hero-only F3/F1 effect-info feed
+    // (CBuffBar::Receive; the GS sends it to the owner only, with
+    // skill = GetEffectSkill(effect)). skillType is 61 or 74;
+    // anything else is ignored. The record is cleared by Clear()
+    // with the pet/skin tables; it is only consulted while the
+    // form bit is on, so a stale record is inert.
+    void NoteFormSource(void* character, int skillType);
+
+    // Pure decision WITH the form's source skill (same purity
+    // contract as FormClassFor, so tests/SkinBodyFix.cpp pins it):
+    //   source 74 (Susanoo): the pet slot is IGNORED -- the titan
+    //     path exactly as FormClassForNamed(bit, -1, name):
+    //     228, or 229 for Gloccy / M4D4R4.
+    //   source 61 (Biju Mode): the beast path exactly as
+    //     FormClassFor (a known beast wins; an unknown beast
+    //     falls back to 228, as today).
+    //   source 0 / anything else (cast never witnessed -- e.g.
+    //     the entity walked into view already transformed): the
+    //     legacy FormClassForNamed decision, unchanged.
+    int FormClassForSource(bool formBit, int beastIndex, const char* name,
+                           int sourceSkill);
+
+    // The full render decision for one entity: reads the form
+    // bit at entity+120 and the side tables (pet + form source +
+    // display name) and returns the resolved monster class, or
+    // -1 when the entity is not in a form. Resolve() (body/pose)
+    // and the CharacterEffects form-aura gates share this one
+    // decision so body and aura can never disagree.
+    int FormClassForEntity(const CHARACTER* character);
+
     // MEAMU TRAIN 7 (2026-11-19): pose-less mode transforms (G's
     // ruling 2026-11-19 00:16 EST) -- the seven mode toggles
     // (58 Mangekyou, 59 Sage, 60 Jinchuriki, 61 Biju, 73 Chakra

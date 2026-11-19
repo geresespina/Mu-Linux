@@ -153,6 +153,43 @@ int main()
     ExpectModeSkill(70, false, "Chakra Roar keeps pose");
     ExpectModeSkill(41, false, "Twisting Slash keeps pose");
 
+    // ── MEAMU TRAIN 8 ADDENDUM (2026-11-19): form-source rig ──
+    // The REAL source-aware decision (BijuTransform::
+    // FormClassForSource): G's ruling "Susanoo = always the
+    // titan". With the source witnessed as 74, the pet slot is
+    // ignored (228, or 229 for the two names); as 61 the beast
+    // path is byte-identical to FormClassFor; unwitnessed (0)
+    // the legacy Train 3/7 decision stands.
+    auto ExpectFormSource = [](bool bit, int beast, const char* name, int source, int want, const char* label) {
+        const int got = BijuTransform::FormClassForSource(bit, beast, name, source);
+        if (got != want) {
+            std::printf("FAIL source %-30s bit=%d beast=%d name=%s src=%d want=%d got=%d\n", label, (int)bit, beast, name ? name : "(null)", source, want, got);
+            ++s_failures;
+        } else {
+            std::printf("ok   source %-30s bit=%d beast=%d name=%s src=%d -> %d\n", label, (int)bit, beast, name ? name : "(null)", source, got);
+        }
+    };
+    // THE bug case: Susanoo cast WITH Kurama equipped.
+    ExpectFormSource(true,  8, "Gloccy",     74, 229, "Susanoo+Kurama, Gloccy");
+    ExpectFormSource(true,  8, "M4D4R4",     74, 229, "Susanoo+Kurama, M4D4R4");
+    ExpectFormSource(true,  8, "AnyoneElse", 74, 228, "Susanoo+Kurama, other");
+    ExpectFormSource(true,  0, "Gloccy",     74, 229, "Susanoo+Shukaku, Gloccy");
+    ExpectFormSource(true, -1, "Gloccy",     74, 229, "Susanoo no pet, Gloccy");
+    ExpectFormSource(true, -1, "AnyoneElse", 74, 228, "Susanoo no pet, other");
+    ExpectFormSource(true, -1, nullptr,      74, 228, "Susanoo no pet, no name");
+    // Biju Mode keeps the beast, exactly as today.
+    ExpectFormSource(true,  8, "Gloccy",     61, 163, "Biju+Kurama, Gloccy");
+    ExpectFormSource(true,  0, "M4D4R4",     61, 155, "Biju+Shukaku, M4D4R4");
+    ExpectFormSource(true, -1, "Gloccy",     61, 228, "Biju, pet feed missed");
+    // Unwitnessed: legacy decision, byte-identical.
+    ExpectFormSource(true,  8, "Gloccy",      0, 163, "unknown+Kurama, Gloccy");
+    ExpectFormSource(true, -1, "Gloccy",      0, 229, "unknown no pet, Gloccy");
+    ExpectFormSource(true, -1, "AnyoneElse",  0, 228, "unknown no pet, other");
+    ExpectFormSource(true,  8, "Gloccy",     99, 163, "bogus source = legacy");
+    // Bit off: never a form, whatever the source says.
+    ExpectFormSource(false, 8, "Gloccy",     74,  -1, "no bit, Susanoo src");
+    ExpectFormSource(false, -1, "Gloccy",    61,  -1, "no bit, Biju src");
+
     if (s_failures) {
         std::printf("SKIN BODY FIX RIG: %d FAILURES\n", s_failures);
         return EXIT_FAILURE;

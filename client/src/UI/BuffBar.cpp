@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "UI/BuffBar.h"
 #include "Net/Protocol/GameServerProtocol.h"
+#include "Render/BijuTransform.h"   // MEAMU TRAIN 8 ADDENDUM: NoteFormSource (hero effect witness feed)
 #include "Render/Gfx.h"
 #include "Platform/Text.h"
 #include "UI/MoveList.h"
@@ -198,6 +199,17 @@ void CBuffBar::Receive(const unsigned char* packet, int size)
     if (size < (int)sizeof(Proto::PMSG_EFFECT_INFO_SEND)) return;
     Proto::PMSG_EFFECT_INFO_SEND msg;
     std::memcpy(&msg, packet, sizeof(msg));
+    // MEAMU TRAIN 8 ADDENDUM (2026-11-19): this F3/F1 feed is the
+    // hero's OWN effect ledger -- the GS sends it to the owner
+    // only, with skill = GetEffectSkill(effect). Skills 61 (Biju
+    // Mode) and 74 (Perfect Susanoo) share the one form bit, so
+    // this gain is a witness for BijuTransform's form-source
+    // table: it covers the hero even if the 0x19 cast echo was
+    // never seen. Losses are not recorded (the record is only
+    // consulted while the form bit is on; the next form cast
+    // overwrites it).
+    if (msg.state && (msg.skill == 61 || msg.skill == 74))
+        BijuTransform::NoteFormSource((void*)(uintptr_t)DAT_07abf5d8, (int)msg.skill);
     int slot = 0;
     while (slot < m_Count && m_Buffs[slot].effect != msg.effect) ++slot;
     if (!msg.state) {
