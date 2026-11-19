@@ -5,6 +5,7 @@
 #include "stdafx.h"
 #include "Model/Model_CustomAnim.h"
 #include "UI/ChatListBox.h"
+#include "Input/AnimTrace.h"        // MEAMU Train 42 (ANIMTRACE round 2)
 extern "C" const char* Guild_GetMarkName(int row);
 #include "Text/TextCore.h"
 #include "Party/Party.h"
@@ -1414,7 +1415,7 @@ void __cdecl MoveCharacter(intptr_t p1)
     // ─── L840-2486: SKILL DISPATCH (when c+757 exhaust limit, drain c+770 queue)
     if (AsCharacter(c)->SkillStage >= (unsigned char)g_iLimitAttackTime)
     {
-        AsCharacter(c)->SkillStage = 0;
+        { AnimTrace::NoteDirect("motion"); AsCharacter(c)->SkillStage = 0; }
         AsObject(o)->PKKey = -1;
         if (AsCharacter(c) == AsCharacter(Hero) && SelectedCharacter != -1) {
             intptr_t selSlot = (intptr_t)CharactersClient + (intptr_t)CHARACTER_STRIDE * SelectedCharacter;
@@ -1823,7 +1824,7 @@ void __cdecl MoveCharacter(intptr_t p1)
         }
 
         // L2481-2485: clear queue + state — hash decrypt/encrypt skipped
-        AsCharacter(c)->Skill = 0;
+        { AnimTrace::NoteDirect("motion"); AsCharacter(c)->Skill = 0; }
         *(short*)&((CHARACTER*)(uintptr_t)(c))->Damage = 0;
         *(BYTE*)&((CHARACTER*)(uintptr_t)(c))->AttackFlag = 0;
     }
