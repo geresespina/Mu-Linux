@@ -32,6 +32,7 @@
 #include "Net/Net.h"              // gNetwork
 #include "Render/ActionCamera.h"  // Train 15: strafe facing law (gActionCamera)
 #include "Input/ActionJump.h"     // Train 29: air-dash glide / teleport air-cancel (gActionJump)
+#include "Input/KbPlay.h"         // Train 31: latch release on scheme flip (KbPlay_ClearAttackLatch)
 #include <SDL3/SDL.h>             // SDL_GetTicks
 #include <cmath>
 #include <cstdarg>
@@ -481,6 +482,9 @@ void FlipScheme()
     ++gFlipSerial;                          // Train 14 edge-detects this
     gUserSettings.SetControlScheme(next);   // persists [Controls] Scheme
     ReleaseDrive();
+    // MEAMU Train 31: entering Action clears any Space attack latch —
+    // its Classic walk-in has no place in manual-movement mode.
+    if (next == ControlScheme::Action) KbPlay_ClearAttackLatch();
     Say("Control scheme: %s", next == ControlScheme::Action
         ? "ACTION (WASD + mouse aim)" : "CLASSIC (click to move)");
     ActLog("ACTION: scheme -> %s (grave)", next == ControlScheme::Action ? "ACTION" : "CLASSIC");
