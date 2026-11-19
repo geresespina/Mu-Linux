@@ -434,11 +434,18 @@ int OctantOf(int dx, int dy)
     return 7;   // dx<0, dy==0
 }
 
-// Feed the four direction slots; returns true when a double-tap fired
-// this tick (the dash request has been sent). Slot press edges are the
-// tap events; a held slot is not a tap.
+// Feed the four direction slots. MEAMU Train 36 (2026-11-19): the
+// double-tap TELEPORT is REMOVED by G's ruling — Space owns
+// teleporting now. This scan no longer fires anything: it keeps the
+// press/release bookkeeping (the drive reads slot held/consumed
+// state, and a fresh press still takes control back from a dash
+// brake armed by a blink/teleport) and stands ready as the gesture
+// detector for G's pending call — pure-dash burst vs gesture gone.
+// Slot press edges are the tap events; a held slot is not a tap.
 bool DashScan(unsigned now, int wantX, int wantY)
 {
+    (void)wantX; (void)wantY;   // Train 36: the fire that read the
+                                // combined vector is gone (see above)
     bool fired = false;
     for (int s = 0; s < 4; ++s) {
         TapSlot& t = gTaps[s];
@@ -450,20 +457,6 @@ bool DashScan(unsigned now, int wantX, int wantY)
             // must not clear the brake the firing edge just armed).
             if (gBrakeActive && now > gBrakeArmedMs) gBrakeActive = false;
             t.pressT = now;
-            if (t.releaseT != 0 && now - t.releaseT <= kDashWindowMs &&
-                t.pressDur <= kTapMaxMs) {
-                // Double-tap: dash along the CURRENT combined direction
-                // (the tapped slot plus anything else held reads as the
-                // player's evident vector; a lone tap = that slot).
-                int dx = wantX, dy = wantY;
-                if (dx == 0 && dy == 0) { dx = (s == 3) - (s == 2); dy = (s == 1) - (s == 0); }
-                const int oct = OctantOf(dx, dy);
-                SendDashRequest(kDashModeDirection, oct);
-                ActLog("ACTION: dash (slot %d, engine dir %d)", s, oct);
-                t.consumed = true;
-                t.releaseT = 0;                      // no triple-tap chain
-                fired = true;
-            }
         } else if (!held && t.held) {                // release edge
             t.releaseT = now;
             t.pressDur = now - t.pressT;
