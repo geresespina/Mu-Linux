@@ -1,48 +1,40 @@
 #pragma once
 
-// ActionJump.h — MEAMU Train 24 (2026-11-19): SPACE = JUMP in Action mode.
+// ActionJump.h — MEAMU Train 24 (2026-11-19) built SPACE = JUMP here;
+// MEAMU Train 35 (2026-11-19): DESIGN PIVOT by G — the jump is REMOVED.
+// Space in Action mode is now a FACING TELEPORT (see ActionJump.cpp).
 //
-// The GunZ wave's foundation verb (G's order, 2026-11-19). The engine has
-// no jump state and its movement re-pins the hero's height to the terrain
-// every step, so the hop is a RENDER-SEAM arc: this module raises the
-// hero's draw height above the terrain on a parabolic arc while the
-// logical position — pathing, picking, server sync — never changes.
-// WASD momentum carries through the air untouched; the dash composes.
+// What this module owns after the pivot:
+//   * The Train 28 XY smoothing spring (fluid WASD) — the render seam
+//     this file was already hosting. Unchanged.
+//   * The Space edge in Action mode -> facing blink trigger.
+//   * The Train 29 air API (Airborne / OnAirDash / CancelAir) as
+//     documented no-ops: with no hop there is no air state, so
+//     air-dash lost its entry (dash chains live on the ground; the
+//     Space blink is the chain's new extension — see Train 35 report).
 //
-// What it owns for real is the AIR-STATE (grounded / airborne / landing),
-// exposed via Airborne() — air-dash and wall-run hook it in later trains.
-//
-// Scope v1 (feel first): Action scheme + pointer-locked only. Classic is
-// untouched (its Space latch never engages in Action mode anyway). The
-// hop is local to this client — other players see the hero grounded.
-// No packets, no server change.
+// Classic is untouched: its Space attack latch never engages here.
 
 class CActionJump
 {
 public:
     // Per-step update, called beside gActionCamera.Update() from
-    // MoveMainCamera (Render_WorldHelpers.cpp). Owns the hero's render
-    // offsets: the Train 24 hop (Z) and the Train 28 smoothing spring
-    // (XY) — both restore-first, both render-only.
+    // MoveMainCamera (Render_WorldHelpers.cpp). Owns the hero's
+    // render XY offset (Train 28 spring, restore-first, render-only)
+    // and the Action-mode Space edge.
     void Update();
 
-    bool Airborne() const { return m_Phase != 0; }
-    int  Phase() const { return m_Phase; }  // 0 grounded · 1 airborne · 2 landing · 3 air-dash glide
+    // Train 35: no air state exists anymore — always grounded.
+    bool Airborne() const { return false; }
 
-    // MEAMU Train 29: a direction dash fired mid-air converts the arc
-    // into a glide from the current height (chains refresh it); a
-    // teleport-class move (blink / click-teleport) ends the air state.
+    // Train 29 API, kept as no-ops so the dash/teleport call sites in
+    // ActionMove stand unchanged. There is no air to dash in or cancel.
     void OnAirDash();
     void CancelAir();
 
 private:
-    int      m_Phase = 0;
-    float    m_T = 0.0f;        // seconds into the current phase
-    float    m_Applied = 0.0f;  // Z offset currently added to the hero
     bool     m_SpacePrev = false;
     unsigned m_LastTick = 0;
-
-    float    m_GlideFrom = 0.0f;  // Train 29: height the glide started at
 
     // MEAMU Train 28: XY smoothing spring (fluid WASD). The rendered
     // position chases the logical one through a damped spring — see
