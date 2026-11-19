@@ -653,7 +653,10 @@ void NetRecv_1E(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
     caster[EntityOffset(776)] = Msg[6];
     caster[EntityOffset(777)] = Msg[7];
     if (caster == (BYTE*)DAT_07abf5d8) {
-        AsCharacter(caster)->SkillStage = 1;
+        // MEAMU TRAIN 33: mode toggles never arm the hero's swing
+        // state on any channel (see PacketHandler_0x19 head note).
+        if (!BijuTransform::IsModeTransformSkill((int)skill))
+            AsCharacter(caster)->SkillStage = 1;
         *(WORD *)&AsCharacter(caster)->TargetCharacter = 0xFFFF;
         caster[EntityOffset(756)] = 0;
         return;
@@ -1011,13 +1014,20 @@ void NetRecv_1A(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         // skill check. Mode skills are not stock 0x1A skills, so
         // the gate is inert unless a mode toggle ever lands here.
         const int magicSkill = (int)(((WORD)Msg[5] << 8) | Msg[6]);
-        if (!BijuTransform::IsModeTransformSkill(magicSkill)) {
+        // MEAMU TRAIN 33: belt and braces -- the handler itself stores
+        // the skill from Msg[5] alone a few lines down, so accept the
+        // mode family in EITHER byte layout; and a mode toggle never
+        // arms SkillStage here either (inert on every channel).
+        const bool modeSkill = BijuTransform::IsModeTransformSkill(magicSkill)
+                            || BijuTransform::IsModeTransformSkill((int)Msg[5]);
+        if (!modeSkill) {
             AsCharacter(caster)->Object.PriorAction = AsCharacter(caster)->Object.CurrentAction;
             AsCharacter(caster)->Object.CurrentAction = 90;            // cast anim (action 90)
             AsCharacter(caster)->Object.AnimationFrame = 0.0f;
         }
         AsCharacter(caster)->Skill = Msg[5];           // ReceiveMagicPosition
-        AsCharacter(caster)->SkillStage = 1;             // attack pending
+        if (!modeSkill)
+            AsCharacter(caster)->SkillStage = 1;         // attack pending (Train 33: never for modes)
         PlayBuffer(88, 0, 0);          // magic cast sound
     }
 

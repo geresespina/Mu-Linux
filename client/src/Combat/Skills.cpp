@@ -152,7 +152,16 @@ void PacketHandler_0x19(BYTE* pkt)
     // reaches its attack-frame limit; without this assignment it only sees
     // stale/zero data and therefore plays the pose without creating the spell
     // effect.
-    AsCharacter(caster)->Skill = (BYTE)skill_type;
+    // MEAMU TRAIN 33 (2026-11-19): mode toggles {58,59,60,61,72,73,
+    // 74,75} never arm the caster's animation state at all -- no
+    // Skill byte, no SkillStage (common_tail below). Trains 7/8/19
+    // pose-proofed every cast branch and packet case, but this
+    // assignment + the tail still fed the frame animation machinery
+    // (MoveCharacter's swing tick) on every server echo, Mangekyou
+    // included. Mode visuals are state-bit driven (aura/burst), so
+    // nothing consumes these fields for the family.
+    if (!BijuTransform::IsModeTransformSkill(skill_type))
+        AsCharacter(caster)->Skill = (BYTE)skill_type;
 
     AsCharacter(caster)->TargetCharacter = (short)target_idx;
     // IDA 0x42BCA0 escribe `sc->SkillSuccess = (TargetKey >> 15) != 0`, y el
@@ -527,7 +536,9 @@ void PacketHandler_0x19(BYTE* pkt)
 common_tail:
     // Common tail: mark skill as active on caster
     // Almost all skill_type cases jump here
-    AsCharacter(caster)->SkillStage = 1;
+    // MEAMU TRAIN 33: mode toggles stay fully inert (see head note).
+    if (!BijuTransform::IsModeTransformSkill(skill_type))
+        AsCharacter(caster)->SkillStage = 1;
 }
 
 
