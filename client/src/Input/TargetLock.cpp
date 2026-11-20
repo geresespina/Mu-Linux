@@ -185,13 +185,47 @@ void TargetLock_LtHold(bool held)
     if (KbPlay_LockIndex() >= 0) return;   // a standing lock wins
     WatchLockKill();                             // Train 76
     if (gKillLatch) return;                      // killed mid-hold: no re-engage, no hunt
+    // Train 79 (G's play report on 78: "doesn't work properly" --
+    // his trace showed the hunt chaining between roaming town
+    // phantoms/villagers, a few casts each, never settling): the
+    // hunt seeks MONSTERS ONLY, like Train 64's auto-lock fill.
+    // Latch-legal bystanders (fabricated villagers, players) are
+    // for the manual verbs (LB / Q), never for the automated
+    // seek. Diagnosis + fix: builds/train79-hunt-diagnosis.md.
     int best = -1, bestD = 9999;
     for (int i = 0; i < 400; ++i) {
         if (!KbPlay_LatchLegal(i)) continue;
+        if (!KbPlay_IsMonster(i)) continue;
         const int d = KbPlay_TargetDist(i);
         if (d < bestD) { bestD = d; best = i; }
     }
-    if (best < 0) return;
+    if (best < 0) {
+        // Train 79: NO monster in view at all -- SWEEP. Hop in
+        // the facing direction (camera forward in Action, the
+        // hero's facing in Classic) so holding LT travels until
+        // contact. Same cadence + landable step-back as the
+        // chase hop below.
+        const uint32_t nowS = (uint32_t)SDL_GetTicks();
+        if (nowS - s_HuntHopT < 280) return;
+        CHARACTER* heroS = HeroC();
+        const int hxS = (int)heroS->PositionX, hyS = (int)heroS->PositionY;
+        float yawDeg = gActionCamera.SchemeIsAction()
+            ? gActionCamera.GetYaw()
+            : 180.0f - heroS->Object.Angle[2];
+        const float rad = yawDeg * 3.14159265f / 180.0f;
+        const float fx = sinf(rad), fy = cosf(rad);   // ActionCamera's forward
+        for (int step = 8; step >= 1; --step) {
+            const int lx = hxS + (int)lroundf(fx * (float)step);
+            const int ly = hyS + (int)lroundf(fy * (float)step);
+            if (lx < 0 || ly < 0 || lx > 255 || ly > 255) continue;
+            if (!TerrainWall) break;
+            const BYTE wall = TerrainWall[((ly & 0xFF) << 8) | (lx & 0xFF)];
+            if (wall & 0x0C) continue;
+            if (ActionMove_TeleportToPoint(lx, ly)) s_HuntHopT = nowS;
+            break;
+        }
+        return;
+    }
     if (bestD <= kEngageRange) {
         if (gActionCamera.SchemeIsAction()) {
             SetLock(best);              // verb lock: break rules + facing
@@ -211,8 +245,12 @@ void TargetLock_LtHold(bool held)
     const int cheb = (dx < 0 ? -dx : dx) > (dy < 0 ? -dy : dy)
                    ? (dx < 0 ? -dx : dx) : (dy < 0 ? -dy : dy);
     if (cheb == 0) return;
-    // Land just inside engage range when one hop allows it.
-    int want = bestD - (kEngageRange - 2);
+    // Train 79: land DEEP -- 8 tiles from the target, well
+    // inside engage range, so the fill locks on the next tick
+    // even when the target is moving away. (Train 78 landed at
+    // engage-2 = 13 out; a moving target stayed beyond 15
+    // through the landing lag and the chase strung out.)
+    int want = bestD - 8;
     if (want > 8) want = 8;
     if (want < 1) want = 1;
     for (int step = want; step >= 1; --step) {
