@@ -1286,7 +1286,7 @@ void PadButtonsTick(unsigned now, float dt, bool actionPad)
     const bool huntNow = PadAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > kTriggerOn;
     const bool huntWas = gActPrev.lt;        // Train 86: RT release edge
     ActMirror(0x32, huntNow, gActPrev.lt);   // RT = Skill 2 cast-hold (Train 81)
-    TargetLock_LtHold(huntNow);              // RT = lock + follow + hunt (Train 81)
+    TargetLock_LtHold(huntNow);              // RT = lock + follow + pour, in-range only (Train 88)
     if (huntWas && !huntNow) TargetLock_ReleaseUnlock();   // Train 86
     ActMirror(0x33, PadButton(SDL_GAMEPAD_BUTTON_WEST),          gActPrev.x);     // X  = Skill 3 (G)
     ActMirror(0x34, PadButton(SDL_GAMEPAD_BUTTON_NORTH),         gActPrev.y);     // Y  = Skill 4 (G)

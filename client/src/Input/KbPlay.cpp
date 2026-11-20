@@ -544,6 +544,7 @@ int SelectedSkillDist()
     return dist;
 }
 
+
 // ── Cast hold ────────────────────────────────────────────────────────────────
 void StopCast(const char* why)
 {
@@ -1363,6 +1364,29 @@ void SelfTestDrive()
 }
 
 } // namespace
+int KbPlay_DigitSkillDist(int digitVal)
+{
+    // Train 88: the range of the skill a digit key WOULD select --
+    // QuickSlotDigit's two-pass resolution (hotkey assignment,
+    // else Nth learned) without the selection side effect.
+    if (!Hero || !CharacterAttribute) return 0;
+    char* CA = (char*)CharacterAttribute;
+    const int row = (int)SelectedHero;
+    int slot = -1;
+    for (int i = 0; i < 60; ++i)
+        if (CA[i + 87] != 0 && (unsigned char)CA[(row << 6) + i + 215] == (unsigned char)digitVal) { slot = i; break; }
+    if (slot < 0) {
+        const int nth = (digitVal == 0) ? 10 : digitVal;
+        int seen = 0;
+        for (int i = 0; i < 60; ++i)
+            if (CA[i + 87] != 0 && ++seen == nth) { slot = i; break; }
+    }
+    if (slot < 0) return 0;
+    int dist = 0;
+    GetSkillInformation((unsigned char)CA[slot + 87], 1, nullptr, nullptr, &dist, nullptr);
+    return dist;
+}
+
 
 // The master state, for the Space pickup handler in Player_InputTick.cpp.
 bool KbPlay_Enabled() { return KbEnabled(); }

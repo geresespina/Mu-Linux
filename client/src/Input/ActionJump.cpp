@@ -207,8 +207,9 @@ void CActionJump::Update()
 
     // MEAMU Train 82: RMB in Action mode is RT's verb -- hold =
     // auto-target + camera follow + SKILL 2 CAST-HOLD + the
-    // hunt (TargetLock_LtHold + the '2' mirror, the exact pair
-    // the pad's RT drives since Train 81). Release: the cast
+    // verb (TargetLock_LtHold + the '2' mirror, the exact pair
+    // the pad's RT drives since Train 81; in-range only since
+    // Train 88 removed the hunt). Release: the cast
     // stops, the follow ends, and since Train 86 (G's rule) the
     // LOCK CLEARS too -- RMB is RT's mirror, so its release
     // unlocks exactly like RT's. Same gates as Q/F above.
