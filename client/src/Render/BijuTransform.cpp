@@ -153,6 +153,8 @@ namespace
         const int formClass = FormClassForEntity(character);
         if (formClass < 0) return false;
         const CatalogMonster* cm = gContentCatalog.GetMonster(formClass);
+        // Train 61: la forma carga su modelo la primera vez que se pide.
+        if (cm && cm->ModelPending) gContentCatalog.EnsureMonsterModel(formClass);
         if (!cm || cm->Model < 0) return false;
         const BMD* bm = AsModel((uintptr_t)DAT_05828d58) + cm->Model;
         if (bm->NumActions <= 0 || bm->NumMeshs <= 0 || !bm->Actions || !bm->Bones)
