@@ -24,8 +24,6 @@ namespace {
 using namespace MoveMarkers;
 
 constexpr uint32_t kClickLifeMs = 550;    // spec: ~0.5-0.6 s
-constexpr uint32_t kTeleLifeMs  = 800;    // spec: ~0.8 s
-constexpr int      kMaxTele     = 16;
 constexpr int      kRingSegs    = 28;
 constexpr float    kCullDist2   = 2600.0f * 2600.0f;  // BloodGore's cull
 
@@ -34,16 +32,7 @@ struct ClickState {
     float    x = 0, y = 0, z = 0;
     uint32_t born = 0;
 };
-struct TeleState {
-    bool     active = false;
-    bool     arrival = false;
-    float    x = 0, y = 0, z = 0;
-    uint32_t born = 0;
-};
-
 ClickState s_Click;
-TeleState  s_Tele[kMaxTele];
-int        s_TeleNext = 0;
 
 // Mouse-only gate state: the Platform::RealInputSerial value seen at
 // the previous evaluated ground-click pulse. Synthesized input (pad,
@@ -74,28 +63,6 @@ void SpawnClick(float wx, float wy, float wz, uint32_t now)
     s_Click.active = true;
     s_Click.x = wx; s_Click.y = wy; s_Click.z = wz;
     s_Click.born = now;
-}
-
-void SpawnTele(float wx, float wy, float wz, bool arrival, uint32_t now)
-{
-    TeleState& s = s_Tele[s_TeleNext];
-    s_TeleNext = (s_TeleNext + 1) % kMaxTele;
-    s.active = true;
-    s.arrival = arrival;
-    s.x = wx; s.y = wy; s.z = wz;
-    s.born = now;
-}
-
-// Entity position from the raw offsets the receive code itself uses
-// (OBJECT Position at +0x10/+0x14/+0x18).
-bool EntityPos(const void* entity, float* out)
-{
-    if (!entity) return false;
-    const unsigned char* e = (const unsigned char*)entity;
-    out[0] = *(const float*)(e + 0x10);
-    out[1] = *(const float*)(e + 0x14);
-    out[2] = *(const float*)(e + 0x18);
-    return true;
 }
 
 // Project a world point to BufferedDraw GL coords (the BloodGore
@@ -133,25 +100,6 @@ void DrawGroundRing(float cx, float cy, float cz, float rOut, float rIn,
     BufferedDraw::End();
 }
 
-// Screen-space light pillar: two nested quads between the projected
-// base and a point 230 world units above it, widths tapering up.
-void DrawPillar(float cx, float cy, float cz, float r, float g, float b,
-                float alpha)
-{
-    float bx = 0, by = 0, tx = 0, ty = 0;
-    if (!Project(cx, cy, cz + 2.0f, &bx, &by)) return;
-    if (!Project(cx, cy, cz + 232.0f, &tx, &ty)) return;
-    const float pass[2][3] = { { 26.0f, 9.0f, 0.16f }, { 13.0f, 4.5f, 0.28f } };
-    for (const auto& p : pass) {
-        Gfx::Color4f(r, g, b, alpha * p[2]);
-        BufferedDraw::Begin(BufferedDraw::Primitive::Quads);
-        BufferedDraw::Vertex2f(bx - p[0], by);
-        BufferedDraw::Vertex2f(bx + p[0], by);
-        BufferedDraw::Vertex2f(tx + p[1], ty);
-        BufferedDraw::Vertex2f(tx - p[1], ty);
-        BufferedDraw::End();
-    }
-}
 
 // Downward chevron (filled triangle) hovering over the projected
 // centre, descending toward the tile as the marker ages.
@@ -201,12 +149,9 @@ void RunSelfTestOnce()
     }
     const uint32_t now = NowMs();
     SpawnClick(hx + 200.0f, hy, 100.0f, now);
-    SpawnTele(hx, hy + 200.0f, 100.0f, true, now);
-    SpawnTele(hx, hy - 200.0f, 100.0f, false, now);
-    const bool ok = ActiveClickMarker() == 1 && ActiveTeleportMarkers() == 2;
-    std::printf("MOVEMARKERS SELFTEST: %s (click %d, tele %d)\n",
-                ok ? "PASS" : "FAIL",
-                ActiveClickMarker(), ActiveTeleportMarkers());
+    const bool ok = ActiveClickMarker() == 1;
+    std::printf("MOVEMARKERS SELFTEST: %s (click %d)\n",
+                ok ? "PASS" : "FAIL", ActiveClickMarker());
     std::fflush(stdout);
     ClearAll();
 }
@@ -234,36 +179,7 @@ void OnGroundClick(int gridX, int gridY, bool clickEdge,
     SpawnClick(wx, wy, RequestTerrainHeight(wx, wy), NowMs());
 }
 
-void OnTeleportArrival(const void* entity)
-{
-    if (!Enabled()) return;
-    float p[3];
-    if (!EntityPos(entity, p)) return;
-    SpawnTele(p[0], p[1], p[2], true, NowMs());
 
-    // Spark swirl around the landing tile — particle 1231 (the shiny
-    // spark the mode-activation bursts use), gold-cyan light, anchored
-    // to the arriving entity. CreateTeleportEnd's own 1176 sparkle
-    // fires alongside from the stock path.
-    float light[3] = { 0.75f, 0.95f, 1.0f };
-    for (int i = 0; i < 8; ++i) {
-        const float yaw = (float)i * 45.0f;
-        const float rad = yaw * 3.14159265f / 180.0f;
-        float pos[3] = { p[0] + std::cos(rad) * 55.0f,
-                         p[1] + std::sin(rad) * 55.0f,
-                         p[2] + 12.0f };
-        float angle[3] = { 0.0f, 0.0f, yaw };
-        Particle_Spawn(1231, pos, angle, light, 0, 0.9f, (intptr_t)entity);
-    }
-}
-
-void OnTeleportDeparture(const void* entity)
-{
-    if (!Enabled()) return;
-    float p[3];
-    if (!EntityPos(entity, p)) return;
-    SpawnTele(p[0], p[1], p[2], false, NowMs());
-}
 
 int ActiveClickMarker()
 {
@@ -271,19 +187,13 @@ int ActiveClickMarker()
     return (NowMs() - s_Click.born <= kClickLifeMs) ? 1 : 0;
 }
 
-int ActiveTeleportMarkers()
-{
-    const uint32_t now = NowMs();
-    int n = 0;
-    for (const TeleState& s : s_Tele)
-        if (s.active && now - s.born <= kTeleLifeMs) ++n;
-    return n;
-}
+
+
+
 
 void ClearAll()
 {
     s_Click.active = false;
-    for (TeleState& s : s_Tele) s.active = false;
 }
 
 } // namespace MoveMarkers
@@ -304,27 +214,6 @@ void Render_MoveMarkers(void)
         EnableAlphaBlend();
         GL_SetAlphaTest('\0');   // DisableTexture: untextured geometry
     };
-
-    // Teleport markers under the click marker.
-    for (const TeleState& s : s_Tele) {
-        if (!s.active) continue;
-        const uint32_t age = now - s.born;
-        if (age > kTeleLifeMs) continue;
-        if (!NearHero(s.x, s.y)) continue;
-        const float t = (float)age / (float)kTeleLifeMs;
-        const float fade = 1.0f - t;
-        beginDraw();
-        if (s.arrival) {
-            const float rOut = 16.0f + (74.0f - 16.0f) * EaseOutCubic(t);
-            DrawGroundRing(s.x, s.y, s.z, rOut, rOut - 8.0f,
-                           0.75f, 0.95f, 1.0f, 0.9f * fade);
-            DrawPillar(s.x, s.y, s.z, 0.75f, 0.95f, 1.0f, fade);
-        } else {
-            const float rOut = 58.0f - (58.0f - 16.0f) * t;
-            DrawGroundRing(s.x, s.y, s.z, rOut, rOut - 6.0f,
-                           0.85f, 0.80f, 1.0f, 0.7f * fade);
-        }
-    }
 
     if (s_Click.active) {
         const uint32_t age = now - s_Click.born;
