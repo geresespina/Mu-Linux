@@ -993,14 +993,15 @@ void Gamepad_RenderIndicator()
     UI_RenderText(578, 6, (char*)"PAD", (LPSIZE)0x0, '\0', 0);
 }
 
-// ── Train 48: ACTION-scheme pad map (G's ruling, 2026-11-19) ────────
-// LB Lock (synthesized middle click — Input_WndProc owns the verb) ·
-// RB Skill 2 · X Skill 3 · Y Skill 4 · A Dash · B Blink (Space
-// mirror) · View Skill 1 · RT/LT 7/8 · L3/R3 9/0 · D-pad up/down
-// Skills 5/6 (left/right spares) · left stick = WASD (ActionMove
-// drives, camera-relative) · right stick = aim (camera delta while
-// locked, cursor while UI is open) · Start = scheme toggle (grave
-// pulse). Classic keeps the PADCAST layout below, untouched.
+// ── ACTION-scheme pad map ────────────────────────────────────────────
+// Train 57 sheet (G's refinement, 2026-11-20; supersedes Train 48):
+// RT Skill 1 · LT Skill 2 · X Skill 3 · Y Skill 4 · B Skill 5 ·
+// A Skill 6 · View Skill 7 · L3 Skill 8 · D-up Skill 9 · D-down
+// Skill 10 · LB Target Lock (synthesized middle click) · RB Dash ·
+// R3 Blink (Space mirror) · D-Left Fishing · left stick = WASD
+// (ActionMove drives, camera-relative) · right stick = aim ·
+// Start = scheme toggle (grave pulse). Classic keeps the PADCAST
+// layout below, untouched.
 struct ActPrev {
     bool rb=false, x=false, y=false, view=false, dup=false, ddown=false;
     bool l3=false, r3=false, rt=false, lt=false;
@@ -1027,21 +1028,27 @@ void ActMirror(int vk, bool down, bool& prev)
 void ActionPadTick(unsigned now, float dt)
 {
     (void)now;
-    ActMirror(0x32, PadButton(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER), gActPrev.rb);   // RB = Skill 2
-    ActMirror(0x33, PadButton(SDL_GAMEPAD_BUTTON_WEST),          gActPrev.x);     // X  = Skill 3
-    ActMirror(0x34, PadButton(SDL_GAMEPAD_BUTTON_NORTH),         gActPrev.y);     // Y  = Skill 4
-    ActMirror(0x31, PadButton(SDL_GAMEPAD_BUTTON_BACK),          gActPrev.view);  // View = Skill 1
-    ActMirror(0x35, PadButton(SDL_GAMEPAD_BUTTON_DPAD_UP),       gActPrev.dup);   // D-up = Skill 5
-    ActMirror(0x36, PadButton(SDL_GAMEPAD_BUTTON_DPAD_DOWN),     gActPrev.ddown); // D-down = Skill 6
-    ActMirror(0x39, PadButton(SDL_GAMEPAD_BUTTON_LEFT_STICK),    gActPrev.l3);    // L3 = Skill 9
-    ActMirror(0x30, PadButton(SDL_GAMEPAD_BUTTON_RIGHT_STICK),   gActPrev.r3);    // R3 = Skill 0
-    ActMirror(0x37, PadAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > kTriggerOn, gActPrev.rt);  // RT = 7
-    ActMirror(0x38, PadAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER)  > kTriggerOn, gActPrev.lt);  // LT = 8
-    gActionPadCastHeld = gActPrev.rb || gActPrev.x || gActPrev.y || gActPrev.view
-                      || gActPrev.dup || gActPrev.ddown || gActPrev.l3 || gActPrev.r3
-                      || gActPrev.rt || gActPrev.lt;
+    // MEAMU Train 57 (2026-11-20): G's refined sheet. His six are
+    // law -- LT = Skill 2, RT = Skill 1, X = Skill 3, Y = Skill 4,
+    // B = Skill 5, A = Skill 6. The collisions resolved: A/B gave
+    // up dash/blink, so DASH moved to the freed RB (movement
+    // cluster beside LB lock) and BLINK to R3 (blink where the aim
+    // stick points). Skills 7-10 fill View, L3, D-up, D-down.
+    ActMirror(0x31, PadAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > kTriggerOn, gActPrev.rt);  // RT = Skill 1 (G)
+    ActMirror(0x32, PadAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER)  > kTriggerOn, gActPrev.lt);  // LT = Skill 2 (G)
+    ActMirror(0x33, PadButton(SDL_GAMEPAD_BUTTON_WEST),          gActPrev.x);     // X  = Skill 3 (G)
+    ActMirror(0x34, PadButton(SDL_GAMEPAD_BUTTON_NORTH),         gActPrev.y);     // Y  = Skill 4 (G)
+    ActMirror(0x35, PadButton(SDL_GAMEPAD_BUTTON_EAST),          gActPrev.b);     // B  = Skill 5 (G)
+    ActMirror(0x36, PadButton(SDL_GAMEPAD_BUTTON_SOUTH),         gActPrev.a);     // A  = Skill 6 (G)
+    ActMirror(0x37, PadButton(SDL_GAMEPAD_BUTTON_BACK),          gActPrev.view);  // View = Skill 7
+    ActMirror(0x38, PadButton(SDL_GAMEPAD_BUTTON_LEFT_STICK),    gActPrev.l3);    // L3 = Skill 8
+    ActMirror(0x39, PadButton(SDL_GAMEPAD_BUTTON_DPAD_UP),       gActPrev.dup);   // D-up = Skill 9
+    ActMirror(0x30, PadButton(SDL_GAMEPAD_BUTTON_DPAD_DOWN),     gActPrev.ddown); // D-down = Skill 10
+    gActionPadCastHeld = gActPrev.rt || gActPrev.lt || gActPrev.x || gActPrev.y
+                      || gActPrev.b || gActPrev.a || gActPrev.view || gActPrev.l3
+                      || gActPrev.dup || gActPrev.ddown;
 
-    ActMirror(0x20, PadButton(SDL_GAMEPAD_BUTTON_EAST), gActPrev.b);   // B = Blink (Space)
+    ActMirror(0x20, PadButton(SDL_GAMEPAD_BUTTON_RIGHT_STICK), gActPrev.r3);   // R3 = Blink (Space)
 
     const bool lb = PadButton(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);       // LB = Target Lock
     if (lb && !gActPrev.lb) {
@@ -1075,12 +1082,12 @@ void ActionPadTick(unsigned now, float dt)
         sx = (ldx >  0.38f) ? 1 : (ldx < -0.38f) ? -1 : 0;
         sy = (ldy >  0.38f) ? 1 : (ldy < -0.38f) ? -1 : 0;
     }
-    const bool a = PadButton(SDL_GAMEPAD_BUTTON_SOUTH);                // A = Dash
-    if (a && !gActPrev.a) {
+    const bool rb = PadButton(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);      // RB = Dash (Train 57)
+    if (rb && !gActPrev.rb) {
         ActionMove_PadDashDir(sx, sy);
         ActionMove_PadDash();
     }
-    gActPrev.a = a;
+    gActPrev.rb = rb;
 
     const int mask = (sy < 0 ? 1 : 0) | (sy > 0 ? 2 : 0) | (sx < 0 ? 4 : 0) | (sx > 0 ? 8 : 0);
     const int vks[4] = { 0x57, 0x53, 0x41, 0x44 };   // W S A D
