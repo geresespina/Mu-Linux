@@ -6,6 +6,7 @@
 #include "UI/BuffBar.h"
 #include "Net/BijuProcVisuals.h"
 #include "Input/Fishing.h"   // Train 56: F3 FE fishing signals
+#include "Input/ActionMove.h" // Train 87: landing resets the drive state
 #include "UI/ChatListBox.h"
 #include "Net/NetText.h"
 #include "Entity/EntityName.h"
@@ -1581,6 +1582,30 @@ void NetRecv_1C(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
     *(DWORD *)&AsCharacter(hero)->PositionX = gridX;
     *(DWORD *)&AsCharacter(hero)->PositionY = gridY;
     AsCharacter(hero)->Object.Angle[2] = ((float)direction - 1.0f) * 45.0f;
+
+    // MEAMU Train 87 (G's order, 2026-11-20): the landing is
+    // authoritative for MOVEMENT too, not just for the render
+    // position. Measured on the trace rig before this train: of
+    // 138 landings followed by a move, 21 opened with the client
+    // claiming the PRE-teleport tile as its path origin (d = 3-8,
+    // worst after blink-to-target fired mid-walk) -- and the
+    // server, which walks from the claimed origin (PathX[0]), 
+    // dragged its own record back to the stale tile: the blink
+    // was undone in the movement record, ~100 ms of flip-flop.
+    // Root: this handler adopted the tile into Position/PositionX/Y
+    // but left the path state stale (PathNum / PathX[0] /
+    // TargetX/Y), and SetPlayerStop at the tail does not clear
+    // it. Kill the path and rebase every movement anchor onto the
+    // server's tile, so the first move or cast after a landing
+    // starts from the server's true tile. Both branches (gate and
+    // gate-0) share this adoption, so both get the rebase.
+    AsCharacter(hero)->PathNum = 0;
+    AsCharacter(hero)->PathCurrent = 0;
+    AsCharacter(hero)->PathX[0] = gridX;
+    AsCharacter(hero)->PathY[0] = gridY;
+    AsCharacter(hero)->TargetX = gridX;
+    AsCharacter(hero)->TargetY = gridY;
+    ActionMove_OnTeleportLanded();
 
     if (gate != 0) {
         // ReceiveTeleport's gate branch clears the old viewport

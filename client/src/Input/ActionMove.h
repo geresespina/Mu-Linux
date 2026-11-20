@@ -72,6 +72,7 @@
 //   schemes; server half is Bounce 14.
 
 void ActionMove_Tick();
+void ActionMove_OnTeleportLanded(); // Train 87: forget the direct-drive route on a landing
 
  // True while the ACTION scheme is live in-world. Read by
 // Player_InputTick (physical-click suppression) and KbPlay (Space latch

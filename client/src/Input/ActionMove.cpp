@@ -291,6 +291,7 @@ void ResetDirectDrive()
     gDirectTx = gDirectTy = -1;
 }
 
+
 // MEAMU Train 27: cancel the hero's issued path — the actual stop.
 // Releasing the virtual button never cancelled the route the engine
 // was already walking (the follower consumes CHARACTER::PathNum/
@@ -498,6 +499,17 @@ void FlipScheme()
 }
 
 } // namespace
+
+// MEAMU Train 87: a teleport landing forgets the direct-drive
+// route state, so the drive's next issue is built fresh from the
+// landing tile (the 1C handler kills + rebases the path itself).
+// Defined at global scope (the header's declaration): the drive
+// state lives in the anonymous namespace above, visible in this
+// TU, so the reset is one call.
+void ActionMove_OnTeleportLanded()
+{
+    ResetDirectDrive();
+}
 
 bool ActionMove_IsAction()
 {
