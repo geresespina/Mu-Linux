@@ -31,7 +31,7 @@ namespace NinjaRun
     // (1.0) to convict or clear the base layer. The dash factor is
     // untouched: if plain walking stops desyncing, the base increase
     // is the poison and speed gets rebuilt on a proven sync.
-    inline constexpr float kSpeedFactor = 1.0f;   // Train 49 test (was 1.75f)
+    inline constexpr float kSpeedFactor = 1.75f;   // Train 52: Ninja Run restored (G's call 2026-11-19) -- Train 49's x1.0 was too slow to play
     inline constexpr float kLeanDegrees = 18.0f;
 
     // Player locomotion actions (the walk/run family). Same set the footstep
