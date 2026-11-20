@@ -32,10 +32,12 @@ void TargetLock_Engage();
 bool TargetLock_AutoLockClosest();
 bool KbPlay_SelectedSkillTargeted();   // Train 70 bridge (impl in KbPlay.cpp)
 // MEAMU Train 68: HOLD-LT verb (G's order) -- while LT is held the
-// lock auto-engages the closest candidate (monsters included) and
-// the Action camera follows the lock. Gamepad feeds the raw LT
-// state every pad tick; TargetLock_LtHold edge/state lives here.
-// TargetLock_FollowHeld is the ActionCamera's read of the verb.
+// lock auto-engages the closest candidate (monsters included).
+// Gamepad feeds the raw LT state every pad tick;
+// TargetLock_LtHold edge/state lives here. Train 74 generalised
+// the camera follow: it is a property of ANY standing lock, so
+// the ActionCamera reads TargetLock_Active() directly and
+// FollowHeld remains only as LT's held-state record.
 void TargetLock_LtHold(bool held);
 bool TargetLock_FollowHeld();
 void TargetLock_Tick();

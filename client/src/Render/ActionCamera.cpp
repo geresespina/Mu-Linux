@@ -240,17 +240,21 @@ void CActionCamera::Update()
     // chased the dragged yaw: a feedback loop that twitched the hero's
     // facing while moving/strafing (G's bug report, 2026-11-19).
 
-    // MEAMU Train 68: LT-HOLD CAMERA FOLLOW -- the ONE scoped
-    // exception to Train 22's "camera never rotates itself" law,
-    // on G's direct order (2026-11-20): while LT is physically
-    // held and a lock stands, the yaw eases toward the lock's
-    // bearing (the same CreateAngle the facing writer below uses,
-    // through the line-141 conversion). The follow target is the
-    // LOCK -- an external point, not the hero's own back -- so the
-    // Train 22 feedback loop cannot form; and the moment LT
-    // releases, the yaw simply stays where the follow left it:
-    // mouse control resumes from there, no snap.
-    if (TargetLock_FollowHeld() && TargetLock_Active()) {
+    // MEAMU Train 74 (G's generalised lock law, 2026-11-20):
+    // ANY target lock camera-follows -- follow is a property of
+    // the LOCK itself, not of any button. Q, LB, pad auto-lock,
+    // LT: whenever a verb lock stands in the Action scheme, the
+    // yaw eases toward the lock's bearing (the same CreateAngle
+    // the facing writer below uses, through the line-141
+    // conversion); the lock breaks, the follow ends, and the yaw
+    // stays where the follow left it (mouse resumes, no snap).
+    // This supersedes Train 68's LT-hold-only scoped exception.
+    // Train 22 stays safe: the follow target is the LOCK -- an
+    // external point, not the hero's own back -- so the feedback
+    // loop that law guards against cannot form. (This camera
+    // exists only in the Action scheme; Classic has no action
+    // camera, so a Classic lock steers facing + casts only.)
+    if (TargetLock_Active()) {
         CHARACTER* tgt = EntryAt(TargetLock_Index());
         if (tgt && tgt->Object.Live != 0) {
             typedef float (__cdecl *CreateAngleFn)(float, float, float, float);
