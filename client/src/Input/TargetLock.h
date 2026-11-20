@@ -21,6 +21,16 @@
 // beside it (ActionMove_BlinkToTarget). Camera never rotates.
 
 void TargetLock_Engage();
+// MEAMU Train 75 (G's pad ruling, 2026-11-20): LB is the lock
+// ON/OFF toggle -- press with no lock standing engages (the
+// Engage rules above); press with a lock standing RELEASES it.
+// Not a cycle. Q keeps its engage/cycle behavior; Toggle is the
+// pad's verb. Action semantics live in TargetLock_Toggle();
+// Gamepad's Classic branch toggles KbPlay's plain lock with the
+// two bridges below (declared here for its use).
+void TargetLock_Toggle();
+int  KbPlay_LockIndex();
+void KbPlay_LockClear();
 // MEAMU Train 64: PAD-CAST AUTO-LOCK (G's ruling). Fills the lock
 // ONLY when it is empty — a manual lock (Tab cycle or the LB/Q
 // verb) always wins until it breaks on its own rules. Monsters

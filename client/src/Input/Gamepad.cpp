@@ -1256,22 +1256,23 @@ void PadButtonsTick(unsigned now, float dt, bool actionPad)
 
     ActMirror(0x20, PadButton(SDL_GAMEPAD_BUTTON_RIGHT_STICK), gActPrev.r3);   // R3 = Blink (Space)
 
-    const bool lb = PadButton(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);       // LB = Target Lock
+    const bool lb = PadButton(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);       // LB = Lock ON/OFF (Train 75)
     if (lb && !gActPrev.lb) {
+        // MEAMU Train 75 (G's ruling): LB toggles the lock -- press
+        // with a lock standing releases it, press with none
+        // engages. NOT a cycle (Q keeps engage/cycle on the
+        // keyboard). Action: the verb lock toggles in TargetLock.
+        // Classic: the plain Tab-style lock toggles the same way --
+        // standing lock clears, empty lock takes the Tab target.
         if (actionPad) {
-            Platform::InputEvent ev{};
-            ev.type = Platform::InputEventType::MiddleDown;
-            ev.x = (int)gCursorX; ev.y = (int)gCursorY;
-            Platform::DeliverSDLInput(ev);
-            ev.type = Platform::InputEventType::MiddleUp;
-            Platform::DeliverSDLInput(ev);
-            PadLog("PAD: LB - target lock verb");
+            TargetLock_Toggle();
+            PadLog("PAD: LB - target lock toggle");
+        } else if (KbPlay_LockIndex() >= 0) {
+            KbPlay_LockClear();
+            PadLog("PAD: LB - lock OFF (Classic)");
         } else {
-            // Classic: the verb is Action-only — LB cycles the
-            // native Tab lock instead (same button, scheme's own
-            // lock). Train 64.
-            PulseKey(0x09, "lock cycle (Tab)");
-            PadLog("PAD: LB - Tab lock cycle (Classic)");
+            PulseKey(0x09, "lock on (Tab)");
+            PadLog("PAD: LB - Tab lock on (Classic)");
         }
     }
     gActPrev.lb = lb;

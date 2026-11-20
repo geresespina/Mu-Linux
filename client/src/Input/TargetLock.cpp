@@ -185,6 +185,20 @@ void TargetLock_Engage()
     SetLock(next);
 }
 
+// MEAMU Train 75: LB ON/OFF (Action side). A standing verb lock
+// releases; no lock engages by the standing Engage rules. The
+// release speaks, mirroring Engage's no-candidates clear.
+void TargetLock_Toggle()
+{
+    if (!Hero || !gActionCamera.SchemeIsAction()) return;
+    if (TargetLock_Active()) {
+        TargetLock_Clear();
+        KbPlay_SayText("Target lock cleared");
+    } else {
+        TargetLock_Engage();
+    }
+}
+
 void TargetLock_Tick()
 {
     if (!gEngaged) return;
