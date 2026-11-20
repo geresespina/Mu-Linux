@@ -75,6 +75,9 @@
 #include "Input/Gamepad.h"
 #include "Input/GamepadDI.h"     // DIPadState / DIPadTranslate (padfix)
 #include "Input/NavMove.h"       // NavMove_ArrowsHeld (movement yield)
+#include "Render/ActionCamera.h"  // Train 48: scheme + pointer lock + OnMouseDelta
+#include "Input/ActionMove.h"     // Train 48: ActionMove_PadDash
+#include "Input/Fishing.h"        // Train 56: fishing verb
 #include "Platform/IInput.h"     // Platform::InputEvent / InputEventType
 #include "Platform/NativeBridge.h" // Platform::NativeWindow/NativeInstance (DI coop level)
 #include "Core/Window.h"         // gWindow (real pixel size)
@@ -974,8 +977,11 @@ bool Gamepad_IsDriving() { return gDriving; }
 // cast-streak latch reads this: a cast observed while a pad skill button
 // drives it is excluded from the AUTO latch (pad law, 2026-11-16),
 // exactly like a cast made while the physical right mouse button is held.
+bool gActionPadCastHeld = false;   // Train 48: set by ActionPadTick
+
 bool Gamepad_PadCastHeld()
 {
+    if (gActionCamera.SchemeIsAction()) return gActionPadCastHeld;
     for (const auto& mk : kSkillKeys)
         if (gPrevButtons[mk.btn]) return true;
     return gPrevRT || gPrevLT;
@@ -985,6 +991,279 @@ void Gamepad_RenderIndicator()
 {
     if (!Gamepad_IsActive()) return;
     UI_RenderText(578, 6, (char*)"PAD", (LPSIZE)0x0, '\0', 0);
+}
+
+// ── ACTION-scheme pad map ────────────────────────────────────────────
+// Train 59 sheet (G, 2026-11-20; refines Train 57): RT Teleport
+// TARGETING (hold to aim, release to land) · LT Skill 2 · X Skill
+// 3 · Y Skill 4 · B Skill 5 · A Skill 6 · View Skill 7 · L3
+// Skill 8 · D-up Skill 9 · D-down Skill 10 · LB Target Lock ·
+// RB Dash · R3 Blink (Space mirror) · D-Left Fishing · Start =
+// scheme toggle · left stick = WASD (ActionMove drives,
+// camera-relative) · right stick = aim (the teleport marker
+// while RT is held). Classic: PADCAST, untouched. (An L3-toggle
+// swap was built and CANCELLED by G the same morning -- "Start
+// is better" -- nothing moved.)
+struct ActPrev {
+    bool rb=false, x=false, y=false, view=false, dup=false, ddown=false;
+    bool l3=false, r3=false, rt=false, lt=false;
+    bool a=false, b=false, lb=false, start=false;
+    int  wasdMask=0;
+};
+ActPrev gActPrev;
+
+static void TpTargetCancel(const char* why);
+
+void ActionPadReleaseAll()
+{
+    const int vks[] = { 0x57, 0x53, 0x41, 0x44, 0x20,
+                        0x31, 0x32, 0x33, 0x34, 0x35,
+                        0x36, 0x37, 0x38, 0x39, 0x30 };
+    for (int vk : vks) Platform::InjectVirtualKey(vk, false);
+    gActPrev = ActPrev{};
+    gActionPadCastHeld = false;
+    TpTargetCancel("scheme flip");
+}
+
+// ── Train 59: TELEPORT TARGETING (Action scheme, RT hold) ────────────
+// G's spec (2026-11-20): RT is Skill 1 = Teleport. HOLDING RT raises
+// a landing marker at the spot a tap-blink would take him (facing
+// ray, max range); the RIGHT STICK walks the marker tile to tile;
+// RELEASING RT teleports to the marker -- through the very same
+// ActionMove_TeleportToPoint the double-click blink uses (mode 2
+// wire, Chebyshev clamp 8, DriveGates). The marker is honest: gold
+// while the tile is landable, RED while it is a wall / out of range
+// / the hero's own tile, and releasing on red fires NOTHING.
+// Cancels (no packet, marker dies): scheme flip (ActionPadReleaseAll
+// above runs on the way out; the Gamepad_Tick state-loss branch
+// cancels too), pad state loss, hero death, chat/UI opening mid-hold.
+// Keyboard Space blink and Classic RT are untouched.
+extern unsigned char* TerrainWall;   // world wall grid (TargetLock's)
+struct TpTargetState {
+    bool     active = false;
+    float    fx = 0.0f, fy = 0.0f;   // marker position, tile space
+    int      tx = 0, ty = 0;         // marker tile
+    bool     valid = false;
+    unsigned lastFxMs = 0;
+};
+TpTargetState gTpT;
+
+static bool TpTileLandable(int hx, int hy, int tx, int ty)
+{
+    if (tx < 0 || ty < 0 || tx > 255 || ty > 255) return false;
+    const int adx = tx > hx ? tx - hx : hx - tx;
+    const int ady = ty > hy ? ty - hy : hy - ty;
+    const int cheb = adx > ady ? adx : ady;
+    if (cheb < 1 || cheb > 8) return false;
+    if (!TerrainWall) return false;
+    const BYTE wall = TerrainWall[((ty & 0xFF) << 8) | (tx & 0xFF)];
+    return (wall & 0x0C) == 0;   // 0x04|0x08 = blocked, as TargetLock reads it
+}
+
+static void TpMarkerFx(CHARACTER* hero)
+{
+    float pos[3] = { (float)(gTpT.tx * 100 + 50), (float)(gTpT.ty * 100 + 50),
+                     hero->Object.Position[2] + 30.0f };
+    float ang[3] = { 0.0f, 0.0f, 0.0f };
+    float gold[3] = { 1.0f, 0.75f, 0.20f };
+    float red[3]  = { 1.0f, 0.15f, 0.15f };
+    CreateEffect(1176, pos, ang, gTpT.valid ? gold : red,
+                 nullptr, nullptr, (float*)(uintptr_t)0xFFFFFFFF, nullptr, 0);
+    gTpT.lastFxMs = (unsigned)SDL_GetTicks();
+}
+
+static void TpTargetBegin()
+{
+    CHARACTER* hero = (CHARACTER*)(uintptr_t)Hero;
+    if (!hero) return;
+    const int hx = (int)hero->PositionX, hy = (int)hero->PositionY;
+    const float yawDeg = gActionCamera.PointerLocked()
+        ? gActionCamera.GetYaw() : hero->Object.Angle[2];
+    const float rad = yawDeg * (3.14159265f / 180.0f);
+    gTpT.fx = (float)hx + sinf(rad) * 8.0f;
+    gTpT.fy = (float)hy + cosf(rad) * 8.0f;
+    gTpT.tx = (int)lroundf(gTpT.fx);
+    gTpT.ty = (int)lroundf(gTpT.fy);
+    gTpT.valid = TpTileLandable(hx, hy, gTpT.tx, gTpT.ty);
+    gTpT.active = true;
+    TpMarkerFx(hero);
+    PadLog("PAD: teleport targeting - marker at (%d,%d)", gTpT.tx, gTpT.ty);
+}
+
+static void TpTargetCancel(const char* why)
+{
+    if (!gTpT.active) return;
+    gTpT.active = false;
+    PadLog("PAD: teleport targeting cancelled (%s)", why);
+}
+
+// Per-tick while RT is held. Returns false when targeting died
+// (caller then treats the coming release as a no-op).
+static bool TpTargetUpdate(float dt)
+{
+    CHARACTER* hero = (CHARACTER*)(uintptr_t)Hero;
+    if (!hero || hero->Dead || InputEnable != 0 || DAT_083a7c24 != 0) {
+        TpTargetCancel("gates closed");
+        return false;
+    }
+    const int hx = (int)hero->PositionX, hy = (int)hero->PositionY;
+    float rdx, rdy;
+    const float rmag = StickVector(PadAxis(SDL_GAMEPAD_AXIS_RIGHTX),
+                                   PadAxis(SDL_GAMEPAD_AXIS_RIGHTY), rdx, rdy);
+    if (rmag > 0.0f) {
+        const float yawDeg = gActionCamera.PointerLocked()
+            ? gActionCamera.GetYaw() : hero->Object.Angle[2];
+        const float rad = yawDeg * (3.14159265f / 180.0f);
+        const float fxv = sinf(rad), fyv = cosf(rad);       // screen-up on the ground
+        const float rxv = -fyv, ryv = fxv;                  // screen-right
+        const float kSpeed = 11.0f;                          // tiles / second
+        gTpT.fx += (rxv * rdx - fxv * rdy) * kSpeed * dt;
+        gTpT.fy += (ryv * rdx - fyv * rdy) * kSpeed * dt;
+        // Keep the marker inside the blink ring around the hero's
+        // CURRENT tile (same Chebyshev scaling TeleportToPoint uses).
+        const float dx = gTpT.fx - (float)hx, dy = gTpT.fy - (float)hy;
+        const float adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
+        const float cheb = adx > ady ? adx : ady;
+        if (cheb > 8.0f) {
+            const float s = 8.0f / cheb;
+            gTpT.fx = (float)hx + dx * s;
+            gTpT.fy = (float)hy + dy * s;
+        }
+    }
+    const int ntx = (int)lroundf(gTpT.fx), nty = (int)lroundf(gTpT.fy);
+    const bool tileChanged = (ntx != gTpT.tx || nty != gTpT.ty);
+    gTpT.tx = ntx; gTpT.ty = nty;
+    gTpT.valid = TpTileLandable(hx, hy, gTpT.tx, gTpT.ty);
+    if (tileChanged || (unsigned)SDL_GetTicks() - gTpT.lastFxMs >= 110)
+        TpMarkerFx(hero);
+    return true;
+}
+
+static void TpTargetFire()
+{
+    if (!gTpT.active) return;
+    gTpT.active = false;
+    if (gTpT.valid) {
+        PadLog("PAD: teleport to marker (%d,%d)", gTpT.tx, gTpT.ty);
+        ActionMove_TeleportToPoint(gTpT.tx, gTpT.ty);
+    } else {
+        PadLog("PAD: teleport release on invalid marker - no fire");
+    }
+}
+
+void ActMirror(int vk, bool down, bool& prev)
+{
+    if (down != prev) { Platform::InjectVirtualKey(vk, down); prev = down; }
+}
+
+void ActionPadTick(unsigned now, float dt)
+{
+    (void)now;
+    // MEAMU Train 59 sheet (G, 2026-11-20; refines Train 57): his
+    // six stand -- LT = Skill 2, RT = Skill 1 (Teleport, now a
+    // hold-to-aim targeting verb, below), X = Skill 3, Y = Skill 4,
+    // B = Skill 5, A = Skill 6. RB = Dash, R3 = Blink, LB = Lock,
+    // D-Left = Fishing, L3 = Skill 8, Start = scheme toggle --
+    // the Train 57 layout, unchanged (an L3-toggle swap was built
+    // and cancelled by G the same morning: "Start is better").
+    // Train 59: RT no longer mirrors Skill 1 -- holding it runs
+    // TELEPORT TARGETING (wired after the skill block below).
+    ActMirror(0x32, PadAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER)  > kTriggerOn, gActPrev.lt);  // LT = Skill 2 (G)
+    ActMirror(0x33, PadButton(SDL_GAMEPAD_BUTTON_WEST),          gActPrev.x);     // X  = Skill 3 (G)
+    ActMirror(0x34, PadButton(SDL_GAMEPAD_BUTTON_NORTH),         gActPrev.y);     // Y  = Skill 4 (G)
+    ActMirror(0x35, PadButton(SDL_GAMEPAD_BUTTON_EAST),          gActPrev.b);     // B  = Skill 5 (G)
+    ActMirror(0x36, PadButton(SDL_GAMEPAD_BUTTON_SOUTH),         gActPrev.a);     // A  = Skill 6 (G)
+    ActMirror(0x37, PadButton(SDL_GAMEPAD_BUTTON_BACK),          gActPrev.view);  // View = Skill 7
+    ActMirror(0x38, PadButton(SDL_GAMEPAD_BUTTON_LEFT_STICK),    gActPrev.l3);    // L3 = Skill 8
+    ActMirror(0x39, PadButton(SDL_GAMEPAD_BUTTON_DPAD_UP),       gActPrev.dup);   // D-up = Skill 9
+    ActMirror(0x30, PadButton(SDL_GAMEPAD_BUTTON_DPAD_DOWN),     gActPrev.ddown); // D-down = Skill 10
+    gActionPadCastHeld = gActPrev.lt || gActPrev.x || gActPrev.y
+                      || gActPrev.b || gActPrev.a || gActPrev.view || gActPrev.l3
+                      || gActPrev.dup || gActPrev.ddown;
+
+    {   // Train 59: RT hold = teleport targeting (see TpTarget block).
+        const bool rt = PadAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > kTriggerOn;
+        if (rt && !gActPrev.rt) {
+            if (InputEnable == 0 && DAT_083a7c24 == 0) TpTargetBegin();
+        } else if (rt && gTpT.active) {
+            TpTargetUpdate(dt);
+        } else if (!rt && gActPrev.rt) {
+            TpTargetFire();
+        }
+        gActPrev.rt = rt;
+    }
+
+    ActMirror(0x20, PadButton(SDL_GAMEPAD_BUTTON_RIGHT_STICK), gActPrev.r3);   // R3 = Blink (Space)
+
+    const bool lb = PadButton(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);       // LB = Target Lock
+    if (lb && !gActPrev.lb) {
+        Platform::InputEvent ev{};
+        ev.type = Platform::InputEventType::MiddleDown;
+        ev.x = (int)gCursorX; ev.y = (int)gCursorY;
+        Platform::DeliverSDLInput(ev);
+        ev.type = Platform::InputEventType::MiddleUp;
+        Platform::DeliverSDLInput(ev);
+        PadLog("PAD: LB - target lock verb");
+    }
+    gActPrev.lb = lb;
+
+    {   // Train 56: D-pad Left = FISHING verb (cast / reel)
+        static bool s_DLeftPrev = false;
+        const bool dl = PadButton(SDL_GAMEPAD_BUTTON_DPAD_LEFT);
+        if (dl && !s_DLeftPrev) { Fishing_Verb(); PadLog("PAD: DLeft - fishing verb"); }
+        s_DLeftPrev = dl;
+    }
+
+    const bool st = PadButton(SDL_GAMEPAD_BUTTON_START);               // Start = scheme toggle
+    if (st && !gActPrev.start) PulseKey(0xC0, "scheme toggle");
+    gActPrev.start = st;
+
+    // Left stick -> WASD virtual keys (ActionMove owns the drive).
+    float ldx, ldy;
+    const float lmag = StickVector(PadAxis(SDL_GAMEPAD_AXIS_LEFTX),
+                                   PadAxis(SDL_GAMEPAD_AXIS_LEFTY), ldx, ldy);
+    int sx = 0, sy = 0;
+    if (lmag > 0.0f) {
+        sx = (ldx >  0.38f) ? 1 : (ldx < -0.38f) ? -1 : 0;
+        sy = (ldy >  0.38f) ? 1 : (ldy < -0.38f) ? -1 : 0;
+    }
+    const bool rb = PadButton(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);      // RB = Dash (Train 57)
+    if (rb && !gActPrev.rb) {
+        ActionMove_PadDashDir(sx, sy);
+        ActionMove_PadDash();
+    }
+    gActPrev.rb = rb;
+
+    const int mask = (sy < 0 ? 1 : 0) | (sy > 0 ? 2 : 0) | (sx < 0 ? 4 : 0) | (sx > 0 ? 8 : 0);
+    const int vks[4] = { 0x57, 0x53, 0x41, 0x44 };   // W S A D
+    for (int i = 0; i < 4; ++i) {
+        const bool want = ((mask >> i) & 1) != 0;
+        const bool had  = ((gActPrev.wasdMask >> i) & 1) != 0;
+        if (want != had) Platform::InjectVirtualKey(vks[i], want);
+    }
+    gActPrev.wasdMask = mask;
+    gDriving = false;   // the WASD keys drive; the cursor-steer yield stays off
+
+    // Right stick -> aim while pointer-locked; cursor while UI is open.
+    // Train 59: while teleport targeting is up, TpTargetUpdate owns
+    // the stick (it steers the landing marker) -- aim/cursor yield.
+    float rdx, rdy;
+    const float rmag = StickVector(PadAxis(SDL_GAMEPAD_AXIS_RIGHTX),
+                                   PadAxis(SDL_GAMEPAD_AXIS_RIGHTY), rdx, rdy);
+    if (rmag > 0.0f && !gTpT.active) {
+        if (gActionCamera.PointerLocked()) {
+            gActionCamera.OnMouseDelta((int)(rdx * rmag * 1500.0f * dt),
+                                       (int)(rdy * rmag * 1500.0f * dt));
+        } else {
+            const float winW = (float)gWindow.GetRealWidth();
+            const float winH = (float)gWindow.GetRealHeight();
+            float nx = gCursorX + rdx * rmag * gCursorSpd * dt;
+            float ny = gCursorY + rdy * rmag * gCursorSpd * dt;
+            if (nx < 0) nx = 0; if (ny < 0) ny = 0;
+            if (nx > winW - 1) nx = winW - 1; if (ny > winH - 1) ny = winH - 1;
+            MoveCursorTo(nx, ny, false);
+        }
+    }
 }
 
 void Gamepad_Tick()
@@ -1046,6 +1325,7 @@ void Gamepad_Tick()
         // same way the LMB did.
         if (AnyVirtualHeld()) {
             PadLog("PAD: pad state lost while inputs held - releasing all");
+            TpTargetCancel("pad state lost");
             ReleaseAllInputs();
         }
         gLastMs = SDL_GetTicks(); gDriving = false; return;
@@ -1065,6 +1345,14 @@ void Gamepad_Tick()
     // button's skill, auto-targets the closest valid monster in that
     // skill's range and hold-casts until the key is released — the pad
     // adds no targeting or casting logic of its own.
+    // Train 48: in the Action scheme the pad runs G's Action map;
+    // the PADCAST sections below run only in Classic.
+    static bool s_wasActionPad = false;
+    const bool actionPad = gActionCamera.SchemeIsAction();
+    if (actionPad) {
+        ActionPadTick(now, dt);
+    } else {
+        if (s_wasActionPad) ActionPadReleaseAll();
     for (const auto& mk : kSkillKeys) MirrorKeyTick(mk);
     MirrorKeyTick(kBackKey);
     TriggerKeyTick("RT", SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, 0x37, gPrevRT);
@@ -1136,6 +1424,8 @@ void Gamepad_Tick()
         }
         gPrevButtons[kb.b] = down;
     }
+    }   // Train 48: end of the Classic-only PADCAST sections
+    s_wasActionPad = actionPad;
 
     // ── PADFIX2: divergence watchdog (left button) ──────────────────────────
     // The game can drop its held flag (MouseLButton, DAT_083a42c4) behind
