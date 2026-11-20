@@ -11,6 +11,7 @@
 #include "globals.h"              // Hero
 #include "Entity/EntityTypes.h"
 #include "Render/ActionCamera.h"
+#include "Input/ActionMove.h"   // Train 78: ActionMove_TeleportToPoint (the hop)
 #include "Entity/EntityName.h"   // EntityName::Get
 
 // KbPlay.cpp bridges (Train 48): the lock rides the Tab lock's
@@ -155,25 +156,74 @@ bool TargetLock_FollowHeld()
     return gLtHeld;
 }
 
+// MEAMU Train 78 (G's LT extension, 2026-11-20): LT HOLD HUNTS.
+// While LT is held with no lock standing, seek the closest
+// latch-legal target ANYWHERE IN VIEW -- the scan has no range
+// cap; "everywhere" is the client's whole visible character
+// list, the only world the client has data for. In engage
+// range: the standing fill locks it. Too far: TELEPORT toward
+// it -- hop by hop (the point-teleport wire, 8-tile clamp
+// inside ActionMove_TeleportToPoint), each hop aimed to land
+// just inside engage range, stepping back to the furthest
+// landable tile when the direct tile is walled -- until the
+// target is in range and the fill engages. Hop cadence 280 ms
+// (Bounce 28's landing is ~150-250 ms; the next hop computes
+// from the hero's fresh tile, so a moving target is chased by
+// its live position). The Train 76 kill latch gates the whole
+// hunt: a kill mid-hold stops the seeking too -- no new target
+// is hunted until LT is fully released and pressed again. A
+// hunt target that dies BEFORE ever locking is simply replaced
+// by the next closest (it never was a lock; the kill rule
+// governs locks).
+static uint32_t s_HuntHopT = 0;   // NowMs() of the last hunt hop
+
 void TargetLock_LtHold(bool held)
 {
     gLtHeld = held;
-    if (!held) { gKillLatch = false; return; }   // Train 76: full release resets the latch
+    if (!held) { gKillLatch = false; s_HuntHopT = 0; return; }   // Train 76 latch + Train 78 hop state reset
     if (!Hero) return;
     if (KbPlay_LockIndex() >= 0) return;   // a standing lock wins
     WatchLockKill();                             // Train 76
-    if (gKillLatch) return;                      // killed mid-hold: LT does NOT re-engage
-    int best = -1, bestD = kEngageRange + 1;
+    if (gKillLatch) return;                      // killed mid-hold: no re-engage, no hunt
+    int best = -1, bestD = 9999;
     for (int i = 0; i < 400; ++i) {
         if (!KbPlay_LatchLegal(i)) continue;
         const int d = KbPlay_TargetDist(i);
         if (d < bestD) { bestD = d; best = i; }
     }
     if (best < 0) return;
-    if (gActionCamera.SchemeIsAction()) {
-        SetLock(best);              // verb lock: break rules + facing
-    } else {
-        KbPlay_LockSet(best);       // Classic: plain Tab-style lock
+    if (bestD <= kEngageRange) {
+        if (gActionCamera.SchemeIsAction()) {
+            SetLock(best);              // verb lock: break rules + facing
+        } else {
+            KbPlay_LockSet(best);       // Classic: plain Tab-style lock
+        }
+        return;
+    }
+    // Too far: hop toward it.
+    const uint32_t now = (uint32_t)SDL_GetTicks();
+    if (now - s_HuntHopT < 280) return;
+    int tx = 0, ty = 0;
+    KbPlay_TargetTile(best, tx, ty);
+    CHARACTER* hero = HeroC();
+    const int hx = (int)hero->PositionX, hy = (int)hero->PositionY;
+    const int dx = tx - hx, dy = ty - hy;
+    const int cheb = (dx < 0 ? -dx : dx) > (dy < 0 ? -dy : dy)
+                   ? (dx < 0 ? -dx : dx) : (dy < 0 ? -dy : dy);
+    if (cheb == 0) return;
+    // Land just inside engage range when one hop allows it.
+    int want = bestD - (kEngageRange - 2);
+    if (want > 8) want = 8;
+    if (want < 1) want = 1;
+    for (int step = want; step >= 1; --step) {
+        const int lx = hx + (int)lroundf((float)dx * (float)step / (float)cheb);
+        const int ly = hy + (int)lroundf((float)dy * (float)step / (float)cheb);
+        if (lx < 0 || ly < 0 || lx > 255 || ly > 255) continue;
+        if (!TerrainWall) break;
+        const BYTE wall = TerrainWall[((ly & 0xFF) << 8) | (lx & 0xFF)];
+        if (wall & 0x0C) continue;   // walled: step closer and retry
+        if (ActionMove_TeleportToPoint(lx, ly)) s_HuntHopT = now;
+        break;
     }
 }
 

@@ -55,6 +55,13 @@ bool KbPlay_SelectedSkillTargeted();   // Train 70 bridge (impl in KbPlay.cpp)
 // the ActionCamera reads TargetLock_Active() directly and
 // FollowHeld remains only as LT's held-state record.
 void TargetLock_LtHold(bool held);
+// MEAMU Train 78 (G's LT extension): the LT hold HUNTS -- with
+// no lock standing it seeks the closest latch-legal target in
+// the whole visible list (no range cap on the search); too far
+// out, it chain-teleports toward the target (8-tile hops aimed
+// to land just inside engage range) until the fill can lock.
+// The Train 76 kill latch gates the hunt exactly like the fill:
+// a kill mid-hold stops the seeking until a fresh LT press.
 bool TargetLock_FollowHeld();
 void TargetLock_Tick();
 bool TargetLock_Active();
