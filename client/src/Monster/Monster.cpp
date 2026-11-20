@@ -1079,6 +1079,8 @@ char* __cdecl CreateMonster(unsigned int Type_, int PositionX, int PositionY,
     // DESVIACION (DLL CustomMonster, ahora catálogo 0.97.20): un monstruo con
     // modelo propio en el server se crea con ese modelo en vez de la definición vanilla.
     const CatalogMonster* custom = gContentCatalog.GetMonster(Type);
+    // Train 61: el modelo del catalogo se carga en el primer spawn.
+    if (custom && custom->ModelPending) gContentCatalog.EnsureMonsterModel(Type);
     if (custom && custom->Model >= 0) {
         c = reinterpret_cast<BYTE*>(CreateCharacter(Key, custom->Model, (unsigned char)PositionX, (unsigned char)PositionY, 0.0f));
         if (!c) return nullptr;
