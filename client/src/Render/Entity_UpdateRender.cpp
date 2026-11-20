@@ -100,31 +100,10 @@ static void RenderAttackBuffSparkles(BYTE* entity)
     }
 }
 
-namespace {
-// MEAMU Train 63 — teleport vanish draw scope. While the hero is
-// being DRAWN, OBJECT::Alpha carries the vanish envelope; the
-// destructor restores the exact prior value before RenderCharacter
-// returns (any exit path), so no code outside this draw — sim,
-// input (incl. the Alpha<0.7 click gate), interpolation — ever
-// observes a faded hero. Gate=0 by construction.
-struct VanishDrawScope {
-    OBJECT* o = nullptr;
-    float saved = 1.0f;
-    ~VanishDrawScope() { if (o) o->Alpha = saved; }
-};
-} // namespace
-
 void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
 {
     int *param_1  = (int *)param_1_;
     int *puVar13  = (int *)param_2_;   // Ghidra alias for param_2
-
-    VanishDrawScope vanish;
-    if ((uintptr_t)param_1_ == (uintptr_t)DAT_07abf050) {
-        vanish.o = AsObject(param_1_);
-        vanish.saved = vanish.o->Alpha;
-        vanish.o->Alpha = vanish.saved * MoveMarkers::TeleportVanishEnvelope();
-    }
 
     // ── 1. Setup ─────────────────────────────────────────────────────────────
     short sVar2    = *(short *)((intptr_t)puVar13 + 2);        // entity_type

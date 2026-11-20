@@ -1423,18 +1423,6 @@ static void Attack_Label1585_97k(char* entity, int iType, bool hasTarget)
         BYTE packet[6] = { 0xC1, 0x06, 0x1C, 0x00,
                            (BYTE)TargetX, (BYTE)TargetY };
         gNetwork.Send(packet, sizeof(packet));
-        // MEAMU Train 69 (2026-11-20, G: "Player should disappear
-        // when casting teleport?"): the Train 63 vanish kicked its
-        // SEND side only from EmitDashFrame (blink / RT-target /
-        // double-click -- the F3 FD wire). The Teleport SPELL cast
-        // leaves through here (the C1 1C gate-0 request), so a cast
-        // never faded out: the hero stood visible at the origin
-        // until the landing notice moved him, and only the fade-IN
-        // half of the envelope played at the destination. Kick the
-        // same envelope at the cast send; the arrival half already
-        // fires in the 0x1C receive handler for gate 0. Render-only
-        // dressing, gate=0, exactly as Train 63 built it.
-        MoveMarkers::TeleportVanishKickSend(AsObject(entity));
         // IDA L9682 LABEL_1762 -> LABEL_1763: sub_444B30(c) = SetPlayerTeleport,
         // o sea la animacion de casteo (accion 87) sobre el propio heroe.
         // MU 5.2 ZzzInterface.cpp:6130 hace lo mismo tras SendRequestMagicTeleport.

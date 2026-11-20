@@ -1700,28 +1700,22 @@ void NetRecv_1C(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         // for ~1.85 s, and its Teleport=3 state + Alpha fade feed
         // the same click gates (Alpha < 0.7 discards clicks) — the
         // package made every teleport feel ~2 s late. What remains
-        // is the pure read of a teleport: sparkle 1176 + chime 88 +
-        // the landing marker, Alpha pinned fully opaque, no action,
-        // no state, no fade.
+        // is the pure read of a teleport: sparkle 1176 + chime 88,
+        // Alpha pinned fully opaque, no action, no state, no fade.
+        // (Train 77 removed the landing marker that used to ride
+        // here -- G ordered the custom teleport visuals out.)
         CreateEffect(1176, AsObject(hero)->Position, AsObject(hero)->Angle,
                      AsObject(hero)->Light, nullptr, nullptr,
                      (float*)(uintptr_t)0xFFFFFFFFu, nullptr, 0);
         PlayBuffer(88, 0, 0);
         AsObject(hero)->Alpha = 1.0f;
         AsObject(hero)->AlphaTarget = 1.0f;
-        MoveMarkers::OnTeleportArrival(AsObject(hero));
-        MoveMarkers::TeleportVanishKickArrival();   // MEAMU Train 63
         Teleport = 0;                 // IDA L508: Teleport = 0 (0x05826D14)
     }
 
-    // MEAMU MoveMarkers: las llegadas por gate (map move) no llaman a
-    // CreateTeleportEnd a proposito; el marcador de llegada se dispara
-    // aca, con el mundo ya cargado y la posicion final puesta. La rama
-    // gate=0 ya lo disparo dentro de CreateTeleportEnd.
-    if (gate != 0) {
-        MoveMarkers::OnTeleportArrival(AsObject(hero));
-        MoveMarkers::TeleportVanishKickArrival();   // MEAMU Train 63
-    }
+    // MEAMU Train 77: gate arrivals used to fire the MoveMarkers
+    // landing dressing here; G removed the custom teleport visuals
+    // (ring + pillar + vanish) -- arrivals are stock now.
 
     // Este store es común a las dos ramas en el original.
     AsCharacter(hero)->Movement = 0;
