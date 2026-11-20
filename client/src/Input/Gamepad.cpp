@@ -271,6 +271,11 @@ void PulseKey(int vk, const char* what)
     PadLog("PAD: key pulse %s (vk 0x%02X)", what, vk);
 }
 
+} // (Train 84 wrapper lives below the anonymous namespace)
+
+void PulseKeyShared(int vk, const char* what) { PulseKey(vk, what); }
+
+namespace {
 void ReleaseAllInputs()
 {
     if (gLeftOwners) { gLeftOwners = 0; SendMouse(Platform::InputEventType::LeftUp, gCursorX, gCursorY); }

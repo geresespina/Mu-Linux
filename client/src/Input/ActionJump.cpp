@@ -148,18 +148,28 @@ void CActionJump::Update()
     // MEAMU Train 48: target-lock break conditions, per frame.
     TargetLock_Tick();
 
-    // MEAMU Train 55 (2026-11-19, G's order): Q = TARGET LOCK
-    // engage/cycle on keyboard+mouse (middle mouse and pad LB
-    // remain the other two doors into the same verb). Same gates
-    // as Space: Action scheme, no chat/text focus.
+    // MEAMU Train 84 (2026-11-20, G's ruling): Q = LB. Q is now
+    // the lock ON/OFF TOGGLE (Train 75), in both schemes --
+    // no lock -> engage; lock standing -> release. Train 55's
+    // engage/cycle on Q is REPLACED (cycling survives nowhere
+    // on the toggle doors; the hunt/RT-RMB fill and the cast
+    // auto-lock are untouched). The Classic arm calls the very
+    // same code LB calls (clear, or Gamepad's queued Tab
+    // pulse), so Q and LB can never drift apart. Same gates
+    // as the other verb drivers: no chat/text focus.
     {
         static bool s_QPrev = false;
         const bool qHeld = ((unsigned short)Platform::GetInput().KeyState(0x51) & 0x8000) != 0;
         const bool qEdge = qHeld && !s_QPrev;
         s_QPrev = qHeld;
-        if (qEdge && gActionCamera.SchemeIsAction()
-            && InputEnable == 0 && DAT_083a7c24 == 0) {
-            TargetLock_Engage();
+        if (qEdge && InputEnable == 0 && DAT_083a7c24 == 0) {
+            if (gActionCamera.SchemeIsAction()) {
+                TargetLock_Toggle();
+            } else if (KbPlay_LockIndex() >= 0) {
+                KbPlay_LockClear();
+            } else {
+                PulseKeyShared(0x09, "Q lock on (Tab)");
+            }
         }
     }
 
