@@ -54,6 +54,7 @@
 #include "../Combat/Skills.h"
 #include "Render/BijuTransform.h"   // MEAMU TRAIN 8 ADDENDUM: NoteFormSource (0x19 witness feed)
 #include "Input/AnimTrace.h"        // MEAMU Train 42 (ANIMTRACE round 2)
+#include "Input/ActionMove.h"   // Train 89: teleport flight API
 
 
 // Forward declarations for functions identified in decompilation
@@ -234,6 +235,9 @@ void PacketHandler_0x19(BYTE* pkt)
         // Unlike the other cases, IDA returns immediately after the
         // teleport-begin animation rather than marking the common skill tail.
         CreateTeleportBegin(AsObject(caster));
+        // Train 89: the hero's own Teleport cast opens the round-trip
+        // gate (remote casters do not gate the hero's movement).
+        if (caster == (BYTE*)DAT_07abf5d8) Combat_NoteTeleportSent();
         return;
     }
 
