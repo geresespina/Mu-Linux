@@ -131,15 +131,13 @@ extern "C" bool __cdecl CharacterAnimation(intptr_t c, intptr_t o)
         }
         // Action 63 with frame > 6.0 → half speed (anim slow-down at end)
         if (AsObject(o)->CurrentAction == 63 && AsObject(o)->AnimationFrame > 6.0f) speed *= 0.5f;
-        // MEAMU NINJA RUN: player walk/run cycles play at the same x1.75 as the
-        // ground step rate (CharacterMoveSpeed), so feet stay under the body.
-        // Attack actions (34..91) are NOT locomotion and keep stock cadence.
+        // Train 53 LOCKSTEP: player walk/run cycles play at the same
+        // x1.4 as the raised ground step rate (CharacterMoveSpeed),
+        // so feet stay under the body -- a plain constant now, the
+        // Ninja Run factor is gone. Attack actions keep stock cadence.
         if (type == 390 && EntityView((const void*)c).Kind() == EntityView::PlayerKind &&
             NinjaRun::IsLocomotionAction(modelAction)) {
-            // Train 37: the hero's cadence follows the active factor
-            // (dash burst); other players keep the base factor.
-            speed *= (c == (intptr_t)(void*)Hero) ? NinjaRun::ActiveFactor()
-                                                  : NinjaRun::kSpeedFactor;
+            speed *= 1.4f;
         }
     }
 
