@@ -5,6 +5,7 @@
 #include "stdafx.h"
 #include "UI/BuffBar.h"
 #include "Net/BijuProcVisuals.h"
+#include "Input/Fishing.h"   // Train 56: F3 FE fishing signals
 #include "UI/ChatListBox.h"
 #include "Net/NetText.h"
 #include "Entity/EntityName.h"
@@ -1351,6 +1352,10 @@ void NetRecv_F3(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
             BijuProcVisuals::Receive((const BYTE*)Msg, Size);
             break;
         }
+        case 0xFE: {  // MEAMU Train 56: fishing signals (F3:FE) -- bobber + bite
+            Fishing_Receive((const BYTE*)Msg, Size);
+            break;
+        }
         case 0xFA: {  // MEAMU Train 8: Rena balance push (F3:FA) — subcode is a
                        // placeholder pending RENA-REPORT.md; see UI/RenaHud.h
             RenaHud::Receive((const uint8_t*)Msg, Size);
@@ -1705,6 +1710,7 @@ void NetRecv_1C(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         AsObject(hero)->Alpha = 1.0f;
         AsObject(hero)->AlphaTarget = 1.0f;
         MoveMarkers::OnTeleportArrival(AsObject(hero));
+        MoveMarkers::TeleportVanishKickArrival();   // MEAMU Train 63
         Teleport = 0;                 // IDA L508: Teleport = 0 (0x05826D14)
     }
 
@@ -1712,8 +1718,10 @@ void NetRecv_1C(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
     // CreateTeleportEnd a proposito; el marcador de llegada se dispara
     // aca, con el mundo ya cargado y la posicion final puesta. La rama
     // gate=0 ya lo disparo dentro de CreateTeleportEnd.
-    if (gate != 0)
+    if (gate != 0) {
         MoveMarkers::OnTeleportArrival(AsObject(hero));
+        MoveMarkers::TeleportVanishKickArrival();   // MEAMU Train 63
+    }
 
     // Este store es común a las dos ramas en el original.
     AsCharacter(hero)->Movement = 0;

@@ -9,7 +9,9 @@
 #include "Platform/Text.h"
 #include "Render/Camera3D.h"
 #include "Render/ActionCamera.h"
-#include "Input/ActionMove.h"     // MEAMU Train 25: ActionMove_TryEventTeleport
+#include "Input/ActionMove.h"
+#include "Input/TargetLock.h"   // Train 48
+#include "Render/ActionCamera.h"   // Train 48: SchemeIsAction     // MEAMU Train 25: ActionMove_TryEventTeleport
 #include "Input/Input.h"
 
 // Helper de src/UI/Chat_InputTick.cpp — envía una línea de chat
@@ -165,6 +167,12 @@ void Input_OnEvent(const Platform::InputEvent& event)
 
     // DESVIACION (DLL Controller.cpp): el botón del medio gira la cámara 3D.
     case Platform::InputEventType::MiddleDown:
+        // MEAMU Train 48: in the Action scheme the middle button is
+        // the target-lock verb; the stock camera drag is Classic's.
+        if (gActionCamera.SchemeIsAction()) {
+            TargetLock_Engage();
+            break;
+        }
         gCamera3D.BeginDrag(event.x, event.y);
         Platform::GetInput().CaptureMouse(true);
         break;

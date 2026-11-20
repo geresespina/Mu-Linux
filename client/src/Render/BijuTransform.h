@@ -105,7 +105,11 @@ namespace BijuTransform
     // (EntityName::Get -- the nameplate's own source) is "Gloccy"
     // or "M4D4R4", the form resolves to class 229 instead:
     // CRIMSON KARANE, his exclusive crimson variant of the titan
-    // (Data/Monster/KaraneCrimson). Pet-on (beast class 155-164)
+    // (Data/Monster/KaraneCrimson). MEAMU TRAIN 67: "Eliger" on
+    // the same titan path resolves to class 230 instead -- the
+    // BLUE MEGAZORD, the HurricaneBlue hero-skin BMD
+    // (Data/Player/Custom/55/SkinHurricaneBlue) registered as a
+    // monster class at scale 3.0. Pet-on (beast class 155-164)
     // and every other name resolve exactly as FormClassFor does.
     // Pure decision (name passed in), so tests/SkinBodyFix.cpp
     // pins this table too. NOTE: class 229 renders only when the
@@ -129,6 +133,19 @@ namespace BijuTransform
     // with the pet/skin tables; it is only consulted while the
     // form bit is on, so a stale record is inert.
     void NoteFormSource(void* character, int skillType);
+
+    // MEAMU TRAIN 65 (2026-11-20): form-model preload. Train 61
+    // deferred every catalog model load to first use -- for the
+    // FORM classes (beasts 155-164, Susanoo 228, Karane 229) that
+    // first use is Resolve(), mid-render, and a failed attempt is
+    // cached as -1 for the whole process (G: "I don't see Susanoo
+    // anymore even if it shows successful cast" -- the server
+    // applies effect 71 and the x3.0 power; only the body never
+    // renders). PreloadFormModels moves the load back to cast
+    // time (self-cast send + the NoteFormSource witness, both
+    // packet/input context -- the context Publish used pre-61)
+    // and retries a cached failure once per call. Idempotent.
+    void PreloadFormModels();
 
     // Pure decision WITH the form's source skill (same purity
     // contract as FormClassFor, so tests/SkinBodyFix.cpp pins it):
