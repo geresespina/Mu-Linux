@@ -1710,6 +1710,7 @@ void NetRecv_1C(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         AsObject(hero)->Alpha = 1.0f;
         AsObject(hero)->AlphaTarget = 1.0f;
         MoveMarkers::OnTeleportArrival(AsObject(hero));
+        MoveMarkers::TeleportVanishKickArrival();   // MEAMU Train 63
         Teleport = 0;                 // IDA L508: Teleport = 0 (0x05826D14)
     }
 
@@ -1717,8 +1718,10 @@ void NetRecv_1C(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
     // CreateTeleportEnd a proposito; el marcador de llegada se dispara
     // aca, con el mundo ya cargado y la posicion final puesta. La rama
     // gate=0 ya lo disparo dentro de CreateTeleportEnd.
-    if (gate != 0)
+    if (gate != 0) {
         MoveMarkers::OnTeleportArrival(AsObject(hero));
+        MoveMarkers::TeleportVanishKickArrival();   // MEAMU Train 63
+    }
 
     // Este store es común a las dos ramas en el original.
     AsCharacter(hero)->Movement = 0;

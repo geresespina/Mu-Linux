@@ -35,6 +35,7 @@
 #include "Game/NinjaRun.h"        // Train 37: pure-dash burst window (gDashBurstEndMs)
 #include "Input/KbPlay.h"         // Train 31: latch release on scheme flip (KbPlay_ClearAttackLatch)
 #include <SDL3/SDL.h>             // SDL_GetTicks
+#include "Net/MoveMarkers.h"        // MEAMU Train 63: teleport vanish kick
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
@@ -386,6 +387,11 @@ bool EmitDashFrame(unsigned char mode, BYTE b5, BYTE b6, const char* label)
     gNetwork.SendC1(pkt, sizeof(pkt));
     ActLog("ACTION-WIRE: %s sent — C1 07 F3 FD %02X %02X %02X",
            label, (unsigned)mode, (unsigned)b5, (unsigned)b6);
+    // MEAMU Train 63: teleport-class frames (blink-to-target and
+    // point teleports — NOT the mode-0 dash) start the vanish
+    // fade-out + departure dressing. Render-only; see MoveMarkers.
+    if (mode == kDashModeTarget || mode == kDashModeClickTp)
+        MoveMarkers::TeleportVanishKickSend(AsObject(HeroC()));
     return true;
 }
 

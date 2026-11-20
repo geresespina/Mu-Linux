@@ -280,6 +280,56 @@ int ActiveTeleportMarkers()
     return n;
 }
 
+// ── Train 63: teleport vanish state ─────────────────────────────
+static uint32_t s_VanishSendT = 0;    // NowMs() of the last send kick
+static uint32_t s_VanishArriveT = 0;  // NowMs() of the last arrival
+
+void TeleportVanishKickSend(const void* heroEntity)
+{
+    s_VanishSendT = NowMs();
+    s_VanishArriveT = 0;
+    // Departure dressing: the shrinking ring (already built for
+    // CreateTeleportBegin, which the hero's own blinks never call)
+    // + the stock 1176 sparkle at the tile being left.
+    OnTeleportDeparture(heroEntity);
+    float p[3];
+    if (heroEntity && EntityPos(heroEntity, p))
+    {
+        float angle[3] = { 0.0f, 0.0f, 0.0f };
+        float light[3] = { 1.0f, 1.0f, 1.0f };
+        (void)CreateEffect(1176, p, angle, light, nullptr, nullptr,
+                           (float*)(uintptr_t)0xFFFFFFFFu, nullptr, 0);
+    }
+}
+
+void TeleportVanishKickArrival()
+{
+    s_VanishArriveT = NowMs();
+}
+
+float TeleportVanishEnvelope()
+{
+    const uint32_t now = NowMs();
+    if (s_VanishArriveT != 0)
+    {
+        const uint32_t dt = now - s_VanishArriveT;
+        if (dt < 70) return 0.0f;                       // gone
+        if (dt < 230) return (float)(dt - 70) / 160.0f; // fade in
+        s_VanishArriveT = 0;
+        s_VanishSendT = 0;
+        return 1.0f;
+    }
+    if (s_VanishSendT != 0)
+    {
+        const uint32_t dt = now - s_VanishSendT;
+        if (dt < 110) return 1.0f - (float)dt / 110.0f; // fade out
+        if (dt < 1600) return 0.0f;                     // in transit
+        s_VanishSendT = 0;                              // lost packet: reappear
+        return 1.0f;
+    }
+    return 1.0f;
+}
+
 void ClearAll()
 {
     s_Click.active = false;
