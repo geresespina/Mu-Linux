@@ -105,6 +105,45 @@ bool TargetLock_AutoLockClosest()
     return true;
 }
 
+// ── MEAMU Train 68: HOLD-LT verb ────────────────────────────────
+// G's order (2026-11-20): holding LT auto-targets (locks the
+// closest) and the camera follows the target while held. LT's ONE
+// mapped action is now this verb (the no-dual-action law): Skill 2
+// left the pad sheet -- keyboard '2' still casts it, exactly as
+// Classic's D-pad potions became keyboard-only in Train 64.
+// Behaviour: while held, an empty lock fills with the closest
+// latch-legal candidate in engage range (monsters included since
+// the Train 68 predicate fix); a standing lock is never stolen; if
+// the lock breaks mid-hold the next tick re-engages. The lock
+// itself is the ordinary lock (verb lock in Action, plain
+// Tab-style in Classic) and PERSISTS after release -- only the
+// camera follow is hold-scoped.
+bool gLtHeld = false;
+
+bool TargetLock_FollowHeld()
+{
+    return gLtHeld;
+}
+
+void TargetLock_LtHold(bool held)
+{
+    gLtHeld = held;
+    if (!held || !Hero) return;
+    if (KbPlay_LockIndex() >= 0) return;   // a standing lock wins
+    int best = -1, bestD = kEngageRange + 1;
+    for (int i = 0; i < 400; ++i) {
+        if (!KbPlay_LatchLegal(i)) continue;
+        const int d = KbPlay_TargetDist(i);
+        if (d < bestD) { bestD = d; best = i; }
+    }
+    if (best < 0) return;
+    if (gActionCamera.SchemeIsAction()) {
+        SetLock(best);              // verb lock: break rules + facing
+    } else {
+        KbPlay_LockSet(best);       // Classic: plain Tab-style lock
+    }
+}
+
 void TargetLock_Engage()
 {
     if (!Hero || !gActionCamera.SchemeIsAction()) return;

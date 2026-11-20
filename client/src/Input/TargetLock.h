@@ -30,6 +30,13 @@ void TargetLock_Engage();
 // housekeeping), because verb locks are Action-only by design.
 // Returns true when it set a lock.
 bool TargetLock_AutoLockClosest();
+// MEAMU Train 68: HOLD-LT verb (G's order) -- while LT is held the
+// lock auto-engages the closest candidate (monsters included) and
+// the Action camera follows the lock. Gamepad feeds the raw LT
+// state every pad tick; TargetLock_LtHold edge/state lives here.
+// TargetLock_FollowHeld is the ActionCamera's read of the verb.
+void TargetLock_LtHold(bool held);
+bool TargetLock_FollowHeld();
 void TargetLock_Tick();
 bool TargetLock_Active();
 int  TargetLock_Index();

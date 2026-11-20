@@ -83,7 +83,7 @@ namespace {
         CHARACTER* c = EntryAt(idx);
         if ((char*)c == (char*)(uintptr_t)Hero) return false;
         if (c->Object.Live == 0) return false;
-        if (c->Object.Kind != 0x22) return false;
+        if (c->Object.Kind != 2 && c->Object.Kind != 8 && c->Object.Kind != 0x22) return false;   // Train 68: mirror of the KbPlay fix (factory writes 2/8, never 0x22)
         if (c->Dead != 0) return false;
         if (c->MonsterIndex == 0xFF) return false;
         return true;
@@ -239,6 +239,32 @@ void CActionCamera::Update()
     // hero's back while he moved, and the facing writer below then
     // chased the dragged yaw: a feedback loop that twitched the hero's
     // facing while moving/strafing (G's bug report, 2026-11-19).
+
+    // MEAMU Train 68: LT-HOLD CAMERA FOLLOW -- the ONE scoped
+    // exception to Train 22's "camera never rotates itself" law,
+    // on G's direct order (2026-11-20): while LT is physically
+    // held and a lock stands, the yaw eases toward the lock's
+    // bearing (the same CreateAngle the facing writer below uses,
+    // through the line-141 conversion). The follow target is the
+    // LOCK -- an external point, not the hero's own back -- so the
+    // Train 22 feedback loop cannot form; and the moment LT
+    // releases, the yaw simply stays where the follow left it:
+    // mouse control resumes from there, no snap.
+    if (TargetLock_FollowHeld() && TargetLock_Active()) {
+        CHARACTER* tgt = EntryAt(TargetLock_Index());
+        if (tgt && tgt->Object.Live != 0) {
+            typedef float (__cdecl *CreateAngleFn)(float, float, float, float);
+            const float ang = ((CreateAngleFn)&CreateAngle)(
+                hero->Object.Position[0], hero->Object.Position[1],
+                tgt->Object.Position[0],  tgt->Object.Position[1]);
+            const float wantYaw = NormalizeDeg(180.0f - ang);
+            float dy = NormalizeDeg(wantYaw - m_CamYaw);
+            const float kFollowStep = 10.0f;   // deg per sim step (~250 deg/s)
+            if (dy > kFollowStep) dy = kFollowStep;
+            else if (dy < -kFollowStep) dy = -kFollowStep;
+            m_CamYaw = NormalizeDeg(m_CamYaw + dy);
+        }
+    }
 
     // MEAMU Train 22: the hero faces the camera yaw whenever the camera
     // is locked and no cast animation owns the facing — idle AND moving

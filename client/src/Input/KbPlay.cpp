@@ -382,7 +382,17 @@ bool ValidMonster(int idx)
     CHARACTER* c = EntryAt(idx);
     if ((char*)c == (char*)(uintptr_t)Hero) return false;
     if (c->Object.Live == 0) return false;
-    if (c->Object.Kind != 0x22) return false;
+    // MEAMU Train 68 (2026-11-20): the kind test was written against
+    // the STOCK client's 0x22, but THIS client's CreateMonster
+    // (Monster.cpp) writes Kind 2 for monsters (8 for the type
+    // 100-110 monster band, 4 for NPCs) -- 0x22 is never written
+    // anywhere. The predicate therefore matched NO monster ever:
+    // the LB/Q lock verb could only take the player / fabricated
+    // branches of ValidLatchTarget ("latches players/bots, not
+    // monsters" -- G's report), and Train 64's cast auto-lock was
+    // silently dead for the same reason. Accept the kinds the
+    // factory actually writes; 0x22 stays for safety.
+    if (c->Object.Kind != 2 && c->Object.Kind != 8 && c->Object.Kind != 0x22) return false;
     if (c->Dead != 0) return false;
     if (c->MonsterIndex == 0xFF) return false;
     return true;
