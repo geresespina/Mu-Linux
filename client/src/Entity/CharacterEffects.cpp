@@ -735,6 +735,64 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
         }
 
 
+
+        // ── 0i. Aura Blue Megazord (DESVIACION, solo cliente;
+        // MEAMU 2026-11-20, Train 67) ──────────────────────────
+        // Eliger's personal Susanoo: the BLUE MEGAZORD (class
+        // 230, the HurricaneBlue skin BMD at titan scale). Twin
+        // of the 0g/0h stack -- same 4 sprites 0x47e, same halo,
+        // same ember cadence -- in Megazord blue: deep blue
+        // (0.10, 0.30, 0.78) breathing to bright zord blue
+        // (0.16, 0.48, 1.00), core lightened toward cyan-white
+        // (0.55, 0.82, 1.00). Gate == 230 exactly, so it follows
+        // the Megazord body and nothing else.
+        if (bVar7 == 0xFF && AsCharacter(puVar13)->Dead == 0 &&
+            !gUserSettings.GetAntilag(ANTILAG_GLOW) &&
+            (*(DWORD*)((BYTE*)puVar13 + 120) & 0x2000) != 0 &&
+            BijuTransform::FormClassForEntity((const CHARACTER*)puVar13) == 230) {
+            const float mz7 = 0.5f - 0.5f * cosf(WorldTime * (2.0f * 3.14159265f / 1500.0f));
+            float mzBase[3] = { 0.10f + (0.16f - 0.10f) * mz7,
+                                0.30f + (0.48f - 0.30f) * mz7,
+                                0.78f + (1.00f - 0.78f) * mz7 };
+            const float mzPulse = 0.85f + 0.25f * mz7;
+            float mzLight[3] = { mzBase[0] * mzPulse,
+                                 mzBase[1] * mzPulse,
+                                 mzBase[2] * mzPulse };
+            float mzPos[3] = { AsObject(puVar13)->Position[0],
+                               AsObject(puVar13)->Position[1],
+                               AsObject(puVar13)->Position[2] };
+            float mzHalo[3] = { mzBase[0] * 0.16f, mzBase[1] * 0.16f, mzBase[2] * 0.16f };
+            Equipment_AddSprite(0x47e, mzPos, kFormAuraHalo, mzHalo,
+                                (intptr_t)puVar13, 0.0f, 0);
+            float mzGround[3] = { mzLight[0] * 0.45f, mzLight[1] * 0.45f, mzLight[2] * 0.45f };
+            Equipment_AddSprite(0x47e, mzPos, kFormAuraHalo * 0.739f, mzGround,
+                                (intptr_t)puVar13, 0.0f, 0);
+            float mzOff[3] = { 0.0f, 0.0f, 0.0f };
+            float mzBody[3];
+            BMD_TransformPosition(pvVar23,
+                (float *)((intptr_t)AsObject(puVar13)->BoneMatrices + 0 * 0x30),
+                mzOff, mzBody, '\x01');
+            Equipment_AddSprite(0x47e, mzBody, kFormAuraHalo * 0.5f, mzLight,
+                                (intptr_t)puVar13, 0.0f, 0);
+            float mzCore[3] = { mzBase[0] + (0.55f - mzBase[0]) * 0.45f,
+                                mzBase[1] + (0.82f - mzBase[1]) * 0.45f,
+                                mzBase[2] + (1.00f - mzBase[2]) * 0.45f };
+            Equipment_AddSprite(0x47e, mzBody, kFormAuraHalo * 0.239f, mzCore,
+                                (intptr_t)puVar13, 0.0f, 0);
+            const int mzPhase = (int)(((intptr_t)puVar13 >> 5) & 0x3F);
+            if ((((int)WorldTime + mzPhase) % 120) < 16) {
+                float mzEmber[3] = { mzBase[0], mzBase[1], mzBase[2] };
+                const float mzAng = (WorldTime + (float)mzPhase * 61.0f) *
+                                    (2.0f * 3.14159265f / 2400.0f);
+                const float mzRad = 23.0f * 18.0f;
+                float emberPos[3] = { mzBody[0] + cosf(mzAng) * mzRad,
+                                      mzBody[1] + sinf(mzAng) * mzRad,
+                                      mzBody[2] };
+                Particle_Spawn(0x4ab, emberPos, (float *)(puVar13 + 7),
+                               mzEmber, 0, 0.9f, 0);
+            }
+        }
+
         // ── 1. Glove sparkle: class byte (cls&7)==0 + (cls_skin&0xF8)==8 ───
         // (DK 2nd-tier with specific skin range): sprite + sin halo at bone 19
         if (((*(BYTE *)&((CHARACTER*)(uintptr_t)(param_1))->Class & 7) == 0) &&
