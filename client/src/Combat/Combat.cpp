@@ -418,6 +418,7 @@
 #include "Party/Party.h"
 #include "Entity/EntityName.h"
 #include "Render/BijuTransform.h"   // MEAMU TRAIN 7: IsModeTransformSkill (casteo sin pose)
+#include "Input/TargetLock.h"       // MEAMU Train 73: verb lock writes the cast selection
 #include "Net/MoveMarkers.h"        // MEAMU Train 69: teleport vanish kick on the cast path
 #include "Platform/ITimer.h"
 #include "Item/ContentCatalog.h"
@@ -2030,6 +2031,29 @@ void __cdecl Combat_DispatchHeroSkillAttack(void *entity_v /* IDA: c */)
     // MEAMU rival targeting C2 (2026-11-15): nothing selected -> snap the
     // nearest hostile player in range + front arc (also AUTO re-acquire).
     Combat_SnapHostileTarget97k(iType);
+    // ══════════════════════════════════════════════════════════════════
+    // MEAMU Train 73 (2026-11-20, G's play report: "Lock works --
+    // just not the cast while locked"): a standing VERB lock is the
+    // player's deliberate target, and casts now honor it HERE, in
+    // the common dispatch, ahead of every branch's CheckTarget --
+    // the C2 snap's own seam. Root cause of the report: the lock
+    // steered only the FACING (Train 48) and KbPlay's aim (whose
+    // Action park Train 31 lands on the hero), while the cast
+    // target itself came from the centre-screen HOVER pick in
+    // Action and the parked hover in Classic -- KbPlay's lock-
+    // honoring AcquireTarget never reached the packet. The lock
+    // now writes the selection directly: it wins over the hover
+    // and over the snap (both are transient; the lock is the
+    // standing order). Targeted skills only, per Train 70's
+    // classification: self skills never take a lock target, and
+    // ally-target skills (heals, Teleport Ally) keep their own
+    // selection. Range machinery downstream is untouched -- an
+    // out-of-range lock behaves exactly like an out-of-range
+    // hover pick (walk-in in Classic, blink-engage / hold in
+    // Action), inside the lock's own 22-tile break range.
+    if (TargetLock_Active() && KbPlay_SelectedSkillTargeted()
+        && !Combat_IsAllyTargetSkill97k(iType))
+        SelectedCharacter = TargetLock_Index();
     // IDA L1346-1484 — bucle de manos equipadas, comun a las clases != 0.
     // ══════════════════════════════════════════════════════════════════════════
     if ((*(char *)&AsCharacter(entity)->Class & 7) != 0) {
