@@ -40,8 +40,14 @@ struct CatalogMonster
     BYTE  Kind;          // 0 NPC, 1 monstruo, 0xFF = el vanilla
     bool  Golden;
     float Scale;         // 0 = la vanilla
-    int   Model;         // slot de modelo, -1 = el vanilla
+    int   Model;         // slot de modelo, -1 = el vanilla, -2 = pendiente (carga diferida)
     char  Name[32];
+    // Train 61 (2026-11-20): la ruta del modelo propio se guarda y la
+    // carga se difiere al primer uso (EnsureMonsterModel); Publish ya
+    // no carga ningun BMD.
+    char  ModelFolder[32];
+    char  ModelName[20];
+    bool  ModelPending = false;
 };
 
 class CContentCatalog
@@ -89,7 +95,10 @@ public:
 
     // Slot de modelo para dibujar el item: type + 400 para los vanilla,
     // el slot dinámico o el del comportamiento para los agregados.
-    int GetItemModel(int type) const;
+    int GetItemModel(int type);
+    // Train 61: carga el modelo propio de un monstruo la primera vez
+    // que algo lo necesita (spawn / forma Biju). Devuelve el slot o -1.
+    int EnsureMonsterModel(int index);
     // true si el catálogo le da al item un modelo propio.
     bool HasOwnModel(int type) const;
 
@@ -160,6 +169,8 @@ private:
     void ApplyMapMusic();
     void ApplyItem(const BYTE* record, int recordSize);
     int  LoadModel(const char* folder, const char* name, int fixedSlot);
+    // Train 61: ejecuta las cargas de modelo diferidas de un item.
+    void ResolvePendingModels(int type);
     int  LoadTexture(const char* path);
 
     bool m_Loaded = false;
