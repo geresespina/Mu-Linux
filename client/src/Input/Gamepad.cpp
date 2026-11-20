@@ -1278,14 +1278,16 @@ void PadButtonsTick(unsigned now, float dt, bool actionPad)
     // the slot-2 skill at the lock through ComputeAim); LtHold
     // fills the lock on this same tick, ahead of the sim step
     // that resolves the cast, and drives the camera follow.
-    // Release: the cast stops, the lock STAYS (Train 68), the
-    // follow ends.
+    // Release: the cast stops, the follow ends -- and since
+    // Train 86 (G's rule) the LOCK CLEARS too (ReleaseUnlock).
     // MEAMU Train 81 (G, 2026-11-20): THIS VERB NOW RIDES RT --
     // the triggers are swapped. (The LtHold name is Train 68's;
     // it is the verb, not the trigger.)
     const bool huntNow = PadAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > kTriggerOn;
+    const bool huntWas = gActPrev.lt;        // Train 86: RT release edge
     ActMirror(0x32, huntNow, gActPrev.lt);   // RT = Skill 2 cast-hold (Train 81)
     TargetLock_LtHold(huntNow);              // RT = lock + follow + hunt (Train 81)
+    if (huntWas && !huntNow) TargetLock_ReleaseUnlock();   // Train 86
     ActMirror(0x33, PadButton(SDL_GAMEPAD_BUTTON_WEST),          gActPrev.x);     // X  = Skill 3 (G)
     ActMirror(0x34, PadButton(SDL_GAMEPAD_BUTTON_NORTH),         gActPrev.y);     // Y  = Skill 4 (G)
     ActMirror(0x35, PadButton(SDL_GAMEPAD_BUTTON_EAST),          gActPrev.b);     // B  = Skill 5 (G)

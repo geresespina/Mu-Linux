@@ -209,8 +209,9 @@ void CActionJump::Update()
     // auto-target + camera follow + SKILL 2 CAST-HOLD + the
     // hunt (TargetLock_LtHold + the '2' mirror, the exact pair
     // the pad's RT drives since Train 81). Release: the cast
-    // stops, the lock stays, the follow ends (Train 72/68
-    // semantics, via LtHold(false)). Same gates as Q/F above.
+    // stops, the follow ends, and since Train 86 (G's rule) the
+    // LOCK CLEARS too -- RMB is RT's mirror, so its release
+    // unlocks exactly like RT's. Same gates as Q/F above.
     {
         static bool s_RmbPrev = false;
         const bool rmb = ((unsigned short)Platform::GetInput().KeyState(0x02) & 0x8000) != 0;   // VK_RBUTTON
@@ -220,6 +221,7 @@ void CActionJump::Update()
         if (drive != s_RmbPrev) {
             Platform::InjectVirtualKey(0x32, drive);   // '2' cast-hold mirror
             TargetLock_LtHold(drive);
+            if (!drive) TargetLock_ReleaseUnlock();   // Train 86
             s_RmbPrev = drive;
         } else if (drive) {
             TargetLock_LtHold(true);   // per-frame: fill / follow / hunt

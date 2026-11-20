@@ -68,3 +68,4 @@ void TargetLock_Tick();
 bool TargetLock_Active();
 int  TargetLock_Index();
 void TargetLock_Clear();
+void TargetLock_ReleaseUnlock(); // Train 86: RT/RMB release clears the lock

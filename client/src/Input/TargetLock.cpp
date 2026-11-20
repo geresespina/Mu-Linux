@@ -115,6 +115,21 @@ void TargetLock_Clear()
     gLosLostT = 0;
 }
 
+// MEAMU Train 86 (G's rule, 2026-11-20): releasing RT unlocks the
+// target. The cast and the camera follow already ended with the
+// release; now the lock goes too -- the marker (Train 83), the
+// facing and the follow all read the one shared slot, so they end
+// together. The slot is shared, so this clears whichever door made
+// the lock: RT's own fill, the hunt's fill, or a Q/LB toggle lock
+// that was standing while RT was held. Classic locks are plain
+// KbPlay locks (Clear only releases a verb engagement), so the
+// plain slot is cleared directly as well.
+void TargetLock_ReleaseUnlock()
+{
+    TargetLock_Clear();
+    if (KbPlay_LockIndex() >= 0) KbPlay_LockClear();
+}
+
 bool TargetLock_AutoLockClosest()
 {
     if (!Hero) return false;
