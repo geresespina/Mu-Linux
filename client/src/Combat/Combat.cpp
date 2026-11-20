@@ -418,6 +418,8 @@
 #include "Party/Party.h"
 #include "Entity/EntityName.h"
 #include "Render/BijuTransform.h"   // MEAMU TRAIN 7: IsModeTransformSkill (casteo sin pose)
+#include "Input/TargetLock.h"       // MEAMU Train 73: verb lock writes the cast selection
+#include "Net/MoveMarkers.h"        // MEAMU Train 69: teleport vanish kick on the cast path
 #include "Platform/ITimer.h"
 #include "Item/ContentCatalog.h"
 #include "Item/Item_Equip.h"
@@ -1202,6 +1204,10 @@ static void Attack_WarriorBranch97k(char* entity)
         if (lowMana) { Attack_UseManaScroll97k(); return; }
         if (!hasAg) return;                                   // IDA L4397
         Attack_SendSkill19_97k(iType, (WORD)HeroKey);
+        // MEAMU TRAIN 65: a form cast (61 Biju / 74 Susanoo) loads
+        // the form models NOW, in input context -- not at first
+        // render (see BijuTransform::PreloadFormModels).
+        if (iType == 61 || iType == 74) BijuTransform::PreloadFormModels();
         // MEAMU TRAIN 7 (2026-11-19): los siete transforms de modo
         // (58-61, 73-75) castean SIN pose -- ni accion 63 ni freno
         // de movimiento; el modo se enciende alrededor del
@@ -2013,6 +2019,56 @@ void __cdecl Combat_DispatchHeroSkillAttack(void *entity_v /* IDA: c */)
     // MEAMU rival targeting C2 (2026-11-15): nothing selected -> snap the
     // nearest hostile player in range + front arc (also AUTO re-acquire).
     Combat_SnapHostileTarget97k(iType);
+    // ══════════════════════════════════════════════════════════════════
+    // MEAMU Train 80 (2026-11-20, G's law: "within range = always
+    // hit -- sometimes I have to look up to hit it; it should
+    // always hit if I'm within range"): the targeted-cast chain
+    // had exactly one pitch-dependent gate -- the screen-space
+    // aim pick that sets SelectedCharacter (in Action the cursor
+    // is pinned to the reticle and the pick runs through the
+    // pitched camera, so a high / flying / elevated target is
+    // unpickable until he pitches up at it). The safety nets did
+    // not cover monsters: Train 73's seam needs a standing lock,
+    // and Combat_SnapHostileTarget97k is PLAYERS ONLY
+    // (Client_IsHostilePlayer: Kind == 1 + PK >= 6). A missed
+    // pick therefore fell to CheckTarget's terrain ray and the
+    // cast whiffed at the ground while a monster stood in range.
+    // THE GUARANTEE, here in the common dispatch: a targeted,
+    // non-ally skill with NO selection resolves to the nearest
+    // monster inside the skill's own range -- tile distance
+    // only (Chebyshev, the server's measure). No screen space,
+    // no arc, no pitch. A successful pick still wins (aim
+    // chooses among targets); the lock still wins over both
+    // (Train 73 block below). Range is the only gate.
+    if (SelectedCharacter == -1 && KbPlay_SelectedSkillTargeted()
+        && !Combat_IsAllyTargetSkill97k(iType)) {
+        const int nearIdx = KbPlay_NearestMonsterInRange(
+            Combat_GetSkillRange97k(iType));
+        if (nearIdx >= 0) SelectedCharacter = nearIdx;
+    }
+    // ══════════════════════════════════════════════════════════════════
+    // MEAMU Train 73 (2026-11-20, G's play report: "Lock works --
+    // just not the cast while locked"): a standing VERB lock is the
+    // player's deliberate target, and casts now honor it HERE, in
+    // the common dispatch, ahead of every branch's CheckTarget --
+    // the C2 snap's own seam. Root cause of the report: the lock
+    // steered only the FACING (Train 48) and KbPlay's aim (whose
+    // Action park Train 31 lands on the hero), while the cast
+    // target itself came from the centre-screen HOVER pick in
+    // Action and the parked hover in Classic -- KbPlay's lock-
+    // honoring AcquireTarget never reached the packet. The lock
+    // now writes the selection directly: it wins over the hover
+    // and over the snap (both are transient; the lock is the
+    // standing order). Targeted skills only, per Train 70's
+    // classification: self skills never take a lock target, and
+    // ally-target skills (heals, Teleport Ally) keep their own
+    // selection. Range machinery downstream is untouched -- an
+    // out-of-range lock behaves exactly like an out-of-range
+    // hover pick (walk-in in Classic, blink-engage / hold in
+    // Action), inside the lock's own 22-tile break range.
+    if (TargetLock_Active() && KbPlay_SelectedSkillTargeted()
+        && !Combat_IsAllyTargetSkill97k(iType))
+        SelectedCharacter = TargetLock_Index();
     // IDA L1346-1484 — bucle de manos equipadas, comun a las clases != 0.
     // ══════════════════════════════════════════════════════════════════════════
     if ((*(char *)&AsCharacter(entity)->Class & 7) != 0) {
