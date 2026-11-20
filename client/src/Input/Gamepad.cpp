@@ -1115,7 +1115,12 @@ static bool TpTargetUpdate(float dt)
             ? gActionCamera.GetYaw() : hero->Object.Angle[2];
         const float rad = yawDeg * (3.14159265f / 180.0f);
         const float fxv = sinf(rad), fyv = cosf(rad);       // screen-up on the ground
-        const float rxv = -fyv, ryv = fxv;                  // screen-right
+        // G's play verdict (2026-11-20): stick left/right walked the
+        // marker BACKWARDS -- the screen-right vector is negated so
+        // the stick's X axis drives the marker the other way. The
+        // up/down terms (-fxv*rdy, -fyv*rdy) are byte-identical:
+        // vertical was right and stays right.
+        const float rxv = fyv, ryv = -fxv;                  // screen-right (X flipped)
         const float kSpeed = 11.0f;                          // tiles / second
         gTpT.fx += (rxv * rdx - fxv * rdy) * kSpeed * dt;
         gTpT.fy += (ryv * rdx - fyv * rdy) * kSpeed * dt;
