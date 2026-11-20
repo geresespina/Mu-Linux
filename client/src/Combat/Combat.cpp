@@ -418,6 +418,8 @@
 #include "Party/Party.h"
 #include "Entity/EntityName.h"
 #include "Render/BijuTransform.h"   // MEAMU TRAIN 7: IsModeTransformSkill (casteo sin pose)
+#include "Input/TargetLock.h"       // MEAMU Train 73: verb lock writes the cast selection
+#include "Net/MoveMarkers.h"        // MEAMU Train 69: teleport vanish kick on the cast path
 #include "Platform/ITimer.h"
 #include "Item/ContentCatalog.h"
 #include "Item/Item_Equip.h"
@@ -1202,6 +1204,10 @@ static void Attack_WarriorBranch97k(char* entity)
         if (lowMana) { Attack_UseManaScroll97k(); return; }
         if (!hasAg) return;                                   // IDA L4397
         Attack_SendSkill19_97k(iType, (WORD)HeroKey);
+        // MEAMU TRAIN 65: a form cast (61 Biju / 74 Susanoo) loads
+        // the form models NOW, in input context -- not at first
+        // render (see BijuTransform::PreloadFormModels).
+        if (iType == 61 || iType == 74) BijuTransform::PreloadFormModels();
         // MEAMU TRAIN 7 (2026-11-19): los siete transforms de modo
         // (58-61, 73-75) castean SIN pose -- ni accion 63 ni freno
         // de movimiento; el modo se enciende alrededor del
@@ -1417,6 +1423,18 @@ static void Attack_Label1585_97k(char* entity, int iType, bool hasTarget)
         BYTE packet[6] = { 0xC1, 0x06, 0x1C, 0x00,
                            (BYTE)TargetX, (BYTE)TargetY };
         gNetwork.Send(packet, sizeof(packet));
+        // MEAMU Train 69 (2026-11-20, G: "Player should disappear
+        // when casting teleport?"): the Train 63 vanish kicked its
+        // SEND side only from EmitDashFrame (blink / RT-target /
+        // double-click -- the F3 FD wire). The Teleport SPELL cast
+        // leaves through here (the C1 1C gate-0 request), so a cast
+        // never faded out: the hero stood visible at the origin
+        // until the landing notice moved him, and only the fade-IN
+        // half of the envelope played at the destination. Kick the
+        // same envelope at the cast send; the arrival half already
+        // fires in the 0x1C receive handler for gate 0. Render-only
+        // dressing, gate=0, exactly as Train 63 built it.
+        MoveMarkers::TeleportVanishKickSend(AsObject(entity));
         // IDA L9682 LABEL_1762 -> LABEL_1763: sub_444B30(c) = SetPlayerTeleport,
         // o sea la animacion de casteo (accion 87) sobre el propio heroe.
         // MU 5.2 ZzzInterface.cpp:6130 hace lo mismo tras SendRequestMagicTeleport.
@@ -2013,6 +2031,29 @@ void __cdecl Combat_DispatchHeroSkillAttack(void *entity_v /* IDA: c */)
     // MEAMU rival targeting C2 (2026-11-15): nothing selected -> snap the
     // nearest hostile player in range + front arc (also AUTO re-acquire).
     Combat_SnapHostileTarget97k(iType);
+    // ══════════════════════════════════════════════════════════════════
+    // MEAMU Train 73 (2026-11-20, G's play report: "Lock works --
+    // just not the cast while locked"): a standing VERB lock is the
+    // player's deliberate target, and casts now honor it HERE, in
+    // the common dispatch, ahead of every branch's CheckTarget --
+    // the C2 snap's own seam. Root cause of the report: the lock
+    // steered only the FACING (Train 48) and KbPlay's aim (whose
+    // Action park Train 31 lands on the hero), while the cast
+    // target itself came from the centre-screen HOVER pick in
+    // Action and the parked hover in Classic -- KbPlay's lock-
+    // honoring AcquireTarget never reached the packet. The lock
+    // now writes the selection directly: it wins over the hover
+    // and over the snap (both are transient; the lock is the
+    // standing order). Targeted skills only, per Train 70's
+    // classification: self skills never take a lock target, and
+    // ally-target skills (heals, Teleport Ally) keep their own
+    // selection. Range machinery downstream is untouched -- an
+    // out-of-range lock behaves exactly like an out-of-range
+    // hover pick (walk-in in Classic, blink-engage / hold in
+    // Action), inside the lock's own 22-tile break range.
+    if (TargetLock_Active() && KbPlay_SelectedSkillTargeted()
+        && !Combat_IsAllyTargetSkill97k(iType))
+        SelectedCharacter = TargetLock_Index();
     // IDA L1346-1484 — bucle de manos equipadas, comun a las clases != 0.
     // ══════════════════════════════════════════════════════════════════════════
     if ((*(char *)&AsCharacter(entity)->Class & 7) != 0) {
