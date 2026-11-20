@@ -996,8 +996,8 @@ void Gamepad_RenderIndicator()
 
 // ── ACTION-scheme pad map ────────────────────────────────────────────
 // Train 59 sheet (G, 2026-11-20; refines Train 57): RT Teleport
-// TARGETING (hold to aim, release to land) · LT HOLD-TO-LOCK verb
-// (Train 68; Skill 2 is keyboard-only from the pad now) · X Skill
+// TARGETING (hold to aim, release to land) · LT HOLD = lock +
+// camera follow + Skill 2 cast-hold (Train 72) · X Skill
 // 3 · Y Skill 4 · B Skill 5 · A Skill 6 · View Skill 7 · L3
 // Skill 8 · D-up Skill 9 · D-down Skill 10 · LB Target Lock ·
 // RB Dash · R3 Blink (Space mirror) · D-Left Fishing · Start =
@@ -1205,12 +1205,19 @@ void PadButtonsTick(unsigned now, float dt, bool actionPad)
     // TELEPORT TARGETING (wired after the skill block below).
     // Train 64: snapshot the skill mirrors for the auto-lock edge.
     const bool prevCastHeld = gActionPadCastHeld;
-    // MEAMU Train 68: LT is no longer Skill 2 -- it is the
-    // HOLD-TO-LOCK verb (auto-target closest + camera follow
-    // while held; TargetLock owns the state). Skill 2 is
-    // keyboard-'2' only from the pad now (G's no-dual-action
-    // law: LT's one mapped action is the verb).
-    TargetLock_LtHold(PadAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > kTriggerOn);
+    // MEAMU Train 72 (G's refined spec, 2026-11-20): LT hold is
+    // ONE combined verb -- auto-target + camera follow + SKILL 2
+    // CAST-HOLD, all at once, for as long as LT is held. This
+    // supersedes Train 68's verb-only call (no tap/hold split:
+    // the hold IS the action). The mirror presses digit '2'
+    // (KbPlay cast-holds the slot-2 skill at the lock through
+    // ComputeAim); LtHold fills the lock on this same tick, ahead
+    // of the sim step that resolves the cast, and drives the
+    // camera follow. Release: the cast stops, the lock STAYS
+    // (Train 68), the follow ends.
+    const bool ltNow = PadAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > kTriggerOn;
+    ActMirror(0x32, ltNow, gActPrev.lt);   // LT = Skill 2 cast-hold (Train 72)
+    TargetLock_LtHold(ltNow);              // LT = lock + follow (Train 68)
     ActMirror(0x33, PadButton(SDL_GAMEPAD_BUTTON_WEST),          gActPrev.x);     // X  = Skill 3 (G)
     ActMirror(0x34, PadButton(SDL_GAMEPAD_BUTTON_NORTH),         gActPrev.y);     // Y  = Skill 4 (G)
     ActMirror(0x35, PadButton(SDL_GAMEPAD_BUTTON_EAST),          gActPrev.b);     // B  = Skill 5 (G)
@@ -1219,7 +1226,7 @@ void PadButtonsTick(unsigned now, float dt, bool actionPad)
     ActMirror(0x38, PadButton(SDL_GAMEPAD_BUTTON_LEFT_STICK),    gActPrev.l3);    // L3 = Skill 8
     ActMirror(0x39, PadButton(SDL_GAMEPAD_BUTTON_DPAD_UP),       gActPrev.dup);   // D-up = Skill 9
     ActMirror(0x30, PadButton(SDL_GAMEPAD_BUTTON_DPAD_DOWN),     gActPrev.ddown); // D-down = Skill 10
-    gActionPadCastHeld = gActPrev.x || gActPrev.y
+    gActionPadCastHeld = gActPrev.lt || gActPrev.x || gActPrev.y
                       || gActPrev.b || gActPrev.a || gActPrev.view || gActPrev.l3
                       || gActPrev.dup || gActPrev.ddown;
     // Train 64: PAD-CAST AUTO-LOCK — a skill press with an empty
