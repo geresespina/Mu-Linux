@@ -40,6 +40,12 @@ void KbPlay_LockClear();
 // housekeeping), because verb locks are Action-only by design.
 // Returns true when it set a lock.
 bool TargetLock_AutoLockClosest();
+// MEAMU Train 76 (G's lock rule): a KILL clears the lock with
+// NO automatic re-fill -- after the locked target dies, neither
+// the LT-hold re-engage (Train 72) nor the pad-cast auto-lock
+// (Train 64) may pick the next target; the next lock is a
+// deliberate LB / Q / fresh LT press. Range and LoS breaks are
+// NOT kills and keep their mid-hold re-fill.
 bool KbPlay_SelectedSkillTargeted();   // Train 70 bridge (impl in KbPlay.cpp)
 // MEAMU Train 68: HOLD-LT verb (G's order) -- while LT is held the
 // lock auto-engages the closest candidate (monsters included).

@@ -35,6 +35,8 @@ constexpr int   kBreakRange    = 22;   // 1.5x engage range
 constexpr unsigned kLosGraceMs = 2000; // line-of-sight lost -> break
 
 bool     gEngaged   = false;   // the current gLockIdx is a VERB lock
+int      gPrevLockIdx = -1;    // Train 76 kill watcher: last seen lock
+bool     gKillLatch   = false; // Train 76: set by a kill-break
 unsigned gLosLostT  = 0;       // tick when LoS was first lost (0 = seen)
 
 CHARACTER* HeroC() { return (CHARACTER*)(uintptr_t)Hero; }
@@ -66,6 +68,31 @@ void SetLock(int idx)
     KbPlay_LockSet(idx);   // parks + names the target (Tab-cycle pattern)
     gEngaged = (idx >= 0);
     gLosLostT = 0;
+    gKillLatch = false;    // a lock standing makes the latch moot
+}
+
+// MEAMU Train 76 (G's lock rule, 2026-11-20): WHEN THE LOCKED
+// TARGET IS KILLED, THE LOCK CLEARS -- NO AUTO-TARGET OF THE
+// NEXT TARGET. The kill ends the engagement; the next lock is
+// the player's deliberate act (LB / Q / LT press). The latch
+// below suppresses BOTH automatic fills -- Train 72's LT-hold
+// mid-hold re-engage and Train 64's pad-cast auto-lock -- after
+// a kill-break. Scoped to kill/gone breaks ONLY: range and LoS
+// breaks keep Train 72's mid-hold re-fill, and a manual engage
+// is never blocked. The latch resets on LT's full release, on
+// any lock standing again, and on SetLock (a manual engage).
+// The watcher runs at the top of Tick AND of both fill paths,
+// so a kill seen by KbPlay's own housekeeping is latched
+// before any same-frame fill can fire. It watches the plain
+// Tab lock too, so the pad-cast auto-lock obeys the rule in
+// Classic as well.
+void WatchLockKill()
+{
+    const int cur = KbPlay_LockIndex();
+    if (gPrevLockIdx >= 0 && cur < 0 && !KbPlay_LatchLegal(gPrevLockIdx))
+        gKillLatch = true;      // the locked target died (or is gone)
+    if (cur >= 0) gKillLatch = false;
+    gPrevLockIdx = cur;
 }
 
 } // namespace
@@ -90,6 +117,8 @@ void TargetLock_Clear()
 bool TargetLock_AutoLockClosest()
 {
     if (!Hero) return false;
+    WatchLockKill();                             // Train 76
+    if (gKillLatch) return false;                // killed: no auto re-fill
     if (KbPlay_LockIndex() >= 0) return false;   // manual lock wins
     int best = -1, bestD = kEngageRange + 1;
     for (int i = 0; i < 400; ++i) {
@@ -129,8 +158,11 @@ bool TargetLock_FollowHeld()
 void TargetLock_LtHold(bool held)
 {
     gLtHeld = held;
-    if (!held || !Hero) return;
+    if (!held) { gKillLatch = false; return; }   // Train 76: full release resets the latch
+    if (!Hero) return;
     if (KbPlay_LockIndex() >= 0) return;   // a standing lock wins
+    WatchLockKill();                             // Train 76
+    if (gKillLatch) return;                      // killed mid-hold: LT does NOT re-engage
     int best = -1, bestD = kEngageRange + 1;
     for (int i = 0; i < 400; ++i) {
         if (!KbPlay_LatchLegal(i)) continue;
@@ -201,6 +233,7 @@ void TargetLock_Toggle()
 
 void TargetLock_Tick()
 {
+    WatchLockKill();                             // Train 76 (both schemes)
     if (!gEngaged) return;
     if (!Hero || !gActionCamera.SchemeIsAction()) { TargetLock_Clear(); return; }
     CHARACTER* hero = HeroC();
