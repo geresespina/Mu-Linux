@@ -1202,6 +1202,10 @@ static void Attack_WarriorBranch97k(char* entity)
         if (lowMana) { Attack_UseManaScroll97k(); return; }
         if (!hasAg) return;                                   // IDA L4397
         Attack_SendSkill19_97k(iType, (WORD)HeroKey);
+        // MEAMU TRAIN 65: a form cast (61 Biju / 74 Susanoo) loads
+        // the form models NOW, in input context -- not at first
+        // render (see BijuTransform::PreloadFormModels).
+        if (iType == 61 || iType == 74) BijuTransform::PreloadFormModels();
         // MEAMU TRAIN 7 (2026-11-19): los siete transforms de modo
         // (58-61, 73-75) castean SIN pose -- ni accion 63 ni freno
         // de movimiento; el modo se enciende alrededor del
