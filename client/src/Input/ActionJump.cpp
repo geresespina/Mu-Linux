@@ -1,10 +1,13 @@
-// ActionJump.cpp — MEAMU Train 24 built SPACE = JUMP here; MEAMU
-// Train 35 (2026-11-19), DESIGN PIVOT by G: the jump is REMOVED and
-// Space in Action mode is a FACING TELEPORT — an instant blink to the
-// furthest reachable point along his facing (the Bounce 14 mode-2
-// furthest-point logic, direction = facing instead of a click).
-// What remains in this module: the Train 28 smoothing spring and the
-// Space edge that fires the blink. See ActionJump.h.
+// ActionJump.cpp — MEAMU Train 24 built SPACE = JUMP here; Train
+// 35 (2026-11-19) replaced it with the facing teleport. MEAMU
+// Train 82 (2026-11-20), G's keyboard-parity order: Space in
+// Action mode is now LT's verb -- HOLD-TO-AIM TELEPORT TARGETING
+// (hold raises the marker, mouse-look aims it, release lands);
+// the instant facing blink is REPLACED on the keyboard (the pad
+// keeps its blink on R3). This module also drives RMB = RT's
+// verb (the triple verb + hunt) for the same parity.
+// What remains: the Train 28 smoothing spring and the verb
+// drivers. See ActionJump.h.
 
 #include "stdafx.h"
 #include "Input/ActionJump.h"
@@ -16,6 +19,8 @@
 #include "Input/AnimTrace.h"
 #include "Input/TargetLock.h"   // Train 48
 #include "Input/Fishing.h"      // Train 56: fishing verb   // MEAMU Train 39 diagnostic     // ActionMove_TeleportToPoint (Train 35 blink)
+#include "Input/Gamepad.h"      // Train 82: TpTarget verbs (shared with the pad)
+namespace Platform { void InjectVirtualKey(int vk, bool down); }   // Train 82: the '2' mirror for RMB
 #include "Game/NinjaRun.h"        // Train 37: dash burst flag refresh
 #include "globals.h"              // Hero, InputEnable, DAT_083a7c24
 #include <SDL3/SDL.h>             // SDL_GetTicks
@@ -126,6 +131,7 @@ void CActionJump::Update()
 
     const bool space = SpaceHeld();
     const bool spaceEdge = space && !m_SpacePrev;
+    const bool spaceRelease = !space && m_SpacePrev;
     m_SpacePrev = space;
 
     // MEAMU Train 35 — SPACE = FACING TELEPORT (Action mode). Gate:
@@ -169,21 +175,44 @@ void CActionJump::Update()
         }
     }
 
-    if (spaceEdge && gActionCamera.SchemeIsAction()
-        && InputEnable == 0 && DAT_083a7c24 == 0) {
-        // MEAMU Train 48: with a lock, Space blinks BESIDE the locked
-        // target (the lock sheet); without one, the facing blink.
-        if (TargetLock_Active()) {
-            ActionMove_BlinkToTarget(TargetLock_Index());
-        } else {
-            const float yawDeg = gActionCamera.PointerLocked()
-                ? gActionCamera.GetYaw() : hero->Object.Angle[2];
-            const float rad = yawDeg * (3.14159265f / 180.0f);
-            const float fx = sinf(rad), fy = cosf(rad);
-            const int hx = (int)hero->PositionX, hy = (int)hero->PositionY;
-            const int tx = hx + (int)lroundf(fx * 24.0f);
-            const int ty = hy + (int)lroundf(fy * 24.0f);
-            ActionMove_TeleportToPoint(tx, ty);
+    // MEAMU Train 82 (2026-11-20, G's keyboard-parity order:
+    // "Spacebar = same as LT · RMB = same as RT"): Space in
+    // Action mode is LT's verb -- HOLD-TO-AIM TELEPORT
+    // TARGETING. Hold raises the marker (Train 59/66 state,
+    // shared with the pad), mouse-look aims it (the marker
+    // rides the camera aim at full blink range), release
+    // lands. This REPLACES the Train 35 instant facing blink
+    // -- and Train 48's Space blink-to-lock with it -- on the
+    // KEYBOARD; the pad keeps its blink on R3, and the
+    // double-click teleport is untouched. Classic Space (the
+    // KbPlay attack latch) is untouched: this block is
+    // Action-only, like the blink it replaces.
+    if (gActionCamera.SchemeIsAction()) {
+        const bool gates = (InputEnable == 0 && DAT_083a7c24 == 0);
+        if (spaceEdge && gates) TpTargetBegin();
+        if (space && TpTargetActive()) TpTargetUpdate(dt, true);
+        if (spaceRelease) TpTargetFire();   // no-op when not targeting
+        if (!gates && TpTargetActive() && !space) TpTargetCancel("gates closed");
+    }
+
+    // MEAMU Train 82: RMB in Action mode is RT's verb -- hold =
+    // auto-target + camera follow + SKILL 2 CAST-HOLD + the
+    // hunt (TargetLock_LtHold + the '2' mirror, the exact pair
+    // the pad's RT drives since Train 81). Release: the cast
+    // stops, the lock stays, the follow ends (Train 72/68
+    // semantics, via LtHold(false)). Same gates as Q/F above.
+    {
+        static bool s_RmbPrev = false;
+        const bool rmb = ((unsigned short)Platform::GetInput().KeyState(0x02) & 0x8000) != 0;   // VK_RBUTTON
+        const bool gates = gActionCamera.SchemeIsAction()
+            && InputEnable == 0 && DAT_083a7c24 == 0;
+        const bool drive = rmb && gates;
+        if (drive != s_RmbPrev) {
+            Platform::InjectVirtualKey(0x32, drive);   // '2' cast-hold mirror
+            TargetLock_LtHold(drive);
+            s_RmbPrev = drive;
+        } else if (drive) {
+            TargetLock_LtHold(true);   // per-frame: fill / follow / hunt
         }
     }
 

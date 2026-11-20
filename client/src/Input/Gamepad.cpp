@@ -1015,7 +1015,7 @@ struct ActPrev {
 };
 ActPrev gActPrev;
 
-static void TpTargetCancel(const char* why);
+void TpTargetCancel(const char* why);
 
 void ActionPadReleaseAll()
 {
@@ -1077,7 +1077,7 @@ static void TpMarkerFx(CHARACTER* hero)
     gTpT.lastFxMs = (unsigned)SDL_GetTicks();
 }
 
-static void TpTargetBegin()
+void TpTargetBegin()
 {
     CHARACTER* hero = (CHARACTER*)(uintptr_t)Hero;
     if (!hero) return;
@@ -1096,16 +1096,20 @@ static void TpTargetBegin()
     PadLog("PAD: teleport targeting - marker at (%d,%d)", gTpT.tx, gTpT.ty);
 }
 
-static void TpTargetCancel(const char* why)
+void TpTargetCancel(const char* why)
 {
     if (!gTpT.active) return;
     gTpT.active = false;
     PadLog("PAD: teleport targeting cancelled (%s)", why);
 }
 
-// Per-tick while RT is held. Returns false when targeting died
-// (caller then treats the coming release as a no-op).
-static bool TpTargetUpdate(float dt)
+// Per-tick while the targeting trigger is held (LT on the pad
+// since Train 81; Space on the keyboard since Train 82).
+// Returns false when targeting died (caller then treats the
+// coming release as a no-op). kbdAim (Train 82): no stick --
+// the marker rides the camera aim at full blink range, which
+// is where Begin anchored it; mouse-look IS the aim.
+bool TpTargetUpdate(float dt, bool kbdAim)
 {
     CHARACTER* hero = (CHARACTER*)(uintptr_t)Hero;
     if (!hero || hero->Dead || InputEnable != 0 || DAT_083a7c24 != 0) {
@@ -1128,8 +1132,15 @@ static bool TpTargetUpdate(float dt)
         gTpT.lastHx = hx;
         gTpT.lastHy = hy;
     }
+    if (kbdAim) {
+        const float yawDeg = gActionCamera.PointerLocked()
+            ? gActionCamera.GetYaw() : hero->Object.Angle[2];
+        const float rad = yawDeg * (3.14159265f / 180.0f);
+        gTpT.fx = (float)hx + sinf(rad) * 8.0f;
+        gTpT.fy = (float)hy + cosf(rad) * 8.0f;
+    }
     float rdx, rdy;
-    const float rmag = StickVector(PadAxis(SDL_GAMEPAD_AXIS_RIGHTX),
+    const float rmag = kbdAim ? 0.0f : StickVector(PadAxis(SDL_GAMEPAD_AXIS_RIGHTX),
                                    PadAxis(SDL_GAMEPAD_AXIS_RIGHTY), rdx, rdy);
     if (rmag > 0.0f) {
         const float yawDeg = gActionCamera.PointerLocked()
@@ -1165,7 +1176,9 @@ static bool TpTargetUpdate(float dt)
     return true;
 }
 
-static void TpTargetFire()
+bool TpTargetActive() { return gTpT.active; }
+
+void TpTargetFire()
 {
     if (!gTpT.active) return;
     gTpT.active = false;
@@ -1254,7 +1267,7 @@ void PadButtonsTick(unsigned now, float dt, bool actionPad)
         if (rt && !gActPrev.rt) {
             if (InputEnable == 0 && DAT_083a7c24 == 0) TpTargetBegin();
         } else if (rt && gTpT.active) {
-            TpTargetUpdate(dt);
+            TpTargetUpdate(dt, false);
         } else if (!rt && gActPrev.rt) {
             TpTargetFire();
         }
