@@ -1046,6 +1046,7 @@ struct TpTargetState {
     int      tx = 0, ty = 0;         // marker tile
     bool     valid = false;
     unsigned lastFxMs = 0;
+    int      lastHx = 0, lastHy = 0; // Train 66: hero tile at last anchor
 };
 TpTargetState gTpT;
 
@@ -1086,6 +1087,7 @@ static void TpTargetBegin()
     gTpT.tx = (int)lroundf(gTpT.fx);
     gTpT.ty = (int)lroundf(gTpT.fy);
     gTpT.valid = TpTileLandable(hx, hy, gTpT.tx, gTpT.ty);
+    gTpT.lastHx = hx; gTpT.lastHy = hy;   // Train 66: anchor
     gTpT.active = true;
     TpMarkerFx(hero);
     PadLog("PAD: teleport targeting - marker at (%d,%d)", gTpT.tx, gTpT.ty);
@@ -1108,6 +1110,21 @@ static bool TpTargetUpdate(float dt)
         return false;
     }
     const int hx = (int)hero->PositionX, hy = (int)hero->PositionY;
+    // MEAMU TRAIN 66 (G's refinement, 2026-11-20): "The tele marker
+    // should move with me if I hold RT and walk." The marker is
+    // anchored RELATIVE to the hero: every tick it is carried by
+    // the hero's tile delta, keeping its exact fractional offset,
+    // so walking (or a dash) travels the marker -- and its range
+    // ring -- with him. The stick walk below then adjusts the
+    // offset from wherever the carry left it; release fires at
+    // the marker's current spot as before.
+    const int dhx = hx - gTpT.lastHx, dhy = hy - gTpT.lastHy;
+    if (dhx != 0 || dhy != 0) {
+        gTpT.fx += (float)dhx;
+        gTpT.fy += (float)dhy;
+        gTpT.lastHx = hx;
+        gTpT.lastHy = hy;
+    }
     float rdx, rdy;
     const float rmag = StickVector(PadAxis(SDL_GAMEPAD_AXIS_RIGHTX),
                                    PadAxis(SDL_GAMEPAD_AXIS_RIGHTY), rdx, rdy);
