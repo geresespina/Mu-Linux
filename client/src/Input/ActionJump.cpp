@@ -13,7 +13,9 @@
 #include "Entity/EntityTypes.h"   // CHARACTER
 #include "Render/ActionCamera.h"  // gActionCamera (lock + scheme state)
 #include "Input/ActionMove.h"
-#include "Input/AnimTrace.h"   // MEAMU Train 39 diagnostic     // ActionMove_TeleportToPoint (Train 35 blink)
+#include "Input/AnimTrace.h"
+#include "Input/TargetLock.h"   // Train 48
+#include "Input/Fishing.h"      // Train 56: fishing verb   // MEAMU Train 39 diagnostic     // ActionMove_TeleportToPoint (Train 35 blink)
 #include "Game/NinjaRun.h"        // Train 37: dash burst flag refresh
 #include "globals.h"              // Hero, InputEnable, DAT_083a7c24
 #include <SDL3/SDL.h>             // SDL_GetTicks
@@ -137,16 +139,52 @@ void CActionJump::Update()
     // to the last walkable tile where the landing is blocked
     // (Bounce 14): max range, never a failed cast, no animation
     // (Train 23's instant arrivals cover the mode-2 wire).
+    // MEAMU Train 48: target-lock break conditions, per frame.
+    TargetLock_Tick();
+
+    // MEAMU Train 55 (2026-11-19, G's order): Q = TARGET LOCK
+    // engage/cycle on keyboard+mouse (middle mouse and pad LB
+    // remain the other two doors into the same verb). Same gates
+    // as Space: Action scheme, no chat/text focus.
+    {
+        static bool s_QPrev = false;
+        const bool qHeld = ((unsigned short)Platform::GetInput().KeyState(0x51) & 0x8000) != 0;
+        const bool qEdge = qHeld && !s_QPrev;
+        s_QPrev = qHeld;
+        if (qEdge && gActionCamera.SchemeIsAction()
+            && InputEnable == 0 && DAT_083a7c24 == 0) {
+            TargetLock_Engage();
+        }
+    }
+
+    // MEAMU Train 56 (2026-11-19): F = FISHING verb (cast / reel),
+    // both schemes -- the server validates the Lorencia bridge spot.
+    {
+        static bool s_FPrev = false;
+        const bool fHeld = ((unsigned short)Platform::GetInput().KeyState(0x46) & 0x8000) != 0;
+        const bool fEdge = fHeld && !s_FPrev;
+        s_FPrev = fHeld;
+        if (fEdge && InputEnable == 0 && DAT_083a7c24 == 0) {
+            Fishing_Verb();
+        }
+    }
+
     if (spaceEdge && gActionCamera.SchemeIsAction()
         && InputEnable == 0 && DAT_083a7c24 == 0) {
-        const float yawDeg = gActionCamera.PointerLocked()
-            ? gActionCamera.GetYaw() : hero->Object.Angle[2];
-        const float rad = yawDeg * (3.14159265f / 180.0f);
-        const float fx = sinf(rad), fy = cosf(rad);
-        const int hx = (int)hero->PositionX, hy = (int)hero->PositionY;
-        const int tx = hx + (int)lroundf(fx * 24.0f);
-        const int ty = hy + (int)lroundf(fy * 24.0f);
-        ActionMove_TeleportToPoint(tx, ty);
+        // MEAMU Train 48: with a lock, Space blinks BESIDE the locked
+        // target (the lock sheet); without one, the facing blink.
+        if (TargetLock_Active()) {
+            ActionMove_BlinkToTarget(TargetLock_Index());
+        } else {
+            const float yawDeg = gActionCamera.PointerLocked()
+                ? gActionCamera.GetYaw() : hero->Object.Angle[2];
+            const float rad = yawDeg * (3.14159265f / 180.0f);
+            const float fx = sinf(rad), fy = cosf(rad);
+            const int hx = (int)hero->PositionX, hy = (int)hero->PositionY;
+            const int tx = hx + (int)lroundf(fx * 24.0f);
+            const int ty = hy + (int)lroundf(fy * 24.0f);
+            ActionMove_TeleportToPoint(tx, ty);
+        }
     }
 
     if (offX != 0.0f || offY != 0.0f) {
