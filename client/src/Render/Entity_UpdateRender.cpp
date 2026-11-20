@@ -6,6 +6,7 @@
 #include "Game/MapManager.h"
 #include "Render/EquipmentVisuals.h"
 #include "Render/BijuTransform.h"
+#include "Net/MoveMarkers.h"   // MEAMU Train 63: teleport vanish envelope
 #include "Entity/CharacterEffects.h"
 
 extern "C" const char* Guild_GetMarkName(int row);
