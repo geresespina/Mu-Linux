@@ -116,6 +116,8 @@ int main()
         }
     };
     ExpectFormNamed(true,  -1, "Gloccy",     229, "bit, NO pet, Gloccy");
+    ExpectFormNamed(true,  -1, "Eliger",     230, "bit, NO pet, Eliger (Train 67 Megazord)");
+    ExpectFormNamed(true,   9, "Eliger",     164, "bit, Ten-Tails, Eliger (beast wins)");
     ExpectFormNamed(true,  -1, "M4D4R4",     229, "bit, NO pet, M4D4R4");
     ExpectFormNamed(true,  -1, "AnyoneElse", 228, "bit, NO pet, other name");
     ExpectFormNamed(true,  -1, "gloccy",     228, "bit, NO pet, lowercase");
