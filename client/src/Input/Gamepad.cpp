@@ -1070,6 +1070,52 @@ static bool TpTileLandable(int hx, int hy, int tx, int ty)
     return (wall & 0x0C) == 0;   // 0x04|0x08 = blocked, as TargetLock reads it
 }
 
+// MEAMU Train 85 (G's rule, 2026-11-20): "The marker should only
+// ever sit on spots I can ACTUALLY teleport to." The aim itself is
+// constrained now: resolve the wanted tile to the NEAREST landable
+// tile inside the blink ring -- nearest by Chebyshev ring around
+// the wanted tile, then by Manhattan distance, every candidate
+// passing the same TpTileLandable test the fire path trusts. The
+// marker can therefore never rest on a wall / blocked /
+// unstandable tile, and release always lands.
+static bool TpResolveLandable(int hx, int hy, int wx, int wy, int& outX, int& outY)
+{
+    if (TpTileLandable(hx, hy, wx, wy)) { outX = wx; outY = wy; return true; }
+    int bestScore = 0x7FFFFFFF;
+    bool found = false;
+    for (int cx = wx - 8; cx <= wx + 8; cx++) {
+        for (int cy = wy - 8; cy <= wy + 8; cy++) {
+            if (!TpTileLandable(hx, hy, cx, cy)) continue;
+            const int adx = cx > wx ? cx - wx : wx - cx;
+            const int ady = cy > wy ? cy - wy : wy - cy;
+            const int cheb = adx > ady ? adx : ady;
+            const int score = cheb * 100 + adx + ady;
+            if (score < bestScore) { bestScore = score; outX = cx; outY = cy; found = true; }
+        }
+    }
+    return found;
+}
+
+// Apply Train 85 to the shared marker state: resolve (wx,wy) and,
+// when the resolution moved the tile, pull the float anchor onto
+// the legal tile so stick/carry math continues FROM the legal
+// spot -- the marker slides along a wall's edge instead of
+// burying its anchor inside the wall (no dead zone on pull-back).
+static void TpApplyLandable(int hx, int hy, int wx, int wy)
+{
+    int rx = 0, ry = 0;
+    if (TpResolveLandable(hx, hy, wx, wy, rx, ry)) {
+        if (rx != gTpT.tx || ry != gTpT.ty) { gTpT.fx = (float)rx; gTpT.fy = (float)ry; }
+        gTpT.tx = rx; gTpT.ty = ry;
+        gTpT.valid = true;
+    } else {
+        // Nothing landable in the whole blink ring (the hero is
+        // walled in): keep the last tile and its verdict.
+        gTpT.tx = wx; gTpT.ty = wy;
+        gTpT.valid = TpTileLandable(hx, hy, wx, wy);
+    }
+}
+
 static void TpMarkerFx(CHARACTER* hero)
 {
     float pos[3] = { (float)(gTpT.tx * 100 + 50), (float)(gTpT.ty * 100 + 50),
@@ -1092,9 +1138,7 @@ void TpTargetBegin()
     const float rad = yawDeg * (3.14159265f / 180.0f);
     gTpT.fx = (float)hx + sinf(rad) * 8.0f;
     gTpT.fy = (float)hy + cosf(rad) * 8.0f;
-    gTpT.tx = (int)lroundf(gTpT.fx);
-    gTpT.ty = (int)lroundf(gTpT.fy);
-    gTpT.valid = TpTileLandable(hx, hy, gTpT.tx, gTpT.ty);
+    TpApplyLandable(hx, hy, (int)lroundf(gTpT.fx), (int)lroundf(gTpT.fy)); // Train 85
     gTpT.lastHx = hx; gTpT.lastHy = hy;   // Train 66: anchor
     gTpT.active = true;
     TpMarkerFx(hero);
@@ -1173,9 +1217,9 @@ bool TpTargetUpdate(float dt, bool kbdAim)
         }
     }
     const int ntx = (int)lroundf(gTpT.fx), nty = (int)lroundf(gTpT.fy);
-    const bool tileChanged = (ntx != gTpT.tx || nty != gTpT.ty);
-    gTpT.tx = ntx; gTpT.ty = nty;
-    gTpT.valid = TpTileLandable(hx, hy, gTpT.tx, gTpT.ty);
+    const int ptx = gTpT.tx, pty = gTpT.ty;
+    TpApplyLandable(hx, hy, ntx, nty); // Train 85: marker rests only on landable tiles
+    const bool tileChanged = (gTpT.tx != ptx || gTpT.ty != pty);
     if (tileChanged || (unsigned)SDL_GetTicks() - gTpT.lastFxMs >= 110)
         TpMarkerFx(hero);
     return true;
