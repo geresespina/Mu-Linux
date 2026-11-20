@@ -14,7 +14,8 @@
 #include "Render/ActionCamera.h"  // gActionCamera (lock + scheme state)
 #include "Input/ActionMove.h"
 #include "Input/AnimTrace.h"
-#include "Input/TargetLock.h"   // Train 48   // MEAMU Train 39 diagnostic     // ActionMove_TeleportToPoint (Train 35 blink)
+#include "Input/TargetLock.h"   // Train 48
+#include "Input/Fishing.h"      // Train 56: fishing verb   // MEAMU Train 39 diagnostic     // ActionMove_TeleportToPoint (Train 35 blink)
 #include "Game/NinjaRun.h"        // Train 37: dash burst flag refresh
 #include "globals.h"              // Hero, InputEnable, DAT_083a7c24
 #include <SDL3/SDL.h>             // SDL_GetTicks
@@ -153,6 +154,18 @@ void CActionJump::Update()
         if (qEdge && gActionCamera.SchemeIsAction()
             && InputEnable == 0 && DAT_083a7c24 == 0) {
             TargetLock_Engage();
+        }
+    }
+
+    // MEAMU Train 56 (2026-11-19): F = FISHING verb (cast / reel),
+    // both schemes -- the server validates the Lorencia bridge spot.
+    {
+        static bool s_FPrev = false;
+        const bool fHeld = ((unsigned short)Platform::GetInput().KeyState(0x46) & 0x8000) != 0;
+        const bool fEdge = fHeld && !s_FPrev;
+        s_FPrev = fHeld;
+        if (fEdge && InputEnable == 0 && DAT_083a7c24 == 0) {
+            Fishing_Verb();
         }
     }
 

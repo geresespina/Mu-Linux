@@ -77,6 +77,7 @@
 #include "Input/NavMove.h"       // NavMove_ArrowsHeld (movement yield)
 #include "Render/ActionCamera.h"  // Train 48: scheme + pointer lock + OnMouseDelta
 #include "Input/ActionMove.h"     // Train 48: ActionMove_PadDash
+#include "Input/Fishing.h"        // Train 56: fishing verb
 #include "Platform/IInput.h"     // Platform::InputEvent / InputEventType
 #include "Platform/NativeBridge.h" // Platform::NativeWindow/NativeInstance (DI coop level)
 #include "Core/Window.h"         // gWindow (real pixel size)
@@ -1053,6 +1054,13 @@ void ActionPadTick(unsigned now, float dt)
         PadLog("PAD: LB - target lock verb");
     }
     gActPrev.lb = lb;
+
+    {   // Train 56: D-pad Left = FISHING verb (cast / reel)
+        static bool s_DLeftPrev = false;
+        const bool dl = PadButton(SDL_GAMEPAD_BUTTON_DPAD_LEFT);
+        if (dl && !s_DLeftPrev) { Fishing_Verb(); PadLog("PAD: DLeft - fishing verb"); }
+        s_DLeftPrev = dl;
+    }
 
     const bool st = PadButton(SDL_GAMEPAD_BUTTON_START);               // Start = scheme toggle
     if (st && !gActPrev.start) PulseKey(0xC0, "scheme toggle");
