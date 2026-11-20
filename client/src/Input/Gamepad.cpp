@@ -20,7 +20,7 @@
 //                 valid monster in that skill's range and hold-casts
 //                 until the key is released (see PADCAST below).
 //   D-pad         Up = Q (HP potion) · Right = W (MP) · Down = E (SD) · Left = C
-//   Start         Esc = main menu               Back = M move list (mirrored)
+//   Start         scheme toggle (Train 62)      Back = M move list (mirrored)
 //
 // PADCAST (2026-11-16, G's final layout — a chain of rulings the same
 // afternoon): EVERY skill button is a digit mirror into the one shared
@@ -1410,12 +1410,19 @@ void Gamepad_Tick()
     gDriving = moving;
 
     // ── Simple edge buttons ──────────────────────────────────────────────────
-    // Start pulses Esc: in this client Esc is the single back key — it closes
-    // the D-menu/chat log, closes the system menu, or opens it. These are
-    // one-shot pulses (not duals): their consumers are edge-triggered, so a
-    // pulse and a held key are indistinguishable to them.
+    // Start pulses the SCHEME TOGGLE (0xC0, the backtick key) -- G's
+    // ruling (2026-11-20): "Start = Action mode ON/OFF", in BOTH
+    // schemes. It used to pulse Esc (the stock menu) here in Classic,
+    // which meant the pad could never switch INTO Action: the toggle
+    // only existed in the Action tick, and every Classic Start press
+    // opened the menu instead. The Action tick's Start already pulses
+    // 0xC0 (Train 57); Classic now matches. The menu keeps its
+    // keyboard Esc; on the pad it has no button in either scheme now
+    // (Back is M / Skill 7 and stays). These are one-shot pulses (not
+    // duals): their consumers are edge-triggered, so a pulse and a
+    // held key are indistinguishable to them.
     static const struct { SDL_GamepadButton b; const char* name; int vk; const char* what; } kBtns[] = {
-        { SDL_GAMEPAD_BUTTON_START,      "Start",  27,   "Esc/menu"     },
+        { SDL_GAMEPAD_BUTTON_START,      "Start",  0xC0, "scheme toggle" },
         { SDL_GAMEPAD_BUTTON_DPAD_UP,    "DUp",    0x51, "Q/HP-potion"  },
         { SDL_GAMEPAD_BUTTON_DPAD_RIGHT, "DRight", 0x57, "W/MP-potion"  },
         { SDL_GAMEPAD_BUTTON_DPAD_DOWN,  "DDown",  0x45, "E/SD-potion"  },
