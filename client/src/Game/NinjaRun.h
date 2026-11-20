@@ -1,5 +1,14 @@
 #pragma once
 
+// ── Train 53 LOCKSTEP (2026-11-19, G's order: "Build the lockstep fix") ─────
+// The factor machinery in this header is RETIRED: no call site
+// scales speed any more. Movement speed now lives in fixed
+// constants on both sides -- client step rates x1.4 in
+// CharacterMoveSpeed (16.8 / 21 / 22.4), server player MoveSpeed
+// 285 (400 / 1.4, Bounce 21) -- and the C3/0E report is unscaled
+// stock. This header survives as the record + the inert dash-
+// burst flag plumbing (the burst drives nothing; the dash gets
+// its own server-paced route later, per the design).
 // ── MEAMU NINJA RUN (2026-11-15, G's order: "Ninja Run for everyone") ────────
 // Always-on run replacement for every player character: the ground step rate
 // (CharacterMoveSpeed), the walk/run animation cadence (CharacterAnimation)

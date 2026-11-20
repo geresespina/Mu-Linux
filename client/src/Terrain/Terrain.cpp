@@ -642,7 +642,7 @@ float10 __cdecl CharacterMoveSpeed(CHARACTER* c)
   {
     if ( AsCharacter(c)->Run < 0x28u )
     {
-      result = 12.0;
+      result = 16.8; // Train 53 LOCKSTEP: walk 12.0 x 1.4
       goto LABEL_12;
     }
   }
@@ -651,23 +651,17 @@ float10 __cdecl CharacterMoveSpeed(CHARACTER* c)
     AsCharacter(c)->Run = 40;
     if ( v2 == 789 )
     {
-      result = 16.0;
+      result = 22.4; // Train 53 LOCKSTEP: winged 16.0 x 1.4
       goto LABEL_12;
     }
   }
-  result = 15.0;
+  result = 21.0; // Train 53 LOCKSTEP: run 15.0 x 1.4
 LABEL_12:
-  // MEAMU NINJA RUN: player ground step rate x1.75 (walk 12->21, run 15->26.25,
-  // winged 16->28 units/tick). The C3/0E PhysiSpeed report scales by the
-  // same factor (Game_MainLoop) under the GS NinjaRun 200% allowance.
-  if ( isPlayer )
-  {
-    // MEAMU Train 37: the HERO steps at the active factor (dash burst
-    // = kDashFactor); everyone else on screen keeps the base factor —
-    // their own clients report their own bursts.
-    result *= ((void*)c == (void*)Hero) ? NinjaRun::ActiveFactor()
-                                        : NinjaRun::kSpeedFactor;
-  }
+  // Train 53 LOCKSTEP (2026-11-19, G's order): the Ninja Run factor
+  // multiply is DELETED. The constants above carry the speed, like
+  // stock -- and the server paces players from its own matching
+  // constant (MoveSpeed 285 = 400 / 1.4, Bounce 21), so the two
+  // paces agree by construction. No factor, no report, no chase.
   if ( (*(const BYTE *)(reinterpret_cast<const BYTE*>(c) + 120) & 2) == 2 )
   {
     return result * 0.5;
