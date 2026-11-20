@@ -178,6 +178,7 @@ const MirrorKey kSkillKeys[] = {
     { SDL_GAMEPAD_BUTTON_EAST,          "B",  0x34 },   // skill 4
     { SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, "RB", 0x35 },   // skill 5
     { SDL_GAMEPAD_BUTTON_LEFT_SHOULDER,  "LB", 0x36 },   // skill 6
+    { SDL_GAMEPAD_BUTTON_LEFT_STICK,     "L3", 0x39 },   // skill 9
     { SDL_GAMEPAD_BUTTON_RIGHT_STICK,    "R3", 0x30 },   // skill 0
 };
 const MirrorKey kBackKey{ SDL_GAMEPAD_BUTTON_BACK, "Back", 0x4D };   // M
@@ -995,13 +996,14 @@ void Gamepad_RenderIndicator()
 // ── ACTION-scheme pad map ────────────────────────────────────────────
 // Train 59 sheet (G, 2026-11-20; refines Train 57): RT Teleport
 // TARGETING (hold to aim, release to land) · LT Skill 2 · X Skill
-// 3 · Y Skill 4 · B Skill 5 · A Skill 6 · View Skill 7 · Start
+// 3 · Y Skill 4 · B Skill 5 · A Skill 6 · View Skill 7 · L3
 // Skill 8 · D-up Skill 9 · D-down Skill 10 · LB Target Lock ·
-// RB Dash · R3 Blink (Space mirror) · D-Left Fishing · L3 scheme
-// toggle · left stick = WASD (ActionMove drives, camera-relative)
-// · right stick = aim (the teleport marker while RT is held).
-// Classic: PADCAST, except L3 also pulses the scheme toggle there
-// (Train 59 -- a one-way toggle would strand pad-only players).
+// RB Dash · R3 Blink (Space mirror) · D-Left Fishing · Start =
+// scheme toggle · left stick = WASD (ActionMove drives,
+// camera-relative) · right stick = aim (the teleport marker
+// while RT is held). Classic: PADCAST, untouched. (An L3-toggle
+// swap was built and CANCELLED by G the same morning -- "Start
+// is better" -- nothing moved.)
 struct ActPrev {
     bool rb=false, x=false, y=false, view=false, dup=false, ddown=false;
     bool l3=false, r3=false, rt=false, lt=false;
@@ -1161,9 +1163,9 @@ void ActionPadTick(unsigned now, float dt)
     // six stand -- LT = Skill 2, RT = Skill 1 (Teleport, now a
     // hold-to-aim targeting verb, below), X = Skill 3, Y = Skill 4,
     // B = Skill 5, A = Skill 6. RB = Dash, R3 = Blink, LB = Lock,
-    // D-Left = Fishing. Train 59 moves: L3 = scheme toggle (was
-    // Skill 8), Start = Skill 8 (was the toggle) -- a straight
-    // swap. Skills 9/10 stay D-up / D-down, Skill 7 stays View.
+    // D-Left = Fishing, L3 = Skill 8, Start = scheme toggle --
+    // the Train 57 layout, unchanged (an L3-toggle swap was built
+    // and cancelled by G the same morning: "Start is better").
     // Train 59: RT no longer mirrors Skill 1 -- holding it runs
     // TELEPORT TARGETING (wired after the skill block below).
     ActMirror(0x32, PadAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER)  > kTriggerOn, gActPrev.lt);  // LT = Skill 2 (G)
@@ -1172,19 +1174,12 @@ void ActionPadTick(unsigned now, float dt)
     ActMirror(0x35, PadButton(SDL_GAMEPAD_BUTTON_EAST),          gActPrev.b);     // B  = Skill 5 (G)
     ActMirror(0x36, PadButton(SDL_GAMEPAD_BUTTON_SOUTH),         gActPrev.a);     // A  = Skill 6 (G)
     ActMirror(0x37, PadButton(SDL_GAMEPAD_BUTTON_BACK),          gActPrev.view);  // View = Skill 7
-    ActMirror(0x38, PadButton(SDL_GAMEPAD_BUTTON_START),         gActPrev.start); // Start = Skill 8 (Train 59)
+    ActMirror(0x38, PadButton(SDL_GAMEPAD_BUTTON_LEFT_STICK),    gActPrev.l3);    // L3 = Skill 8
     ActMirror(0x39, PadButton(SDL_GAMEPAD_BUTTON_DPAD_UP),       gActPrev.dup);   // D-up = Skill 9
     ActMirror(0x30, PadButton(SDL_GAMEPAD_BUTTON_DPAD_DOWN),     gActPrev.ddown); // D-down = Skill 10
     gActionPadCastHeld = gActPrev.lt || gActPrev.x || gActPrev.y
-                      || gActPrev.b || gActPrev.a || gActPrev.view
-                      || gActPrev.dup || gActPrev.ddown || gActPrev.start;
-
-    {   // Train 59: L3 = Action mode ON/OFF (the scheme toggle moved
-        // here from Start; Start takes Skill 8 above).
-        const bool l3 = PadButton(SDL_GAMEPAD_BUTTON_LEFT_STICK);
-        if (l3 && !gActPrev.l3) PulseKey(0xC0, "scheme toggle");
-        gActPrev.l3 = l3;
-    }
+                      || gActPrev.b || gActPrev.a || gActPrev.view || gActPrev.l3
+                      || gActPrev.dup || gActPrev.ddown;
 
     {   // Train 59: RT hold = teleport targeting (see TpTarget block).
         const bool rt = PadAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > kTriggerOn;
@@ -1218,6 +1213,10 @@ void ActionPadTick(unsigned now, float dt)
         if (dl && !s_DLeftPrev) { Fishing_Verb(); PadLog("PAD: DLeft - fishing verb"); }
         s_DLeftPrev = dl;
     }
+
+    const bool st = PadButton(SDL_GAMEPAD_BUTTON_START);               // Start = scheme toggle
+    if (st && !gActPrev.start) PulseKey(0xC0, "scheme toggle");
+    gActPrev.start = st;
 
     // Left stick -> WASD virtual keys (ActionMove owns the drive).
     float ldx, ldy;
@@ -1412,7 +1411,6 @@ void Gamepad_Tick()
     // pulse and a held key are indistinguishable to them.
     static const struct { SDL_GamepadButton b; const char* name; int vk; const char* what; } kBtns[] = {
         { SDL_GAMEPAD_BUTTON_START,      "Start",  27,   "Esc/menu"     },
-        { SDL_GAMEPAD_BUTTON_LEFT_STICK, "L3",     0xC0, "scheme toggle" },   // Train 59: L3 toggles Action mode from Classic too (was Skill 9)
         { SDL_GAMEPAD_BUTTON_DPAD_UP,    "DUp",    0x51, "Q/HP-potion"  },
         { SDL_GAMEPAD_BUTTON_DPAD_RIGHT, "DRight", 0x57, "W/MP-potion"  },
         { SDL_GAMEPAD_BUTTON_DPAD_DOWN,  "DDown",  0x45, "E/SD-potion"  },
