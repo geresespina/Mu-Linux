@@ -513,7 +513,20 @@ void QuickSlotDigit(int digitVal)
 bool IsSelfSkill(int skillType)
 {
     // Elf heal/buff line: Heal, Greater Defense, Greater Damage, Greater Life.
-    return skillType == 26 || skillType == 27 || skillType == 28 || skillType == 48 || skillType == 57 || skillType == 58 || skillType == 59 || skillType == 60 || skillType == 61 || skillType == 72 || skillType == 73 || skillType == 74 || skillType == 75 || skillType == 76;  // 57 = Omni Buff (MEAMU 2026-11-14), 58 = Mangekyou Sharingan (MEAMU 2026-11-15), 59 = Sage Mode (MEAMU 2026-11-17), 60 = Jinchuriki Mode + 61 = Biju Mode (MEAMU 2026-11-17, Train 4), 72 = Biju Bond + 73 = Chakra Cloak + 74 = Perfect Susanoo + 75 = Dragon Sage Mode (MEAMU 2026-11-18), 76 = Biju Legion (MEAMU 2026-11-18, Train 6 prep)
+    // MEAMU Train 70 (2026-11-20, G's scope ruling: the lock applies
+    // to ALL targeted skills -- Lightning, Ice, the whole family --
+    // keyed off this one classification, never a per-skill list):
+    // the self family is now COMPLETE. Mana Shield (16) and Defense
+    // (18) are self-buffs that were missing, and the summon line
+    // (30-37, Legion 44, Summon All 45) casts on the hero's own
+    // side -- all of them were falling through to AcquireTarget, so
+    // a shield refresh or a summon could aim at (and in Action,
+    // walk toward) a monster. Everything NOT in this set is a
+    // targeted skill and consumes the lock through ComputeAim.
+    return skillType == 16 || skillType == 18
+        || skillType == 26 || skillType == 27 || skillType == 28 || skillType == 48
+        || (skillType >= 30 && skillType <= 37) || skillType == 44 || skillType == 45
+        || skillType == 57 || skillType == 58 || skillType == 59 || skillType == 60 || skillType == 61 || skillType == 72 || skillType == 73 || skillType == 74 || skillType == 75 || skillType == 76;  // 57 = Omni Buff (MEAMU 2026-11-14), 58 = Mangekyou Sharingan (MEAMU 2026-11-15), 59 = Sage Mode (MEAMU 2026-11-17), 60 = Jinchuriki Mode + 61 = Biju Mode (MEAMU 2026-11-17, Train 4), 72 = Biju Bond + 73 = Chakra Cloak + 74 = Perfect Susanoo + 75 = Dragon Sage Mode (MEAMU 2026-11-18), 76 = Biju Legion (MEAMU 2026-11-18, Train 6 prep)
 }
 
 int SelectedSkillType()
@@ -1702,6 +1715,7 @@ void KbPlay_LockSet(int idx)
 void KbPlay_LockClear() { gLockIdx = -1; }
 bool KbPlay_LatchLegal(int idx) { return ValidLatchTarget(idx); }
 bool KbPlay_IsMonster(int idx) { return ValidMonster(idx); }   // Train 64: auto-lock is monsters-only
+bool KbPlay_SelectedSkillTargeted() { return !IsSelfSkill(SelectedSkillType()); }   // Train 70: pad auto-lock fires only for targeted skills
 int KbPlay_TargetDist(int idx)
 {
     if (!Hero || idx < 0 || idx >= 400) return 9999;

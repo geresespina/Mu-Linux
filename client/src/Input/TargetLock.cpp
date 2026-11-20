@@ -19,7 +19,8 @@ int  KbPlay_LockIndex();
 void KbPlay_LockSet(int idx);
 void KbPlay_LockClear();
 bool KbPlay_LatchLegal(int idx);
-bool KbPlay_IsMonster(int idx);   // Train 64
+bool KbPlay_IsMonster(int idx);
+bool KbPlay_SelectedSkillTargeted();   // Train 70   // Train 64
 int  KbPlay_TargetDist(int idx);
 void KbPlay_TargetTile(int idx, int& tx, int& ty);
 void KbPlay_SayText(const char* s);

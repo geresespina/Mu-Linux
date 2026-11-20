@@ -1227,7 +1227,10 @@ void PadButtonsTick(unsigned now, float dt, bool actionPad)
     // the cast (the pad tick runs ahead of the sim step that reads
     // the mirrored key). A held manual lock is never overridden:
     // AutoLockClosest itself refuses while any lock stands.
-    if (gActionPadCastHeld && !prevCastHeld) {
+    if (gActionPadCastHeld && !prevCastHeld && KbPlay_SelectedSkillTargeted()) {
+        // Train 70: the auto-lock belongs to TARGETED skills only
+        // (G's scope ruling) -- a self/summon cast no longer
+        // manufactures a lock it cannot use.
         if (TargetLock_AutoLockClosest()) PadLog("PAD: cast auto-lock -> closest monster");
         if (!actionPad) Rumble(4000, 0, 50);   // Classic cast-engage thump (kept from the PADCAST era)
     }
