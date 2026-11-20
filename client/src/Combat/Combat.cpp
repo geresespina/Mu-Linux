@@ -2020,6 +2020,33 @@ void __cdecl Combat_DispatchHeroSkillAttack(void *entity_v /* IDA: c */)
     // nearest hostile player in range + front arc (also AUTO re-acquire).
     Combat_SnapHostileTarget97k(iType);
     // ══════════════════════════════════════════════════════════════════
+    // MEAMU Train 80 (2026-11-20, G's law: "within range = always
+    // hit -- sometimes I have to look up to hit it; it should
+    // always hit if I'm within range"): the targeted-cast chain
+    // had exactly one pitch-dependent gate -- the screen-space
+    // aim pick that sets SelectedCharacter (in Action the cursor
+    // is pinned to the reticle and the pick runs through the
+    // pitched camera, so a high / flying / elevated target is
+    // unpickable until he pitches up at it). The safety nets did
+    // not cover monsters: Train 73's seam needs a standing lock,
+    // and Combat_SnapHostileTarget97k is PLAYERS ONLY
+    // (Client_IsHostilePlayer: Kind == 1 + PK >= 6). A missed
+    // pick therefore fell to CheckTarget's terrain ray and the
+    // cast whiffed at the ground while a monster stood in range.
+    // THE GUARANTEE, here in the common dispatch: a targeted,
+    // non-ally skill with NO selection resolves to the nearest
+    // monster inside the skill's own range -- tile distance
+    // only (Chebyshev, the server's measure). No screen space,
+    // no arc, no pitch. A successful pick still wins (aim
+    // chooses among targets); the lock still wins over both
+    // (Train 73 block below). Range is the only gate.
+    if (SelectedCharacter == -1 && KbPlay_SelectedSkillTargeted()
+        && !Combat_IsAllyTargetSkill97k(iType)) {
+        const int nearIdx = KbPlay_NearestMonsterInRange(
+            Combat_GetSkillRange97k(iType));
+        if (nearIdx >= 0) SelectedCharacter = nearIdx;
+    }
+    // ══════════════════════════════════════════════════════════════════
     // MEAMU Train 73 (2026-11-20, G's play report: "Lock works --
     // just not the cast while locked"): a standing VERB lock is the
     // player's deliberate target, and casts now honor it HERE, in

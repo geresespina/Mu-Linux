@@ -46,7 +46,8 @@ bool TargetLock_AutoLockClosest();
 // (Train 64) may pick the next target; the next lock is a
 // deliberate LB / Q / fresh LT press. Range and LoS breaks are
 // NOT kills and keep their mid-hold re-fill.
-bool KbPlay_SelectedSkillTargeted();   // Train 70 bridge (impl in KbPlay.cpp)
+bool KbPlay_SelectedSkillTargeted();
+int  KbPlay_NearestMonsterInRange(int rangeTiles);   // Train 80   // Train 70 bridge (impl in KbPlay.cpp)
 // MEAMU Train 68: HOLD-LT verb (G's order) -- while LT is held the
 // lock auto-engages the closest candidate (monsters included).
 // Gamepad feeds the raw LT state every pad tick;

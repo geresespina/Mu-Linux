@@ -1721,6 +1721,20 @@ int KbPlay_TargetDist(int idx)
     if (!Hero || idx < 0 || idx >= 400) return 9999;
     return Cheb(HeroC(), EntryAt(idx));
 }
+// Train 80: the nearest monster within rangeTiles (Chebyshev -- the
+// server's own measure). Pure tile math: no screen space, no facing
+// arc, no pitch. Combat's always-hit guarantee consumes this.
+int KbPlay_NearestMonsterInRange(int rangeTiles)
+{
+    if (!Hero || rangeTiles <= 0) return -1;
+    int best = -1, bestD = 9999;
+    for (int i = 0; i < 400; ++i) {
+        if (!ValidMonster(i)) continue;
+        const int d = Cheb(HeroC(), EntryAt(i));
+        if (d <= rangeTiles && d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+}
 void KbPlay_TargetTile(int idx, int& tx, int& ty)
 {
     CHARACTER* c = (idx < 0) ? HeroC() : EntryAt(idx);
