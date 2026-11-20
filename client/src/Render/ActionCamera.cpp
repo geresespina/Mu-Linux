@@ -3,7 +3,8 @@
 #include "Render/Camera3D.h"
 #include "Render/Gfx.h"
 #include "Config/UserSettings.h"
-#include "Input/ActionMove.h"   // Train 15: scheme state owner (ActionMove_IsAction)
+#include "Input/ActionMove.h"
+#include "Input/TargetLock.h"   // Train 48: lock-driven facing   // Train 15: scheme state owner (ActionMove_IsAction)
 #include "Platform/IInput.h"
 #include "Platform/IWindow.h"
 #include "Entity/EntityTypes.h"
@@ -246,7 +247,19 @@ void CActionCamera::Update()
     // gated off for the hero (Path_Legacy) and the movement input no
     // longer pins facing itself (ActionMove).
     if (hero->SkillStage == 0) {
-        const float want = NormalizeDeg(180.0f - m_CamYaw);
+        float want = NormalizeDeg(180.0f - m_CamYaw);
+        // MEAMU Train 48: a target lock drives the hero's FACING (the
+        // camera yaw stays the player's alone — the lock never
+        // rotates the camera, per the lock sheet).
+        if (TargetLock_Active()) {
+            CHARACTER* tgt = EntryAt(TargetLock_Index());
+            if (tgt && tgt->Object.Live != 0) {
+                typedef float (__cdecl *CreateAngleFn)(float, float, float, float);
+                want = ((CreateAngleFn)&CreateAngle)(
+                    hero->Object.Position[0], hero->Object.Position[1],
+                    tgt->Object.Position[0],  tgt->Object.Position[1]);
+            }
+        }
         const float cur = hero->Object.Angle[2];
         hero->Object.Angle[2] = cur + ShortestArc(cur, want) * kFacingEase;
     }
