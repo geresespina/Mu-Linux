@@ -516,8 +516,40 @@ void __cdecl MoveCharacterPosition(CHARACTER* character) {
     float out[3] = {0.0f, 0.0f, 0.0f};
     Matrix_BuildFromEuler((float*)(param_1 + 0x1c), local_30);
     Vector_Rotate(vel, local_30, out);
-    *(float*)(param_1 + 0x10) = out[0] + *(float*)(param_1 + 0x10);
-    *(float*)(param_1 + 0x14) = out[1] + *(float*)(param_1 + 0x14);
+    float stepX = out[0] + *(float*)(param_1 + 0x10);
+    float stepY = out[1] + *(float*)(param_1 + 0x14);
+    // MEAMU Train 54 (2026-11-19): WALL CLAMP -- the lockstep
+    // regression fix. This stepper has NEVER had a wall check: it
+    // moves the body along its facing by CharacterMoveSpeed and
+    // trusts the walker's turns to keep it near the (legal) path.
+    // At the x1.4 step rate the straight facing-steps overshoot
+    // corners and the body cuts through wall tiles the path
+    // lawfully went around. Clamp the HERO's step against the
+    // terrain, with the game's own ground predicate (the A* /
+    // cursor rule: attr, minus the 0x20 bit, >= 8 is blocked):
+    // full step blocked -> slide along X -> slide along Y -> stay.
+    // Escape hatches: the wing-789 fly branch keeps its sky, and a
+    // hero already standing inside a blocked-flag tile (swim /
+    // fly areas, odd landings) is never trapped by the clamp.
+    if ((void*)character == (void*)Hero
+        && *(WORD *)&AsCharacter(character)->Wing.Type != 789) {
+        const float curX = *(float*)(param_1 + 0x10);
+        const float curY = *(float*)(param_1 + 0x14);
+        auto tileBlocked = [](float wx, float wy) -> bool {
+            const int tx = (int)(wx * 0.01f), ty = (int)(wy * 0.01f);
+            if (tx < 0 || tx >= 256 || ty < 0 || ty >= 256) return true;
+            unsigned int a = ((const unsigned char*)&DAT_0838bc70)[ty * 256 + tx];
+            if ((a & 0x20) == 0x20) a -= 0x20;
+            return a >= 8;
+        };
+        if (!tileBlocked(curX, curY) && tileBlocked(stepX, stepY)) {
+            if (!tileBlocked(stepX, curY))      stepY = curY;
+            else if (!tileBlocked(curX, stepY)) stepX = curX;
+            else { stepX = curX; stepY = curY; }
+        }
+    }
+    *(float*)(param_1 + 0x10) = stepX;
+    *(float*)(param_1 + 0x14) = stepY;
     *(float*)(param_1 + 0x18) = out[2] + *(float*)(param_1 + 0x18);
     float terrainH = RequestTerrainHeight(*(float*)(param_1 + 0x10), *(float*)(param_1 + 0x14));
     if (*(short*)&((CHARACTER*)(uintptr_t)(param_1))->Helper.Type == 0x333) {
