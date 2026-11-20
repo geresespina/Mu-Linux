@@ -130,6 +130,19 @@ namespace BijuTransform
     // form bit is on, so a stale record is inert.
     void NoteFormSource(void* character, int skillType);
 
+    // MEAMU TRAIN 65 (2026-11-20): form-model preload. Train 61
+    // deferred every catalog model load to first use -- for the
+    // FORM classes (beasts 155-164, Susanoo 228, Karane 229) that
+    // first use is Resolve(), mid-render, and a failed attempt is
+    // cached as -1 for the whole process (G: "I don't see Susanoo
+    // anymore even if it shows successful cast" -- the server
+    // applies effect 71 and the x3.0 power; only the body never
+    // renders). PreloadFormModels moves the load back to cast
+    // time (self-cast send + the NoteFormSource witness, both
+    // packet/input context -- the context Publish used pre-61)
+    // and retries a cached failure once per call. Idempotent.
+    void PreloadFormModels();
+
     // Pure decision WITH the form's source skill (same purity
     // contract as FormClassFor, so tests/SkinBodyFix.cpp pins it):
     //   source 74 (Susanoo): the pet slot is IGNORED -- the titan

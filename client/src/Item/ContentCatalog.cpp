@@ -1105,6 +1105,26 @@ int CContentCatalog::EnsureMonsterModel(int index)
     return monster.Model;
 }
 
+int CContentCatalog::RetryMonsterModel(int index)
+{
+    if (index < 0 || index >= MAX_CATALOG_MONSTER) return -1;
+    CatalogMonster& monster = s_Monsters[index];
+    if (!monster.Present) return -1;
+    if (monster.Model >= 0) return monster.Model;
+    if (monster.ModelPending) return this->EnsureMonsterModel(index);
+    // Model < 0 with nothing pending = a cached failure. Rebuild
+    // LoadModel's cache key (normalized folder + name + "#-1", the
+    // fixedSlot every monster load uses), drop it, and load again.
+    char sub[96];
+    if (NormalizeFolder(monster.ModelFolder, sub, sizeof(sub))) {
+        const std::string key = std::string(sub) + monster.ModelName + "#-1";
+        s_LoadedModels.erase(key);
+    }
+    monster.Model = -2;
+    monster.ModelPending = true;
+    return this->EnsureMonsterModel(index);
+}
+
 int CContentCatalog::GetItemModel(int type)
 {
     if (type < 0 || type >= ITEM_MAX_EX) return type + ITEM_MODEL_BASE;

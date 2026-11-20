@@ -50,7 +50,10 @@
 #include "globals.h"
 #include "functions.h"
 #include <cmath>
+#include <cstdio>
 #include <cstring>
+
+extern "C" void DbgLogPublic(const char*);   // Train 65: hero form diagnostic
 
 namespace BijuTransform
 {
@@ -155,10 +158,49 @@ namespace
         const CatalogMonster* cm = gContentCatalog.GetMonster(formClass);
         // Train 61: la forma carga su modelo la primera vez que se pide.
         if (cm && cm->ModelPending) gContentCatalog.EnsureMonsterModel(formClass);
-        if (!cm || cm->Model < 0) return false;
+        if (!cm || cm->Model < 0) {
+            // Train 65: hero diagnostic -- name the failing gate in
+            // the debug log, once per verdict change.
+            if (slot == 400) {
+                static int s_lastFail = -999;
+                const int failCode = cm ? -2 : -3;   // -2 model failed, -3 class absent
+                if (s_lastFail != failCode * 1000 + formClass) {
+                    s_lastFail = failCode * 1000 + formClass;
+                    char buf[192];
+                    std::snprintf(buf, sizeof(buf),
+                        "BijuTransform hero form FAIL: class=%d cm=%s model=%d (Train 65 diag)",
+                        formClass, cm ? "present" : "ABSENT", cm ? cm->Model : -99);
+                    DbgLogPublic(buf);
+                }
+            }
+            return false;
+        }
         const BMD* bm = AsModel((uintptr_t)DAT_05828d58) + cm->Model;
-        if (bm->NumActions <= 0 || bm->NumMeshs <= 0 || !bm->Actions || !bm->Bones)
+        if (bm->NumActions <= 0 || bm->NumMeshs <= 0 || !bm->Actions || !bm->Bones) {
+            if (slot == 400) {
+                static int s_lastBmdFail = -999;
+                if (s_lastBmdFail != formClass) {
+                    s_lastBmdFail = formClass;
+                    char buf[192];
+                    std::snprintf(buf, sizeof(buf),
+                        "BijuTransform hero form FAIL: class=%d model=%d BMD empty (actions=%d meshs=%d) (Train 65 diag)",
+                        formClass, cm->Model, (int)bm->NumActions, (int)bm->NumMeshs);
+                    DbgLogPublic(buf);
+                }
+            }
             return false;   // modelo no cargado → render normal del jugador
+        }
+        if (slot == 400) {
+            static int s_lastOk = -999;
+            if (s_lastOk != formClass) {
+                s_lastOk = formClass;
+                char buf[160];
+                std::snprintf(buf, sizeof(buf),
+                    "BijuTransform hero form OK: class=%d model=%d (Train 65 diag)",
+                    formClass, cm->Model);
+                DbgLogPublic(buf);
+            }
+        }
         if (modelOut) *modelOut = cm->Model;
         if (scaleOut) *scaleOut = (cm->Scale > 0.0f) ? cm->Scale : 1.0f;
         return true;
@@ -245,6 +287,27 @@ void Clear(void* character)
     }
 }
 
+void PreloadFormModels()
+{
+    // Train 65: load (or retry a cached failure of) every form
+    // class NOW, in cast/packet context -- never leave the load
+    // to Resolve() mid-render. See the header for the bug.
+    static const int kFormClasses[] = { kSusanooClass, kKaraneCrimsonClass };
+    for (int cls : kFormClasses) {
+        const CatalogMonster* cm = gContentCatalog.GetMonster(cls);
+        if (!cm) continue;
+        if (cm->ModelPending) gContentCatalog.EnsureMonsterModel(cls);
+        else if (cm->Model < 0) gContentCatalog.RetryMonsterModel(cls);
+    }
+    for (int beast = 0; beast < kBeastCount; ++beast) {
+        const int cls = kFirstBeastClass + beast;
+        const CatalogMonster* cm = gContentCatalog.GetMonster(cls);
+        if (!cm) continue;
+        if (cm->ModelPending) gContentCatalog.EnsureMonsterModel(cls);
+        else if (cm->Model < 0) gContentCatalog.RetryMonsterModel(cls);
+    }
+}
+
 void NoteFormSource(void* character, int skillType)
 {
     // Solo las dos skills de forma comparten el bit 0x2000; cualquier
@@ -254,6 +317,7 @@ void NoteFormSource(void* character, int skillType)
     const int slot = SlotOf(character);
     if (slot < 0) return;
     s_formSourceBySlot[slot] = (unsigned char)skillType;
+    PreloadFormModels();   // Train 65: a form was just witnessed -- load its models now
 }
 
 bool IsFullBodySkinItem(int itemType)

@@ -99,6 +99,12 @@ public:
     // Train 61: carga el modelo propio de un monstruo la primera vez
     // que algo lo necesita (spawn / forma Biju). Devuelve el slot o -1.
     int EnsureMonsterModel(int index);
+    // Train 65: a FAILED monster load is cached as -1 by LoadModel
+    // for the whole process. RetryMonsterModel drops that cache
+    // entry and loads again -- the self-heal for a form model whose
+    // first (deferred) attempt failed transiently. No-op when the
+    // model is already loaded or the class is absent.
+    int RetryMonsterModel(int index);
     // true si el catálogo le da al item un modelo propio.
     bool HasOwnModel(int type) const;
 
