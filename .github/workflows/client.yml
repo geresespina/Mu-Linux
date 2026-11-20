@@ -328,6 +328,15 @@ jobs:
           dlls=$(x86_64-w64-mingw32-objdump -p build/mingw-x64-webgpu-release/bin/main.exe | sed -n 's/.*DLL Name: //p' | tr '\n' ' ')
           echo "main.exe: $dlls"
           if echo "$dlls" | grep -qiE 'libstdc|libgcc|libwinpthread'; then exit 1; fi
+      # MEAMU (2026-11-20): this job is the only Windows x64 WebGPU
+      # lane that finishes tonight -- the MSVC job dies in vcpkg's
+      # configure step. Upload its binary so a release can ship
+      # from the MinGW lane when the MSVC lane is poisoned.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mingw-windows-x64-webgpu
+          path: client/build/mingw-x64-webgpu-release/bin/main.exe
+          if-no-files-found: error
 
   # Resultado del workflow: OK si compiló bien o si no hacía falta compilar.
   # Es el check que exige la regla de main (una matriz salteada no reporta sus
