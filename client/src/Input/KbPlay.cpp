@@ -1691,6 +1691,7 @@ void KbPlay_LockSet(int idx)
 }
 void KbPlay_LockClear() { gLockIdx = -1; }
 bool KbPlay_LatchLegal(int idx) { return ValidLatchTarget(idx); }
+bool KbPlay_IsMonster(int idx) { return ValidMonster(idx); }   // Train 64: auto-lock is monsters-only
 int KbPlay_TargetDist(int idx)
 {
     if (!Hero || idx < 0 || idx >= 400) return 9999;

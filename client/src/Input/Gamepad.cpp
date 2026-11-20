@@ -76,6 +76,7 @@
 #include "Input/GamepadDI.h"     // DIPadState / DIPadTranslate (padfix)
 #include "Input/NavMove.h"       // NavMove_ArrowsHeld (movement yield)
 #include "Render/ActionCamera.h"  // Train 48: scheme + pointer lock + OnMouseDelta
+#include "Input/TargetLock.h"     // Train 64: pad-cast auto-lock
 #include "Input/ActionMove.h"     // Train 48: ActionMove_PadDash
 #include "Input/Fishing.h"        // Train 56: fishing verb
 #include "Platform/IInput.h"     // Platform::InputEvent / InputEventType
@@ -1161,7 +1162,18 @@ void ActMirror(int vk, bool down, bool& prev)
     if (down != prev) { Platform::InjectVirtualKey(vk, down); prev = down; }
 }
 
-void ActionPadTick(unsigned now, float dt)
+// MEAMU Train 64 (G's ruling, 2026-11-20): ONE PAD MAP, ALWAYS.
+// This button tick now runs in BOTH schemes — the Action sheet IS
+// the pad sheet: RT teleport targeting · LT 2 · X 3 · Y 4 · B 5 ·
+// A 6 · RB Dash · R3 Blink · View 7 · L3 8 · D-up 9 · D-down 10 ·
+// LB lock · D-Left fishing · Start scheme toggle. What differs by
+// scheme is only the STICKS (Action: WASD + aim; Classic: cursor
+// steering) and LB's lock flavour (Action: the verb; Classic: a
+// Tab pulse cycling the native Tab lock — the verb is Action-only
+// by Train 48 design). Classic's PADCAST bindings retired here:
+// D-pad potions (Q/W/E), C (character) and Back=M (move list) lose
+// their pad buttons; the keyboard keeps every one of them.
+void PadButtonsTick(unsigned now, float dt, bool actionPad)
 {
     (void)now;
     // MEAMU Train 59 sheet (G, 2026-11-20; refines Train 57): his
@@ -1173,6 +1185,8 @@ void ActionPadTick(unsigned now, float dt)
     // and cancelled by G the same morning: "Start is better").
     // Train 59: RT no longer mirrors Skill 1 -- holding it runs
     // TELEPORT TARGETING (wired after the skill block below).
+    // Train 64: snapshot the skill mirrors for the auto-lock edge.
+    const bool prevCastHeld = gActionPadCastHeld;
     ActMirror(0x32, PadAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER)  > kTriggerOn, gActPrev.lt);  // LT = Skill 2 (G)
     ActMirror(0x33, PadButton(SDL_GAMEPAD_BUTTON_WEST),          gActPrev.x);     // X  = Skill 3 (G)
     ActMirror(0x34, PadButton(SDL_GAMEPAD_BUTTON_NORTH),         gActPrev.y);     // Y  = Skill 4 (G)
@@ -1185,6 +1199,15 @@ void ActionPadTick(unsigned now, float dt)
     gActionPadCastHeld = gActPrev.lt || gActPrev.x || gActPrev.y
                       || gActPrev.b || gActPrev.a || gActPrev.view || gActPrev.l3
                       || gActPrev.dup || gActPrev.ddown;
+    // Train 64: PAD-CAST AUTO-LOCK — a skill press with an empty
+    // lock fills it with the closest monster BEFORE KbPlay resolves
+    // the cast (the pad tick runs ahead of the sim step that reads
+    // the mirrored key). A held manual lock is never overridden:
+    // AutoLockClosest itself refuses while any lock stands.
+    if (gActionPadCastHeld && !prevCastHeld) {
+        if (TargetLock_AutoLockClosest()) PadLog("PAD: cast auto-lock -> closest monster");
+        if (!actionPad) Rumble(4000, 0, 50);   // Classic cast-engage thump (kept from the PADCAST era)
+    }
 
     {   // Train 59: RT hold = teleport targeting (see TpTarget block).
         const bool rt = PadAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > kTriggerOn;
@@ -1202,13 +1225,21 @@ void ActionPadTick(unsigned now, float dt)
 
     const bool lb = PadButton(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);       // LB = Target Lock
     if (lb && !gActPrev.lb) {
-        Platform::InputEvent ev{};
-        ev.type = Platform::InputEventType::MiddleDown;
-        ev.x = (int)gCursorX; ev.y = (int)gCursorY;
-        Platform::DeliverSDLInput(ev);
-        ev.type = Platform::InputEventType::MiddleUp;
-        Platform::DeliverSDLInput(ev);
-        PadLog("PAD: LB - target lock verb");
+        if (actionPad) {
+            Platform::InputEvent ev{};
+            ev.type = Platform::InputEventType::MiddleDown;
+            ev.x = (int)gCursorX; ev.y = (int)gCursorY;
+            Platform::DeliverSDLInput(ev);
+            ev.type = Platform::InputEventType::MiddleUp;
+            Platform::DeliverSDLInput(ev);
+            PadLog("PAD: LB - target lock verb");
+        } else {
+            // Classic: the verb is Action-only — LB cycles the
+            // native Tab lock instead (same button, scheme's own
+            // lock). Train 64.
+            PulseKey(0x09, "lock cycle (Tab)");
+            PadLog("PAD: LB - Tab lock cycle (Classic)");
+        }
     }
     gActPrev.lb = lb;
 
@@ -1219,10 +1250,32 @@ void ActionPadTick(unsigned now, float dt)
         s_DLeftPrev = dl;
     }
 
+    {   // RB = Dash (Train 57; Train 64: both schemes — it is a
+        // BUTTON, so it lives here, not in the sticks tick). In
+        // Action the left stick aims the dash; in Classic there is
+        // no WASD stick, so the dash takes the hero's facing.
+        const bool rb = PadButton(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+        if (rb && !gActPrev.rb) {
+            if (actionPad) {
+                float ldx, ldy;
+                StickVector(PadAxis(SDL_GAMEPAD_AXIS_LEFTX),
+                            PadAxis(SDL_GAMEPAD_AXIS_LEFTY), ldx, ldy);
+                const int sx = (ldx >  0.38f) ? 1 : (ldx < -0.38f) ? -1 : 0;
+                const int sy = (ldy >  0.38f) ? 1 : (ldy < -0.38f) ? -1 : 0;
+                ActionMove_PadDashDir(sx, sy);
+            }
+            ActionMove_PadDash();
+        }
+        gActPrev.rb = rb;
+    }
+
     const bool st = PadButton(SDL_GAMEPAD_BUTTON_START);               // Start = scheme toggle
     if (st && !gActPrev.start) PulseKey(0xC0, "scheme toggle");
     gActPrev.start = st;
+}
 
+void ActionSticksTick(float dt)
+{
     // Left stick -> WASD virtual keys (ActionMove owns the drive).
     float ldx, ldy;
     const float lmag = StickVector(PadAxis(SDL_GAMEPAD_AXIS_LEFTX),
@@ -1232,13 +1285,6 @@ void ActionPadTick(unsigned now, float dt)
         sx = (ldx >  0.38f) ? 1 : (ldx < -0.38f) ? -1 : 0;
         sy = (ldy >  0.38f) ? 1 : (ldy < -0.38f) ? -1 : 0;
     }
-    const bool rb = PadButton(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);      // RB = Dash (Train 57)
-    if (rb && !gActPrev.rb) {
-        ActionMove_PadDashDir(sx, sy);
-        ActionMove_PadDash();
-    }
-    gActPrev.rb = rb;
-
     const int mask = (sy < 0 ? 1 : 0) | (sy > 0 ? 2 : 0) | (sx < 0 ? 4 : 0) | (sx > 0 ? 8 : 0);
     const int vks[4] = { 0x57, 0x53, 0x41, 0x44 };   // W S A D
     for (int i = 0; i < 4; ++i) {
@@ -1346,24 +1392,25 @@ void Gamepad_Tick()
     if (!gCursorInit) { gCursorX = winW * 0.5f; gCursorY = winH * 0.5f; gCursorInit = true; }
 
     // ── Skill buttons + triggers + Back: digit/M mirrors (PADCAST) ──────────
-    // Every skill button feeds KbPlay's digit path, which selects the
-    // button's skill, auto-targets the closest valid monster in that
-    // skill's range and hold-casts until the key is released — the pad
-    // adds no targeting or casting logic of its own.
+    // Every skill button feeds KbPlay's digit path, which selects
+    // the button's skill and hold-casts until the key is released.
+    // (Train 64 adds ONE piece of pad targeting of its own: the
+    // cast-press auto-lock in PadButtonsTick.)
     // Train 48: in the Action scheme the pad runs G's Action map;
     // the PADCAST sections below run only in Classic.
+    // Train 64: ONE PAD MAP, ALWAYS — PadButtonsTick (the Action
+    // sheet) runs in BOTH schemes; only the sticks differ. A scheme
+    // flip releases every mirrored input + any in-flight teleport
+    // targeting first, then the unified tick re-engages from the
+    // physical pad state.
     static bool s_wasActionPad = false;
     const bool actionPad = gActionCamera.SchemeIsAction();
+    if (actionPad != s_wasActionPad) ActionPadReleaseAll();
+    s_wasActionPad = actionPad;
+    PadButtonsTick(now, dt, actionPad);
     if (actionPad) {
-        ActionPadTick(now, dt);
+        ActionSticksTick(dt);
     } else {
-        if (s_wasActionPad) ActionPadReleaseAll();
-    for (const auto& mk : kSkillKeys) MirrorKeyTick(mk);
-    MirrorKeyTick(kBackKey);
-    TriggerKeyTick("RT", SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, 0x37, gPrevRT);
-    const bool ltWas = gPrevLT;
-    TriggerKeyTick("LT", SDL_GAMEPAD_AXIS_LEFT_TRIGGER, 0x38, gPrevLT);
-    if (gPrevLT && !ltWas) Rumble(4000, 0, 50);   // cast-engage thump (kept from the RMB era)
 
     // ── Left stick: movement (owns the cursor while deflected) ───────────────
     // Arrow keys take movement precedence while held (either source can take
@@ -1409,35 +1456,7 @@ void Gamepad_Tick()
     // skill button, nothing is ever held without a physical hold.)
     gDriving = moving;
 
-    // ── Simple edge buttons ──────────────────────────────────────────────────
-    // Start pulses the SCHEME TOGGLE (0xC0, the backtick key) -- G's
-    // ruling (2026-11-20): "Start = Action mode ON/OFF", in BOTH
-    // schemes. It used to pulse Esc (the stock menu) here in Classic,
-    // which meant the pad could never switch INTO Action: the toggle
-    // only existed in the Action tick, and every Classic Start press
-    // opened the menu instead. The Action tick's Start already pulses
-    // 0xC0 (Train 57); Classic now matches. The menu keeps its
-    // keyboard Esc; on the pad it has no button in either scheme now
-    // (Back is M / Skill 7 and stays). These are one-shot pulses (not
-    // duals): their consumers are edge-triggered, so a pulse and a
-    // held key are indistinguishable to them.
-    static const struct { SDL_GamepadButton b; const char* name; int vk; const char* what; } kBtns[] = {
-        { SDL_GAMEPAD_BUTTON_START,      "Start",  0xC0, "scheme toggle" },
-        { SDL_GAMEPAD_BUTTON_DPAD_UP,    "DUp",    0x51, "Q/HP-potion"  },
-        { SDL_GAMEPAD_BUTTON_DPAD_RIGHT, "DRight", 0x57, "W/MP-potion"  },
-        { SDL_GAMEPAD_BUTTON_DPAD_DOWN,  "DDown",  0x45, "E/SD-potion"  },
-        { SDL_GAMEPAD_BUTTON_DPAD_LEFT,  "DLeft",  0x43, "C/character"  },
-    };
-    for (const auto& kb : kBtns) {
-        const bool down = PadButton(kb.b);
-        if (down && !gPrevButtons[kb.b]) {
-            PadLog("PAD: button %s down", kb.name);
-            PulseKey(kb.vk, kb.what);
-        }
-        gPrevButtons[kb.b] = down;
-    }
-    }   // Train 48: end of the Classic-only PADCAST sections
-    s_wasActionPad = actionPad;
+    }   // Train 64: end of the Classic sticks block (buttons above are unified)
 
     // ── PADFIX2: divergence watchdog (left button) ──────────────────────────
     // The game can drop its held flag (MouseLButton, DAT_083a42c4) behind

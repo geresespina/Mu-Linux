@@ -19,6 +19,7 @@ int  KbPlay_LockIndex();
 void KbPlay_LockSet(int idx);
 void KbPlay_LockClear();
 bool KbPlay_LatchLegal(int idx);
+bool KbPlay_IsMonster(int idx);   // Train 64
 int  KbPlay_TargetDist(int idx);
 void KbPlay_TargetTile(int idx, int& tx, int& ty);
 void KbPlay_SayText(const char* s);
@@ -83,6 +84,25 @@ void TargetLock_Clear()
     if (gEngaged) KbPlay_LockClear();
     gEngaged = false;
     gLosLostT = 0;
+}
+
+bool TargetLock_AutoLockClosest()
+{
+    if (!Hero) return false;
+    if (KbPlay_LockIndex() >= 0) return false;   // manual lock wins
+    int best = -1, bestD = kEngageRange + 1;
+    for (int i = 0; i < 400; ++i) {
+        if (!KbPlay_IsMonster(i)) continue;
+        const int d = KbPlay_TargetDist(i);
+        if (d < bestD) { bestD = d; best = i; }
+    }
+    if (best < 0) return false;
+    if (gActionCamera.SchemeIsAction()) {
+        SetLock(best);              // verb lock: break rules + facing
+    } else {
+        KbPlay_LockSet(best);       // Classic: plain Tab-style lock
+    }
+    return true;
 }
 
 void TargetLock_Engage()

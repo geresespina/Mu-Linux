@@ -21,6 +21,15 @@
 // beside it (ActionMove_BlinkToTarget). Camera never rotates.
 
 void TargetLock_Engage();
+// MEAMU Train 64: PAD-CAST AUTO-LOCK (G's ruling). Fills the lock
+// ONLY when it is empty — a manual lock (Tab cycle or the LB/Q
+// verb) always wins until it breaks on its own rules. Monsters
+// only (manual engage keeps players latch-legal), closest within
+// engage range. In Action the fill is a verb lock (break rules +
+// facing); in Classic it is a plain Tab-style lock (KbPlay's own
+// housekeeping), because verb locks are Action-only by design.
+// Returns true when it set a lock.
+bool TargetLock_AutoLockClosest();
 void TargetLock_Tick();
 bool TargetLock_Active();
 int  TargetLock_Index();
