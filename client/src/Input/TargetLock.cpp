@@ -12,6 +12,7 @@
 #include "Entity/EntityTypes.h"
 #include "Render/ActionCamera.h"
 #include "Entity/EntityName.h"   // EntityName::Get
+#include "Input/ActionMove.h"   // Train 89: teleport flight API (pour grace)
 
 // KbPlay.cpp bridges (Train 48): the lock rides the Tab lock's
 // variable + predicates, which live in KbPlay's anonymous namespace.
@@ -270,9 +271,16 @@ void TargetLock_Tick()
     if (hero->Object.Live == 0 || hero->Dead != 0) { TargetLock_Clear(); return; }
     const int idx = KbPlay_LockIndex();
     if (idx < 0 || idx >= 400 || !KbPlay_LatchLegal(idx)) { TargetLock_Clear(); return; }
-    if (KbPlay_TargetDist(idx) > kBreakRange) { TargetLock_Clear(); return; }
     const unsigned now = (unsigned)SDL_GetTicks();
-    if (!LosClear(idx)) {
+    // Train 89 (pour continuity): while a teleport is in flight and
+    // for 300 ms after the landing, the hero's tile is in flux --
+    // range and LoS breaks are SUSPENDED so a held RT pour resumes
+    // from the landing tile on the same lock, no re-press. Death
+    // breaks (WatchLockKill above) still apply.
+    const bool tpGrace = Combat_TeleportInFlight()
+        || (Combat_LastTeleportLandMs() != 0 && now - Combat_LastTeleportLandMs() < 300);
+    if (!tpGrace && KbPlay_TargetDist(idx) > kBreakRange) { TargetLock_Clear(); return; }
+    if (!tpGrace && !LosClear(idx)) {
         if (gLosLostT == 0) gLosLostT = now;
         else if (now - gLosLostT > kLosGraceMs) { TargetLock_Clear(); return; }
     } else {

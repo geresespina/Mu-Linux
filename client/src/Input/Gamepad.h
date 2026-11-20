@@ -28,6 +28,7 @@ void PulseKeyShared(int vk, const char* what);
 // CursorSpeed (px/s, default 900) — see Config/UserSettings.
 
 void Gamepad_Tick();
+void PadBuffer_FlushTeleport();   // Train 89: fire a cast buffered during a teleport (called by the 1C handler)
 
 // True while a gamepad is connected and the module is enabled. Drives the
 // on-screen indicator (Gamepad_RenderIndicator, called from the HUD render).

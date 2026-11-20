@@ -1244,10 +1244,45 @@ void ActMirror(int vk, bool down, bool& prev)
     if (down != prev) { Platform::InjectVirtualKey(vk, down); prev = down; }
 }
 
+// ── MEAMU Train 89: landing buffer for pad skill presses ──────────────
+// A skill button pressed DURING a teleport round-trip used to be
+// eaten: the press landed inside the flight and never cast. Now the
+// latest such press is buffered and fired by the 1C landing handler
+// (PadBuffer_FlushTeleport): if the button is still held, the mirror
+// takes it over as a hold; if it was already released, the flush
+// fires a tap and the next pad tick releases it.
+static int            gBufVk = 0;
+static bool*          gBufPrev = nullptr;
+static bool           gBufTapOff = false;
+
+static void ActMirrorBuffered(int vk, bool down, bool& prev)
+{
+    if (Combat_TeleportInFlight()) {
+        if (down) { gBufVk = vk; gBufPrev = &prev; }   // latest press wins
+        return;   // swallowed while the flight is open (prev untouched)
+    }
+    ActMirror(vk, down, prev);
+}
+
+void PadBuffer_FlushTeleport()
+{
+    if (gBufVk == 0 || gBufPrev == nullptr) return;
+    const int vk = gBufVk;
+    bool* prev = gBufPrev;
+    gBufVk = 0; gBufPrev = nullptr;
+    Platform::InjectVirtualKey(vk, true);
+    *prev = true;
+    // If the physical button is already up, the next PadButtonsTick
+    // turns this into a tap (releases it); if it is still held, the
+    // buffered mirror call next tick sees prev == down and holds.
+    gBufTapOff = true;
+    PadLog("PAD: buffered cast fired at landing (vk 0x%02X)", vk);
+}
+
 // MEAMU Train 64 (G's ruling, 2026-11-20): ONE PAD MAP, ALWAYS.
 // This button tick now runs in BOTH schemes — the Action sheet IS
 // the pad sheet: RT teleport targeting · LT 2 · X 3 · Y 4 · B 5 ·
-// A 6 · RB Dash · R3 Blink · View 7 · L3 8 · D-up 9 · D-down 10 ·
+// A Dash · RB 6 · R3 Blink · View 7 · L3 8 · D-up 9 · D-down 10 ·
 // LB lock · D-Left fishing · Start scheme toggle. What differs by
 // scheme is only the STICKS (Action: WASD + aim; Classic: cursor
 // steering) and LB's lock flavour (Action: the verb; Classic: a
@@ -1288,16 +1323,16 @@ void PadButtonsTick(unsigned now, float dt, bool actionPad)
     ActMirror(0x32, huntNow, gActPrev.lt);   // RT = Skill 2 cast-hold (Train 81)
     TargetLock_LtHold(huntNow);              // RT = lock + follow + pour, in-range only (Train 88)
     if (huntWas && !huntNow) TargetLock_ReleaseUnlock();   // Train 86
-    ActMirror(0x33, PadButton(SDL_GAMEPAD_BUTTON_WEST),          gActPrev.x);     // X  = Skill 3 (G)
-    ActMirror(0x34, PadButton(SDL_GAMEPAD_BUTTON_NORTH),         gActPrev.y);     // Y  = Skill 4 (G)
-    ActMirror(0x35, PadButton(SDL_GAMEPAD_BUTTON_EAST),          gActPrev.b);     // B  = Skill 5 (G)
-    ActMirror(0x36, PadButton(SDL_GAMEPAD_BUTTON_SOUTH),         gActPrev.a);     // A  = Skill 6 (G)
-    ActMirror(0x37, PadButton(SDL_GAMEPAD_BUTTON_BACK),          gActPrev.view);  // View = Skill 7
-    ActMirror(0x38, PadButton(SDL_GAMEPAD_BUTTON_LEFT_STICK),    gActPrev.l3);    // L3 = Skill 8
-    ActMirror(0x39, PadButton(SDL_GAMEPAD_BUTTON_DPAD_UP),       gActPrev.dup);   // D-up = Skill 9
-    ActMirror(0x30, PadButton(SDL_GAMEPAD_BUTTON_DPAD_DOWN),     gActPrev.ddown); // D-down = Skill 10
+    ActMirrorBuffered(0x33, PadButton(SDL_GAMEPAD_BUTTON_WEST),          gActPrev.x);     // X  = Skill 3 (G)
+    ActMirrorBuffered(0x34, PadButton(SDL_GAMEPAD_BUTTON_NORTH),         gActPrev.y);     // Y  = Skill 4 (G)
+    ActMirrorBuffered(0x35, PadButton(SDL_GAMEPAD_BUTTON_EAST),          gActPrev.b);     // B  = Skill 5 (G)
+    ActMirrorBuffered(0x36, PadButton(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER), gActPrev.rb);   // RB = Skill 6 (Train 90 swap: A took dash)
+    ActMirrorBuffered(0x37, PadButton(SDL_GAMEPAD_BUTTON_BACK),          gActPrev.view);  // View = Skill 7
+    ActMirrorBuffered(0x38, PadButton(SDL_GAMEPAD_BUTTON_LEFT_STICK),    gActPrev.l3);    // L3 = Skill 8
+    ActMirrorBuffered(0x39, PadButton(SDL_GAMEPAD_BUTTON_DPAD_UP),       gActPrev.dup);   // D-up = Skill 9
+    ActMirrorBuffered(0x30, PadButton(SDL_GAMEPAD_BUTTON_DPAD_DOWN),     gActPrev.ddown); // D-down = Skill 10
     gActionPadCastHeld = gActPrev.lt || gActPrev.x || gActPrev.y
-                      || gActPrev.b || gActPrev.a || gActPrev.view || gActPrev.l3
+                      || gActPrev.b || gActPrev.rb || gActPrev.view || gActPrev.l3
                       || gActPrev.dup || gActPrev.ddown;
     // Train 64: PAD-CAST AUTO-LOCK — a skill press with an empty
     // lock fills it with the closest monster BEFORE KbPlay resolves
@@ -1355,12 +1390,13 @@ void PadButtonsTick(unsigned now, float dt, bool actionPad)
         s_DLeftPrev = dl;
     }
 
-    {   // RB = Dash (Train 57; Train 64: both schemes — it is a
-        // BUTTON, so it lives here, not in the sticks tick). In
-        // Action the left stick aims the dash; in Classic there is
-        // no WASD stick, so the dash takes the hero's facing.
-        const bool rb = PadButton(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
-        if (rb && !gActPrev.rb) {
+    {   // A = Dash (Train 90 remap -- the dash moved here from RB;
+        // RB took Skill 6 in the mirror list above). Both schemes --
+        // it is a BUTTON, so it lives here, not in the sticks tick.
+        // In Action the left stick aims the dash; in Classic there
+        // is no WASD stick, so the dash takes the hero's facing.
+        const bool aBtn = PadButton(SDL_GAMEPAD_BUTTON_SOUTH);
+        if (aBtn && !gActPrev.a) {
             if (actionPad) {
                 float ldx, ldy;
                 StickVector(PadAxis(SDL_GAMEPAD_AXIS_LEFTX),
@@ -1371,7 +1407,7 @@ void PadButtonsTick(unsigned now, float dt, bool actionPad)
             }
             ActionMove_PadDash();
         }
-        gActPrev.rb = rb;
+        gActPrev.a = aBtn;
     }
 
     const bool st = PadButton(SDL_GAMEPAD_BUTTON_START);               // Start = scheme toggle

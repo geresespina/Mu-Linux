@@ -72,7 +72,12 @@
 //   schemes; server half is Bounce 14.
 
 void ActionMove_Tick();
-void ActionMove_OnTeleportLanded(); // Train 87: forget the direct-drive route on a landing
+void ActionMove_OnTeleportLanded();
+// Train 89: teleport round-trip flight API (impl in Combat.cpp).
+void Combat_NoteTeleportSent();
+void Combat_NoteTeleportLanded();
+bool Combat_TeleportInFlight();
+unsigned Combat_LastTeleportLandMs(); // Train 87: forget the direct-drive route on a landing
 
  // True while the ACTION scheme is live in-world. Read by
 // Player_InputTick (physical-click suppression) and KbPlay (Space latch

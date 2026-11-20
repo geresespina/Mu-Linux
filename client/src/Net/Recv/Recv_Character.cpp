@@ -7,6 +7,7 @@
 #include "Net/BijuProcVisuals.h"
 #include "Input/Fishing.h"   // Train 56: F3 FE fishing signals
 #include "Input/ActionMove.h" // Train 87: landing resets the drive state
+#include "Input/Gamepad.h"   // Train 89: PadBuffer_FlushTeleport
 #include "UI/ChatListBox.h"
 #include "Net/NetText.h"
 #include "Entity/EntityName.h"
@@ -1606,6 +1607,8 @@ void NetRecv_1C(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
     AsCharacter(hero)->TargetX = gridX;
     AsCharacter(hero)->TargetY = gridY;
     ActionMove_OnTeleportLanded();
+    Combat_NoteTeleportLanded();     // Train 89: close the round-trip gate
+    PadBuffer_FlushTeleport();       // Train 89: fire a cast buffered mid-flight
 
     if (gate != 0) {
         // ReceiveTeleport's gate branch clears the old viewport

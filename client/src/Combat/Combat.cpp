@@ -415,6 +415,7 @@
 //   CharData_RecalcStats @ 0x0047e3c0
 
 #include "stdafx.h"
+#include <SDL3/SDL.h>   // Train 89: SDL_GetTicks for the teleport flight gate
 #include "Party/Party.h"
 #include "Entity/EntityName.h"
 #include "Render/BijuTransform.h"   // MEAMU TRAIN 7: IsModeTransformSkill (casteo sin pose)
@@ -555,8 +556,49 @@ static bool SendMove_ChaosBoxBlocks97k(const CHARACTER* character)
     return true;
 }
 
+// ── MEAMU Train 89: teleport round-trip flight state ──────────────────
+// A teleport the HERO initiates (blink/dash wire, Teleport spell) opens
+// a round-trip: the request is out, the 1C landing has not arrived.
+// Move packets composed inside that window are built from pre-teleport
+// state -- the crossed packets Bounce 33 now rejects server-side.
+// This gate kills them at the source: while a flight is open, the
+// hero emits NO move path packets at all (every emitter funnels
+// through Combat_SendMovePathPacket). The 1C handler closes the
+// flight (Combat_NoteTeleportLanded); a 1500 ms timeout covers a
+// refused teleport whose 1C never comes.
+static bool     gTpFlight = false;
+static unsigned gTpFlightT = 0;
+static unsigned gTpLandT = 0;
+
+void Combat_NoteTeleportSent()
+{
+    gTpFlight = true;
+    gTpFlightT = (unsigned)SDL_GetTicks();
+}
+
+void Combat_NoteTeleportLanded()
+{
+    gTpFlight = false;
+    gTpLandT = (unsigned)SDL_GetTicks();
+}
+
+bool Combat_TeleportInFlight()
+{
+    if (gTpFlight && (unsigned)SDL_GetTicks() - gTpFlightT > 1500) gTpFlight = false;
+    return gTpFlight;
+}
+
+unsigned Combat_LastTeleportLandMs()
+{
+    return gTpLandT;
+}
+
 void __cdecl Combat_SendMovePathPacket(CHARACTER* character, const OBJECT* object)
 {
+    // Train 89: no hero move emission during a teleport round-trip.
+    if (character != nullptr && Hero != 0 &&
+        (uintptr_t)character == (uintptr_t)Hero && Combat_TeleportInFlight())
+        return;
     auto* param_1 = reinterpret_cast<unsigned char*>(character);
     const auto* param_2 = reinterpret_cast<const unsigned char*>(object);
     // Saltea si la entidad en param_2+0x78 tiene el flag 0x20 seteado (entidad ocupada/bloqueada)

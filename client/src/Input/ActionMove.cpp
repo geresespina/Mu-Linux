@@ -386,6 +386,7 @@ bool EmitDashFrame(unsigned char mode, BYTE b5, BYTE b6, const char* label)
     ArmDashBrake((unsigned)SDL_GetTicks());
     const BYTE pkt[7] = { 0xC1, 0x07, kDashHead, kDashSub, mode, b5, b6 };
     gNetwork.SendC1(pkt, sizeof(pkt));
+    Combat_NoteTeleportSent();   // Train 89: the wire teleport opens the round-trip gate
     ActLog("ACTION-WIRE: %s sent — C1 07 F3 FD %02X %02X %02X",
            label, (unsigned)mode, (unsigned)b5, (unsigned)b6);
     return true;
@@ -438,6 +439,55 @@ int OctantOf(int dx, int dy)
     return 7;   // dx<0, dy==0
 }
 
+// MEAMU Train 90: screen-vector -> world Dir byte, using the drive's
+// own projection method (project the 8 world steps to screen, pick
+// by dot) -- the dash goes exactly where the drive would walk.
+static int DashDirFromScreenVec(int sx, int sy)
+{
+    if (!Hero || (sx == 0 && sy == 0)) return -1;
+    CHARACTER* hero = HeroC();
+    const float hx = hero->Object.Position[0];
+    const float hy = hero->Object.Position[1];
+    int hsx = 0, hsy = 0;
+    Camera_ProjectWorldToScreen((float*)hero->Object.Position, &hsx, &hsy);
+    const float wl = sqrtf((float)(sx * sx + sy * sy));
+    const float wx = sx / wl, wy = sy / wl;
+    int bestOct = -1; float bestDot = -2.0f;
+    for (int oy = -1; oy <= 1; ++oy)
+        for (int ox = -1; ox <= 1; ++ox) {
+            if (ox == 0 && oy == 0) continue;
+            float wp[3] = { hx + (float)ox * 100.0f, hy + (float)oy * 100.0f,
+                            hero->Object.Position[2] };
+            int px = 0, py = 0;
+            Camera_ProjectWorldToScreen(wp, &px, &py);
+            const float dx = (float)(px - hsx), dy = (float)(py - hsy);
+            const float len = sqrtf(dx * dx + dy * dy);
+            if (len < 1.0f) continue;
+            const float dot = (dx / len) * wx + (dy / len) * wy;
+            if (dot > bestDot) { bestDot = dot; bestOct = OctantOf(ox, oy); }
+        }
+    return (bestOct >= 0 && bestDot > 0.3f) ? bestOct : -1;
+}
+
+// Classic fallback: dash along the hero's facing (the yaw convention
+// the LT sweep used: forward = (sin, cos) of 180 - Angle[2]).
+static int DashDirFromFacing()
+{
+    if (!Hero) return -1;
+    CHARACTER* hero = HeroC();
+    const float rad = (180.0f - hero->Object.Angle[2]) * 0.017453292f;
+    const float fx = sinf(rad), fy = cosf(rad);
+    int bestOct = -1; float bestDot = -2.0f;
+    for (int oy = -1; oy <= 1; ++oy)
+        for (int ox = -1; ox <= 1; ++ox) {
+            if (ox == 0 && oy == 0) continue;
+            const float len = sqrtf((float)(ox * ox + oy * oy));
+            const float dot = ((float)ox / len) * fx + ((float)oy / len) * fy;
+            if (dot > bestDot) { bestDot = dot; bestOct = OctantOf(ox, oy); }
+        }
+    return bestOct;
+}
+
 // Feed the four direction slots; returns true when a double-tap fired
 // this tick. History: Train 15 fired the dash WIRE (a server
 // teleport); Train 36 (G's ruling) removed the teleport — Space owns
@@ -464,11 +514,15 @@ bool DashScan(unsigned now, int wantX, int wantY)
             t.pressT = now;
             if (t.releaseT != 0 && now - t.releaseT <= kDashWindowMs &&
                 t.pressDur <= kTapMaxMs) {
-                // Double-tap: PURE DASH (Train 37). Open/refresh the
-                // burst window; the drive tick + render seam keep
-                // NinjaRun::gDashBurst live until it lapses.
-                NinjaRun::gDashBurstEndMs = now + kDashBurstMs;
-                ActLog("ACTION: pure dash (slot %d, burst %u ms)", s, kDashBurstMs);
+                // Double-tap: WIRE DASH (Train 90). Train 37's pure
+                // burst died with Train 53's lockstep (the factor
+                // machinery was retired; the flag drove nothing).
+                // The dash is the F3 FD mode-0 relocation again, in
+                // the tapped direction (slot screen vectors W/S/A/D).
+                static const int kSlotVec[4][2] = { {0,-1}, {0,1}, {-1,0}, {1,0} };
+                const int ddir = DashDirFromScreenVec(kSlotVec[s][0], kSlotVec[s][1]);
+                if (ddir >= 0) SendDashRequest(0, ddir);
+                ActLog("ACTION: double-tap dash (slot %d, dir %d)", s, ddir);
                 t.releaseT = 0;                      // no triple-tap chain
                 fired = true;
             }
@@ -560,9 +614,8 @@ bool ActionMove_BlinkToTarget(int targetIdx)
 }
 
 // Train 48: pad dash state — a stored screen-space direction the
-// drive tick honours while the burst runs and no key is held.
+// Train 90: read by ActionMove_PadDash at the press to aim the wire dash.
 int      gPadDashX = 0, gPadDashY = -1;
-unsigned gPadDashEnd = 0;
 
 void ActionMove_PadDashDir(int sx, int sy)
 {
@@ -572,10 +625,16 @@ void ActionMove_PadDashDir(int sx, int sy)
 
 void ActionMove_PadDash()
 {
-    const unsigned now = (unsigned)SDL_GetTicks();
-    NinjaRun::gDashBurstEndMs = now + kDashBurstMs;
-    gPadDashEnd = now + kDashBurstMs;
-    ActLog("ACTION: pad dash (burst %u ms)", kDashBurstMs);
+    // MEAMU Train 90: the pad dash is the WIRE dash (see DashScan).
+    // Action: the left-stick direction, camera-relative via the
+    // projection picker (neutral stick = screen-up = camera
+    // forward). Classic: the hero's facing. Server-paced relocation
+    // with the step-back landing; Bounce 33's window covers it.
+    int dir = -1;
+    if (gActionCamera.SchemeIsAction()) dir = DashDirFromScreenVec(gPadDashX, gPadDashY);
+    if (dir < 0) dir = DashDirFromFacing();
+    if (dir >= 0) SendDashRequest(0, dir);
+    ActLog("ACTION: pad dash (dir %d)", dir);
 }
 
 bool ActionMove_CameraLocked()
@@ -791,17 +850,15 @@ void ActionMove_Tick()
         anyHeld = true;
         if (!gTaps[s].consumed) anyLive = true;
     }
-    // Train 48: an active pad dash with no held direction drives in
-    // its stored direction for the burst window.
-    const bool padDash = (gPadDashEnd != 0 && (int)(now - gPadDashEnd) < 0);
-    if (!padDash) gPadDashEnd = 0;
+    // Train 90: the Train 48 pad-dash drive override is GONE -- the
+    // dash is a wire relocation now; nothing auto-drives after it
+    // (the manual-movement law).
     int effX = wantX, effY = wantY;
-    if (padDash && effX == 0 && effY == 0) { effX = gPadDashX; effY = gPadDashY; }
-    if ((!anyHeld || (wantX == 0 && wantY == 0) || !anyLive) && !padDash) {
+    if (!anyHeld || (wantX == 0 && wantY == 0) || !anyLive) {
         StopDrive();
         return;
     }
-    if (!anyLive && !padDash) {
+    if (!anyLive) {
         StopDrive();
         return;
     }
@@ -813,7 +870,7 @@ void ActionMove_Tick()
     int hsx = 0, hsy = 0;
     Camera_ProjectWorldToScreen((float*)hero->Object.Position, &hsx, &hsy);
     const float wl = sqrtf((float)(effX * effX + effY * effY));
-    const float wx = effX / wl, wy = effY / wl;   // Train 48: eff* carries the pad-dash override
+    const float wx = effX / wl, wy = effY / wl;
 
     int   bestOct = -1;
     float bestDot = -2.0f;
