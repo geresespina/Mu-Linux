@@ -3,7 +3,8 @@
 #include "Render/Camera3D.h"
 #include "Render/Gfx.h"
 #include "Config/UserSettings.h"
-#include "Input/ActionMove.h"   // Train 15: scheme state owner (ActionMove_IsAction)
+#include "Input/ActionMove.h"
+#include "Input/TargetLock.h"   // Train 48: lock-driven facing   // Train 15: scheme state owner (ActionMove_IsAction)
 #include "Platform/IInput.h"
 #include "Platform/IWindow.h"
 #include "Entity/EntityTypes.h"
@@ -82,7 +83,7 @@ namespace {
         CHARACTER* c = EntryAt(idx);
         if ((char*)c == (char*)(uintptr_t)Hero) return false;
         if (c->Object.Live == 0) return false;
-        if (c->Object.Kind != 0x22) return false;
+        if (c->Object.Kind != 2 && c->Object.Kind != 8 && c->Object.Kind != 0x22) return false;   // Train 68: mirror of the KbPlay fix (factory writes 2/8, never 0x22)
         if (c->Dead != 0) return false;
         if (c->MonsterIndex == 0xFF) return false;
         return true;
@@ -239,6 +240,36 @@ void CActionCamera::Update()
     // chased the dragged yaw: a feedback loop that twitched the hero's
     // facing while moving/strafing (G's bug report, 2026-11-19).
 
+    // MEAMU Train 74 (G's generalised lock law, 2026-11-20):
+    // ANY target lock camera-follows -- follow is a property of
+    // the LOCK itself, not of any button. Q, LB, pad auto-lock,
+    // LT: whenever a verb lock stands in the Action scheme, the
+    // yaw eases toward the lock's bearing (the same CreateAngle
+    // the facing writer below uses, through the line-141
+    // conversion); the lock breaks, the follow ends, and the yaw
+    // stays where the follow left it (mouse resumes, no snap).
+    // This supersedes Train 68's LT-hold-only scoped exception.
+    // Train 22 stays safe: the follow target is the LOCK -- an
+    // external point, not the hero's own back -- so the feedback
+    // loop that law guards against cannot form. (This camera
+    // exists only in the Action scheme; Classic has no action
+    // camera, so a Classic lock steers facing + casts only.)
+    if (TargetLock_Active()) {
+        CHARACTER* tgt = EntryAt(TargetLock_Index());
+        if (tgt && tgt->Object.Live != 0) {
+            typedef float (__cdecl *CreateAngleFn)(float, float, float, float);
+            const float ang = ((CreateAngleFn)&CreateAngle)(
+                hero->Object.Position[0], hero->Object.Position[1],
+                tgt->Object.Position[0],  tgt->Object.Position[1]);
+            const float wantYaw = NormalizeDeg(180.0f - ang);
+            float dy = NormalizeDeg(wantYaw - m_CamYaw);
+            const float kFollowStep = 10.0f;   // deg per sim step (~250 deg/s)
+            if (dy > kFollowStep) dy = kFollowStep;
+            else if (dy < -kFollowStep) dy = -kFollowStep;
+            m_CamYaw = NormalizeDeg(m_CamYaw + dy);
+        }
+    }
+
     // MEAMU Train 22: the hero faces the camera yaw whenever the camera
     // is locked and no cast animation owns the facing — idle AND moving
     // (GunZ law: hero faces the reticle, steady). This is the ONLY
@@ -246,7 +277,19 @@ void CActionCamera::Update()
     // gated off for the hero (Path_Legacy) and the movement input no
     // longer pins facing itself (ActionMove).
     if (hero->SkillStage == 0) {
-        const float want = NormalizeDeg(180.0f - m_CamYaw);
+        float want = NormalizeDeg(180.0f - m_CamYaw);
+        // MEAMU Train 48: a target lock drives the hero's FACING (the
+        // camera yaw stays the player's alone — the lock never
+        // rotates the camera, per the lock sheet).
+        if (TargetLock_Active()) {
+            CHARACTER* tgt = EntryAt(TargetLock_Index());
+            if (tgt && tgt->Object.Live != 0) {
+                typedef float (__cdecl *CreateAngleFn)(float, float, float, float);
+                want = ((CreateAngleFn)&CreateAngle)(
+                    hero->Object.Position[0], hero->Object.Position[1],
+                    tgt->Object.Position[0],  tgt->Object.Position[1]);
+            }
+        }
         const float cur = hero->Object.Angle[2];
         hero->Object.Angle[2] = cur + ShortestArc(cur, want) * kFacingEase;
     }
