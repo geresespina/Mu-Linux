@@ -5,6 +5,7 @@
 #include "stdafx.h"
 #include "UI/BuffBar.h"
 #include "Net/BijuProcVisuals.h"
+#include "Input/Fishing.h"   // Train 56: F3 FE fishing signals
 #include "UI/ChatListBox.h"
 #include "Net/NetText.h"
 #include "Entity/EntityName.h"
@@ -1349,6 +1350,10 @@ void NetRecv_F3(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         }
         case 0xF9: {  // MEAMU Train 2: Biju Powers proc visuals + bearer state (F3:F9)
             BijuProcVisuals::Receive((const BYTE*)Msg, Size);
+            break;
+        }
+        case 0xFE: {  // MEAMU Train 56: fishing signals (F3:FE) -- bobber + bite
+            Fishing_Receive((const BYTE*)Msg, Size);
             break;
         }
         case 0xFA: {  // MEAMU Train 8: Rena balance push (F3:FA) — subcode is a

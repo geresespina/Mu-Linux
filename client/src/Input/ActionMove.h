@@ -102,6 +102,17 @@ unsigned ActionMove_SchemeFlipSerial();
 // the one frame per engagement that actually sends the request.
 bool ActionMove_TryBlinkEngage(int targetIdx, int attackRangeTiles);
 
+// Train 48: unconditional blink-to-target for the Space / pad-B verb
+// when a target lock is active (no engagement guard — the press IS
+// the order). Validates the target, sends the mode-1 dash frame.
+bool ActionMove_BlinkToTarget(int targetIdx);
+
+// Train 48: pad dash verb (button A). Sets the pure-dash burst; the
+// direction is the currently held drive direction, or the stored
+// pad-dash direction (sx, sy in screen space) when no key is held.
+void ActionMove_PadDashDir(int sx, int sy);
+void ActionMove_PadDash();
+
 // MEAMU Train 17: true while the Action Camera holds the pointer lock.
 // NavMove reads it to yield its arrow drive in ACTION+locked, where
 // ActionMove samples the arrows itself and direct-drives (its held
