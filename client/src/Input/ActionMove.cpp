@@ -34,6 +34,7 @@
 #include "Input/ActionJump.h"     // Train 29: air-dash glide / teleport air-cancel (gActionJump)
 #include "Game/NinjaRun.h"        // Train 37: pure-dash burst window (gDashBurstEndMs)
 #include "Input/KbPlay.h"         // Train 31: latch release on scheme flip (KbPlay_ClearAttackLatch)
+#include "Input/TargetLock.h"     // Train 91: TargetLock_FollowHeld (the RT pour gate)
 #include <SDL3/SDL.h>             // SDL_GetTicks
 #include "Net/MoveMarkers.h"        // MEAMU Train 63: teleport vanish kick
 #include <cmath>
@@ -582,6 +583,18 @@ unsigned ActionMove_SchemeFlipSerial() { return gFlipSerial; }
 
 bool ActionMove_TryBlinkEngage(int targetIdx, int attackRangeTiles)
 {
+    // MEAMU Train 91 (G's law: RT NEVER teleports): Train 13's
+    // blink-engage survived Train 88's hunt removal underneath the
+    // pour -- both callers (KbPlay's AimAndPark and the stock
+    // attack branch in Player_InputTick, which the mirrored '2'
+    // cast-hold routes through) blink the hero onto any aim target
+    // beyond reach, so an RT pour at a monster that stepped out of
+    // Skill 2's range teleported him onto it. While the RT/RMB
+    // pour drives, blink-engage is OFF, centrally, for every
+    // caller: the pour locks + follows + casts in range only, and
+    // an out-of-range target is never blinked onto. Keyboard casts
+    // and AUTO keep the closer when RT is not held.
+    if (TargetLock_FollowHeld()) return false;
     if (targetIdx < 0 || targetIdx >= 400 || !Hero || !CharactersClient)
         return false;
     CHARACTER* hero = HeroC();
