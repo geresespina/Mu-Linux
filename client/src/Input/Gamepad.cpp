@@ -75,6 +75,8 @@
 #include "Input/Gamepad.h"
 #include "Input/GamepadDI.h"     // DIPadState / DIPadTranslate (padfix)
 #include "Input/NavMove.h"       // NavMove_ArrowsHeld (movement yield)
+#include "Render/ActionCamera.h"  // Train 48: scheme + pointer lock + OnMouseDelta
+#include "Input/ActionMove.h"     // Train 48: ActionMove_PadDash
 #include "Platform/IInput.h"     // Platform::InputEvent / InputEventType
 #include "Platform/NativeBridge.h" // Platform::NativeWindow/NativeInstance (DI coop level)
 #include "Core/Window.h"         // gWindow (real pixel size)
@@ -974,8 +976,11 @@ bool Gamepad_IsDriving() { return gDriving; }
 // cast-streak latch reads this: a cast observed while a pad skill button
 // drives it is excluded from the AUTO latch (pad law, 2026-11-16),
 // exactly like a cast made while the physical right mouse button is held.
+bool gActionPadCastHeld = false;   // Train 48: set by ActionPadTick
+
 bool Gamepad_PadCastHeld()
 {
+    if (gActionCamera.SchemeIsAction()) return gActionPadCastHeld;
     for (const auto& mk : kSkillKeys)
         if (gPrevButtons[mk.btn]) return true;
     return gPrevRT || gPrevLT;
@@ -985,6 +990,118 @@ void Gamepad_RenderIndicator()
 {
     if (!Gamepad_IsActive()) return;
     UI_RenderText(578, 6, (char*)"PAD", (LPSIZE)0x0, '\0', 0);
+}
+
+// ── Train 48: ACTION-scheme pad map (G's ruling, 2026-11-19) ────────
+// LB Lock (synthesized middle click — Input_WndProc owns the verb) ·
+// RB Skill 2 · X Skill 3 · Y Skill 4 · A Dash · B Blink (Space
+// mirror) · View Skill 1 · RT/LT 7/8 · L3/R3 9/0 · D-pad up/down
+// Skills 5/6 (left/right spares) · left stick = WASD (ActionMove
+// drives, camera-relative) · right stick = aim (camera delta while
+// locked, cursor while UI is open) · Start = scheme toggle (grave
+// pulse). Classic keeps the PADCAST layout below, untouched.
+struct ActPrev {
+    bool rb=false, x=false, y=false, view=false, dup=false, ddown=false;
+    bool l3=false, r3=false, rt=false, lt=false;
+    bool a=false, b=false, lb=false, start=false;
+    int  wasdMask=0;
+};
+ActPrev gActPrev;
+
+void ActionPadReleaseAll()
+{
+    const int vks[] = { 0x57, 0x53, 0x41, 0x44, 0x20,
+                        0x31, 0x32, 0x33, 0x34, 0x35,
+                        0x36, 0x37, 0x38, 0x39, 0x30 };
+    for (int vk : vks) Platform::InjectVirtualKey(vk, false);
+    gActPrev = ActPrev{};
+    gActionPadCastHeld = false;
+}
+
+void ActMirror(int vk, bool down, bool& prev)
+{
+    if (down != prev) { Platform::InjectVirtualKey(vk, down); prev = down; }
+}
+
+void ActionPadTick(unsigned now, float dt)
+{
+    (void)now;
+    ActMirror(0x32, PadButton(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER), gActPrev.rb);   // RB = Skill 2
+    ActMirror(0x33, PadButton(SDL_GAMEPAD_BUTTON_WEST),          gActPrev.x);     // X  = Skill 3
+    ActMirror(0x34, PadButton(SDL_GAMEPAD_BUTTON_NORTH),         gActPrev.y);     // Y  = Skill 4
+    ActMirror(0x31, PadButton(SDL_GAMEPAD_BUTTON_BACK),          gActPrev.view);  // View = Skill 1
+    ActMirror(0x35, PadButton(SDL_GAMEPAD_BUTTON_DPAD_UP),       gActPrev.dup);   // D-up = Skill 5
+    ActMirror(0x36, PadButton(SDL_GAMEPAD_BUTTON_DPAD_DOWN),     gActPrev.ddown); // D-down = Skill 6
+    ActMirror(0x39, PadButton(SDL_GAMEPAD_BUTTON_LEFT_STICK),    gActPrev.l3);    // L3 = Skill 9
+    ActMirror(0x30, PadButton(SDL_GAMEPAD_BUTTON_RIGHT_STICK),   gActPrev.r3);    // R3 = Skill 0
+    ActMirror(0x37, PadAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > kTriggerOn, gActPrev.rt);  // RT = 7
+    ActMirror(0x38, PadAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER)  > kTriggerOn, gActPrev.lt);  // LT = 8
+    gActionPadCastHeld = gActPrev.rb || gActPrev.x || gActPrev.y || gActPrev.view
+                      || gActPrev.dup || gActPrev.ddown || gActPrev.l3 || gActPrev.r3
+                      || gActPrev.rt || gActPrev.lt;
+
+    ActMirror(0x20, PadButton(SDL_GAMEPAD_BUTTON_EAST), gActPrev.b);   // B = Blink (Space)
+
+    const bool lb = PadButton(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);       // LB = Target Lock
+    if (lb && !gActPrev.lb) {
+        Platform::InputEvent ev{};
+        ev.type = Platform::InputEventType::MiddleDown;
+        ev.x = (int)gCursorX; ev.y = (int)gCursorY;
+        Platform::DeliverSDLInput(ev);
+        ev.type = Platform::InputEventType::MiddleUp;
+        Platform::DeliverSDLInput(ev);
+        PadLog("PAD: LB - target lock verb");
+    }
+    gActPrev.lb = lb;
+
+    const bool st = PadButton(SDL_GAMEPAD_BUTTON_START);               // Start = scheme toggle
+    if (st && !gActPrev.start) PulseKey(0xC0, "scheme toggle");
+    gActPrev.start = st;
+
+    // Left stick -> WASD virtual keys (ActionMove owns the drive).
+    float ldx, ldy;
+    const float lmag = StickVector(PadAxis(SDL_GAMEPAD_AXIS_LEFTX),
+                                   PadAxis(SDL_GAMEPAD_AXIS_LEFTY), ldx, ldy);
+    int sx = 0, sy = 0;
+    if (lmag > 0.0f) {
+        sx = (ldx >  0.38f) ? 1 : (ldx < -0.38f) ? -1 : 0;
+        sy = (ldy >  0.38f) ? 1 : (ldy < -0.38f) ? -1 : 0;
+    }
+    const bool a = PadButton(SDL_GAMEPAD_BUTTON_SOUTH);                // A = Dash
+    if (a && !gActPrev.a) {
+        ActionMove_PadDashDir(sx, sy);
+        ActionMove_PadDash();
+    }
+    gActPrev.a = a;
+
+    const int mask = (sy < 0 ? 1 : 0) | (sy > 0 ? 2 : 0) | (sx < 0 ? 4 : 0) | (sx > 0 ? 8 : 0);
+    const int vks[4] = { 0x57, 0x53, 0x41, 0x44 };   // W S A D
+    for (int i = 0; i < 4; ++i) {
+        const bool want = ((mask >> i) & 1) != 0;
+        const bool had  = ((gActPrev.wasdMask >> i) & 1) != 0;
+        if (want != had) Platform::InjectVirtualKey(vks[i], want);
+    }
+    gActPrev.wasdMask = mask;
+    gDriving = false;   // the WASD keys drive; the cursor-steer yield stays off
+
+    // Right stick -> aim while pointer-locked; cursor while UI is open.
+    float rdx, rdy;
+    const float rmag = StickVector(PadAxis(SDL_GAMEPAD_AXIS_RIGHTX),
+                                   PadAxis(SDL_GAMEPAD_AXIS_RIGHTY), rdx, rdy);
+    if (rmag > 0.0f) {
+        if (gActionCamera.PointerLocked()) {
+            gActionCamera.OnMouseDelta((int)(rdx * rmag * 1500.0f * dt),
+                                       (int)(rdy * rmag * 1500.0f * dt));
+        } else {
+            const float winW = (float)gWindow.GetRealWidth();
+            const float winH = (float)gWindow.GetRealHeight();
+            float nx = gCursorX + rdx * rmag * gCursorSpd * dt;
+            float ny = gCursorY + rdy * rmag * gCursorSpd * dt;
+            if (nx < 0) nx = 0; if (ny < 0) ny = 0;
+            if (nx > winW - 1) nx = winW - 1; if (ny > winH - 1) ny = winH - 1;
+            MoveCursorTo(nx, ny, false);
+        }
+    }
 }
 
 void Gamepad_Tick()
@@ -1065,6 +1182,14 @@ void Gamepad_Tick()
     // button's skill, auto-targets the closest valid monster in that
     // skill's range and hold-casts until the key is released — the pad
     // adds no targeting or casting logic of its own.
+    // Train 48: in the Action scheme the pad runs G's Action map;
+    // the PADCAST sections below run only in Classic.
+    static bool s_wasActionPad = false;
+    const bool actionPad = gActionCamera.SchemeIsAction();
+    if (actionPad) {
+        ActionPadTick(now, dt);
+    } else {
+        if (s_wasActionPad) ActionPadReleaseAll();
     for (const auto& mk : kSkillKeys) MirrorKeyTick(mk);
     MirrorKeyTick(kBackKey);
     TriggerKeyTick("RT", SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, 0x37, gPrevRT);
@@ -1136,6 +1261,8 @@ void Gamepad_Tick()
         }
         gPrevButtons[kb.b] = down;
     }
+    }   // Train 48: end of the Classic-only PADCAST sections
+    s_wasActionPad = actionPad;
 
     // ── PADFIX2: divergence watchdog (left button) ──────────────────────────
     // The game can drop its held flag (MouseLButton, DAT_083a42c4) behind
