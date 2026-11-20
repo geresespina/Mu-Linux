@@ -7,6 +7,8 @@
 
 #include "stdafx.h"
 #include "Net/MoveMarkers.h"
+#include "Input/TargetLock.h"   // MEAMU Train 83: KbPlay_LockIndex (the one lock slot)
+#include "Entity/EntityTypes.h" // MEAMU Train 83: CHARACTER / CHARACTER_STRIDE
 #include "Config/UserSettings.h"
 #include "Core/Window.h"
 #include "Platform/ITimer.h"
@@ -201,7 +203,6 @@ void ClearAll()
 void Render_MoveMarkers(void)
 {
     RunSelfTestOnce();
-    if (!Enabled()) return;
     if (SceneFlag != 5) return;
     if (!CharactersClient) return;
     const uint32_t now = NowMs();
@@ -215,7 +216,7 @@ void Render_MoveMarkers(void)
         GL_SetAlphaTest('\0');   // DisableTexture: untextured geometry
     };
 
-    if (s_Click.active) {
+    if (Enabled() && s_Click.active) {
         const uint32_t age = now - s_Click.born;
         if (age <= kClickLifeMs && NearHero(s_Click.x, s_Click.y)) {
             const float t = (float)age / (float)kClickLifeMs;
@@ -228,6 +229,54 @@ void Render_MoveMarkers(void)
                            1.0f, 0.85f, 0.45f, 0.8f * fade);
             DrawChevron(s_Click.x, s_Click.y, s_Click.z, t,
                         1.0f, 0.85f, 0.45f, 0.95f * fade);
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // MEAMU Train 83 (2026-11-20, G's order): A VISIBLE MARKER ON
+    // THE TARGET-LOCKED CHARACTER. The lock was invisible -- you
+    // could not see WHO you were locked onto. Now the locked
+    // character wears MEAMU gold (the click marker's own gold):
+    // a breathing ground ring at its feet (terrain height, so it
+    // stays truthful under fliers) + a bobbing chevron over its
+    // head (head height scales with the body, so forms wear it
+    // right too). Tied to the ONE lock slot (KbPlay_LockIndex --
+    // the verb locks and Classic's Tab lock live in the same
+    // slot), so it appears the moment any lock engages in either
+    // scheme, tracks the target every frame, and clears the
+    // frame the lock clears -- unlock, kill (Train 76), or break.
+    // Not gated by the click-marker setting: it is a lock
+    // indicator, not a move marker.
+    {
+        const int lockIdx = KbPlay_LockIndex();
+        if (lockIdx >= 0 && lockIdx < 400) {
+            CHARACTER* t = (CHARACTER*)((char*)(uintptr_t)CharactersClient
+                                         + lockIdx * CHARACTER_STRIDE);
+            if (t->Object.Live && !t->Dead) {
+                const float tx = t->Object.Position[0];
+                const float ty = t->Object.Position[1];
+                if (NearHero(tx, ty)) {
+                    beginDraw();
+                    const float pulse = 0.5f + 0.5f * std::sin((float)now / 280.0f);
+                    const float gz = RequestTerrainHeight(tx, ty);
+                    const float rOut = 54.0f + 5.0f * pulse;
+                    DrawGroundRing(tx, ty, gz, rOut, rOut - 7.0f,
+                                   1.0f, 0.85f, 0.45f, 0.55f + 0.35f * pulse);
+                    DrawGroundRing(tx, ty, gz, 40.0f, 37.5f,
+                                   1.0f, 0.85f, 0.45f, 0.35f + 0.25f * pulse);
+                    const float bodyScale = t->Object.Scale > 0.05f ? t->Object.Scale : 1.0f;
+                    float gx = 0, gy = 0;
+                    if (Project(tx, ty, t->Object.Position[2] + 205.0f * bodyScale, &gx, &gy)) {
+                        const float bob = 30.0f + 7.0f * std::sin((float)now / 240.0f);
+                        Gfx::Color4f(1.0f, 0.85f, 0.45f, 0.95f);
+                        BufferedDraw::Begin(BufferedDraw::Primitive::Triangles);
+                        BufferedDraw::Vertex2f(gx - 10.0f, gy + bob);
+                        BufferedDraw::Vertex2f(gx + 10.0f, gy + bob);
+                        BufferedDraw::Vertex2f(gx, gy + bob - 12.0f);
+                        BufferedDraw::End();
+                    }
+                }
+            }
         }
     }
 
