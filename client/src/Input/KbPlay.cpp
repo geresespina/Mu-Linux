@@ -150,7 +150,8 @@
 #include "Config/UserSettings.h" // gUserSettings ([Keyboard] Enable)
 #include "Input/Gamepad.h"       // Gamepad_IsDriving (cast yield), Gamepad_PadCastHeld (pad law)
 #include "Input/NavMove.h"       // NavMove_ArrowsHeld (NPC click guard)
-#include "Input/ActionMove.h"    // Train 13: scheme gate + blink-engage hook
+#include "Input/ActionMove.h"
+#include "Input/TargetLock.h"   // Train 48: verb-lock awareness    // Train 13: scheme gate + blink-engage hook
 #include "Platform/IInput.h"     // Platform::InputEvent, GetInput
 #include "Core/Window.h"         // gWindow
 #include "Entity/EntityTypes.h"  // CHARACTER, CHARACTER_STRIDE
@@ -381,7 +382,17 @@ bool ValidMonster(int idx)
     CHARACTER* c = EntryAt(idx);
     if ((char*)c == (char*)(uintptr_t)Hero) return false;
     if (c->Object.Live == 0) return false;
-    if (c->Object.Kind != 0x22) return false;
+    // MEAMU Train 68 (2026-11-20): the kind test was written against
+    // the STOCK client's 0x22, but THIS client's CreateMonster
+    // (Monster.cpp) writes Kind 2 for monsters (8 for the type
+    // 100-110 monster band, 4 for NPCs) -- 0x22 is never written
+    // anywhere. The predicate therefore matched NO monster ever:
+    // the LB/Q lock verb could only take the player / fabricated
+    // branches of ValidLatchTarget ("latches players/bots, not
+    // monsters" -- G's report), and Train 64's cast auto-lock was
+    // silently dead for the same reason. Accept the kinds the
+    // factory actually writes; 0x22 stays for safety.
+    if (c->Object.Kind != 2 && c->Object.Kind != 8 && c->Object.Kind != 0x22) return false;
     if (c->Dead != 0) return false;
     if (c->MonsterIndex == 0xFF) return false;
     return true;
@@ -406,7 +417,12 @@ bool ValidLatchTarget(int idx)
     if ((char*)c == (char*)(uintptr_t)Hero) return false;
     if (c->Object.Live == 0) return false;
     if (c->Dead != 0) return false;
-    if (!FabricatedMark::Is(c)) return false;
+    // MEAMU Train 55: REAL players are latch-legal. Train 48
+    // admitted only fabricated marks (phantoms/followers) and
+    // monsters, so the lock could never take a real rival --
+    // in Clan War PvP it simply found nobody. NPC kinds stay out.
+    if (!FabricatedMark::Is(c))
+        return c->Object.Type == 390 && c->Object.Kind == 1;
     if (FabricatedMark::Kind(c) == FabricatedMark::kFollower &&
         FabricatedMark::Owner(c) == (int)HeroC()->Key) return false;
     return true;
@@ -428,7 +444,15 @@ int AcquireTarget(int skillDist)
     if (acq < 8) acq = 8;
     if (acq > 14) acq = 14;
 
-    if (ValidMonster(gLockIdx) && Cheb(hero, EntryAt(gLockIdx)) <= acq + 2)
+    // Train 48: a VERB lock (TargetLock) may hold a fabricated rival
+    // (ValidLatchTarget), not only a monster — same precedence slot.
+    // Train 55: while the verb lock is ACTIVE it is honored out to
+    // its own break range (22 tiles) -- Train 48 capped casts at
+    // acq + 2 (16), so a lock taken at 17-22 tiles steered the
+    // facing but casts silently fell through to nearest.
+    const bool verbLock = TargetLock_Active() && ValidLatchTarget(gLockIdx);
+    if ((ValidMonster(gLockIdx) || verbLock)
+        && Cheb(hero, EntryAt(gLockIdx)) <= (verbLock ? 22 : acq + 2))
         return gLockIdx;
     if (ValidLatchTarget(gLastIdx) && Cheb(hero, EntryAt(gLastIdx)) <= acq)
         return gLastIdx;
@@ -489,7 +513,20 @@ void QuickSlotDigit(int digitVal)
 bool IsSelfSkill(int skillType)
 {
     // Elf heal/buff line: Heal, Greater Defense, Greater Damage, Greater Life.
-    return skillType == 26 || skillType == 27 || skillType == 28 || skillType == 48 || skillType == 57 || skillType == 58 || skillType == 59 || skillType == 60 || skillType == 61 || skillType == 72 || skillType == 73 || skillType == 74 || skillType == 75 || skillType == 76;  // 57 = Omni Buff (MEAMU 2026-11-14), 58 = Mangekyou Sharingan (MEAMU 2026-11-15), 59 = Sage Mode (MEAMU 2026-11-17), 60 = Jinchuriki Mode + 61 = Biju Mode (MEAMU 2026-11-17, Train 4), 72 = Biju Bond + 73 = Chakra Cloak + 74 = Perfect Susanoo + 75 = Dragon Sage Mode (MEAMU 2026-11-18), 76 = Biju Legion (MEAMU 2026-11-18, Train 6 prep)
+    // MEAMU Train 70 (2026-11-20, G's scope ruling: the lock applies
+    // to ALL targeted skills -- Lightning, Ice, the whole family --
+    // keyed off this one classification, never a per-skill list):
+    // the self family is now COMPLETE. Mana Shield (16) and Defense
+    // (18) are self-buffs that were missing, and the summon line
+    // (30-37, Legion 44, Summon All 45) casts on the hero's own
+    // side -- all of them were falling through to AcquireTarget, so
+    // a shield refresh or a summon could aim at (and in Action,
+    // walk toward) a monster. Everything NOT in this set is a
+    // targeted skill and consumes the lock through ComputeAim.
+    return skillType == 16 || skillType == 18
+        || skillType == 26 || skillType == 27 || skillType == 28 || skillType == 48
+        || (skillType >= 30 && skillType <= 37) || skillType == 44 || skillType == 45
+        || skillType == 57 || skillType == 58 || skillType == 59 || skillType == 60 || skillType == 61 || skillType == 72 || skillType == 73 || skillType == 74 || skillType == 75 || skillType == 76;  // 57 = Omni Buff (MEAMU 2026-11-14), 58 = Mangekyou Sharingan (MEAMU 2026-11-15), 59 = Sage Mode (MEAMU 2026-11-17), 60 = Jinchuriki Mode + 61 = Biju Mode (MEAMU 2026-11-17, Train 4), 72 = Biju Bond + 73 = Chakra Cloak + 74 = Perfect Susanoo + 75 = Dragon Sage Mode (MEAMU 2026-11-18), 76 = Biju Legion (MEAMU 2026-11-18, Train 6 prep)
 }
 
 int SelectedSkillType()
@@ -1464,8 +1501,8 @@ void KbPlay_Tick()
     if (AutoGates() && Attacking == 1 && ValidLatchTarget(DAT_00559c70))
         gLastIdx = DAT_00559c70;
     // A dead/gone lock clears silently.
-    if (gLockIdx >= 0 && (!AutoGates() || !ValidMonster(gLockIdx)))
-        gLockIdx = -1;
+    if (gLockIdx >= 0 && (!AutoGates() || (!ValidMonster(gLockIdx) && !TargetLock_Active())))
+        gLockIdx = -1;   // Train 48: verb locks are TargetLock_Tick's to clear
 
     // ── Digits: press = select + cast once, hold = repeat-cast ───────────────
     const bool modifiers = KeyHeld(0x11) || KeyHeld(0x12);   // Ctrl / Alt
@@ -1662,3 +1699,31 @@ void KbPlay_RenderAutoIndicator()
     if (!gAutoOn) return;
     UI_RenderText(532, 6, (char*)"AUTO", (LPSIZE)0x0, '\0', 0);
 }
+
+// ── Train 48: TargetLock bridges ─────────────────────────────────────
+// The lock state + predicates live in this TU's anonymous namespace;
+// TargetLock.cpp orchestrates the verb through these exports.
+int KbPlay_LockIndex() { return gLockIdx; }
+void KbPlay_LockSet(int idx)
+{
+    gLockIdx = idx;
+    if (idx >= 0) {
+        ParkOnCharacter(EntryAt(idx));   // stock target display = the marker
+        Say("Target: %s", EntityName::Get((char*)EntryAt(idx)));
+    }
+}
+void KbPlay_LockClear() { gLockIdx = -1; }
+bool KbPlay_LatchLegal(int idx) { return ValidLatchTarget(idx); }
+bool KbPlay_IsMonster(int idx) { return ValidMonster(idx); }   // Train 64: auto-lock is monsters-only
+bool KbPlay_SelectedSkillTargeted() { return !IsSelfSkill(SelectedSkillType()); }   // Train 70: pad auto-lock fires only for targeted skills
+int KbPlay_TargetDist(int idx)
+{
+    if (!Hero || idx < 0 || idx >= 400) return 9999;
+    return Cheb(HeroC(), EntryAt(idx));
+}
+void KbPlay_TargetTile(int idx, int& tx, int& ty)
+{
+    CHARACTER* c = (idx < 0) ? HeroC() : EntryAt(idx);
+    tx = (int)c->PositionX; ty = (int)c->PositionY;
+}
+void KbPlay_SayText(const char* s) { Say("%s", s); }

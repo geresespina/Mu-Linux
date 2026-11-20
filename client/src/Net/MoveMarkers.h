@@ -52,6 +52,23 @@ void OnTeleportArrival(const void* entity);
 // Any character leaving by teleport (CreateTeleportBegin path only).
 void OnTeleportDeparture(const void* entity);
 
+// MEAMU Train 63 — TELEPORT VANISH (hero only, G's ruling: "I don't
+// want the body pose but I want the disappearing player when
+// teleporting"). Pure render dressing, gate=0 BY CONSTRUCTION:
+// the envelope is a function of time read ONLY inside
+// RenderCharacter's draw (via an RAII scope that restores
+// OBJECT::Alpha before the function returns), so no sim or input
+// code ever observes a faded hero — the input tick's Alpha<0.7
+// click gate (the Train 43 click-eater) can never trip. No pose,
+// no Teleport state, no AlphaTarget machine.
+//   KickSend    — a teleport-class dash frame (modes 1/2) left:
+//                 fade-out starts + departure dressing fires.
+//   KickArrival — the teleport/move result landed: fade-in starts.
+//   Envelope    — current alpha multiplier for the hero's draw.
+void TeleportVanishKickSend(const void* heroEntity);
+void TeleportVanishKickArrival();
+float TeleportVanishEnvelope();
+
 // Test/diagnostic surface (also used by the env-gated self-test).
 int  ActiveClickMarker();
 int  ActiveTeleportMarkers();
