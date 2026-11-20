@@ -105,7 +105,11 @@ namespace BijuTransform
     // (EntityName::Get -- the nameplate's own source) is "Gloccy"
     // or "M4D4R4", the form resolves to class 229 instead:
     // CRIMSON KARANE, his exclusive crimson variant of the titan
-    // (Data/Monster/KaraneCrimson). Pet-on (beast class 155-164)
+    // (Data/Monster/KaraneCrimson). MEAMU TRAIN 67: "Eliger" on
+    // the same titan path resolves to class 230 instead -- the
+    // BLUE MEGAZORD, the HurricaneBlue hero-skin BMD
+    // (Data/Player/Custom/55/SkinHurricaneBlue) registered as a
+    // monster class at scale 3.0. Pet-on (beast class 155-164)
     // and every other name resolve exactly as FormClassFor does.
     // Pure decision (name passed in), so tests/SkinBodyFix.cpp
     // pins this table too. NOTE: class 229 renders only when the

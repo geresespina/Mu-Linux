@@ -74,7 +74,8 @@ namespace
     constexpr int kBeastCount      = 10;
     constexpr int kFirstBeastClass = 155;             // Shukaku .. Ten-Tails
     constexpr int kSusanooClass    = 228;
-    constexpr int kKaraneCrimsonClass = 229;          // MEAMU TRAIN 7: Crimson Karane, forma personal de G (skill 74, nombres Gloccy/M4D4R4)             // MEAMU TRAIN 3: Perfect Susanoo form (skill 74)
+    constexpr int kKaraneCrimsonClass = 229;
+    constexpr int kMegazordClass = 230;   // MEAMU TRAIN 67: Eliger's Blue Megazord (skill 74)          // MEAMU TRAIN 7: Crimson Karane, forma personal de G (skill 74, nombres Gloccy/M4D4R4)             // MEAMU TRAIN 3: Perfect Susanoo form (skill 74)
 
     signed char s_beastBySlot[400];
     // MEAMU SKIN BODY FIX (2026-11-18): skin de cuerpo entero puesta en el
@@ -292,7 +293,7 @@ void PreloadFormModels()
     // Train 65: load (or retry a cached failure of) every form
     // class NOW, in cast/packet context -- never leave the load
     // to Resolve() mid-render. See the header for the bug.
-    static const int kFormClasses[] = { kSusanooClass, kKaraneCrimsonClass };
+    static const int kFormClasses[] = { kSusanooClass, kKaraneCrimsonClass, kMegazordClass };
     for (int cls : kFormClasses) {
         const CatalogMonster* cm = gContentCatalog.GetMonster(cls);
         if (!cm) continue;
@@ -373,6 +374,14 @@ int FormClassForNamed(bool formBit, int beastIndex, const char* name)
     if (std::strcmp(name, "Gloccy") == 0 ||
         std::strcmp(name, "M4D4R4") == 0)
         return kKaraneCrimsonClass;
+    // MEAMU TRAIN 67 (2026-11-20, G's order): Eliger's Susanoo is
+    // the BLUE MEGAZORD -- the HurricaneBlue skin BMD (already in
+    // every client's Data as the (8,55) hero skin) registered as
+    // monster class 230 at titan scale. Same titan-path gate as
+    // the Karane diversion: only a pet-less / source-74 titan
+    // resolution diverts; a known beast still wins.
+    if (std::strcmp(name, "Eliger") == 0)
+        return kMegazordClass;
     return base;
 }
 
