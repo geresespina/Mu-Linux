@@ -1416,6 +1416,32 @@ void __cdecl MoveCharacter(intptr_t p1)
     memset(p1f, 0, sizeof(p1f));
     Light[0] = 1.0f; Light[1] = 1.0f; Light[2] = 1.0f;
 
+    // MEAMU Train 58 (2026-11-20): MODE TOGGLES NEVER RUN THE SWING
+    // MACHINE -- enforced here, at the machine itself. Four hunt
+    // rounds (Trains 33/38/39/42) gated the ARMING writers one by
+    // one, keyed on the incoming skill byte; G's 2026-11-20
+    // ANIMTRACE log (12,783 lines) proved the machine was being
+    // armed with skill 16 -- Mana Shield's byte, action 63, stage
+    // climbing 2->14 -- through the local cast machinery (skill-bar
+    // click / RMB with keyboard controls OFF), while every guard
+    // watched for 58. The server sends no cast echo for mode
+    // skills at all (SkillManager's mode cases call their own
+    // handlers), so the arming is local, and this tick + the
+    // dispatch below are the ONLY consumers that can play the
+    // pose. While the hero's SELECTED skill (CurrentSkill slot ->
+    // CharacterAttribute type, the ground truth every cast source
+    // sets before casting) is a mode toggle, the machine is held
+    // disarmed. A real cast re-selects first, so the gate lifts
+    // in the same tick the real cast arms.
+    if (AsCharacter(c) == AsCharacter(Hero) && CharacterAttribute
+        && AsCharacter(c)->CurrentSkill < 60) {
+        const int selSkill = (int)(unsigned char)((char*)CharacterAttribute)[AsCharacter(c)->CurrentSkill + 87];
+        if (BijuTransform::IsModeTransformSkill(selSkill)) {
+            AsCharacter(c)->SkillStage = 0;
+            AsCharacter(c)->Skill = 0;
+        }
+    }
+
     // L812-817: attack swing tick
     if (AsCharacter(c)->SkillStage) {
         AttackStage(c, o);
