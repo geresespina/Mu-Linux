@@ -35,6 +35,7 @@
 #include "Game/NinjaRun.h"        // Train 37: pure-dash burst window (gDashBurstEndMs)
 #include "Input/KbPlay.h"         // Train 31: latch release on scheme flip (KbPlay_ClearAttackLatch)
 #include <SDL3/SDL.h>             // SDL_GetTicks
+#include "Net/MoveMarkers.h"        // MEAMU Train 63: teleport vanish kick
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
@@ -290,6 +291,7 @@ void ResetDirectDrive()
     gDirectTx = gDirectTy = -1;
 }
 
+
 // MEAMU Train 27: cancel the hero's issued path — the actual stop.
 // Releasing the virtual button never cancelled the route the engine
 // was already walking (the follower consumes CHARACTER::PathNum/
@@ -498,6 +500,17 @@ void FlipScheme()
 
 } // namespace
 
+// MEAMU Train 87: a teleport landing forgets the direct-drive
+// route state, so the drive's next issue is built fresh from the
+// landing tile (the 1C handler kills + rebases the path itself).
+// Defined at global scope (the header's declaration): the drive
+// state lives in the anonymous namespace above, visible in this
+// TU, so the reset is one call.
+void ActionMove_OnTeleportLanded()
+{
+    ResetDirectDrive();
+}
+
 bool ActionMove_IsAction()
 {
     return gInit && gScheme == ControlScheme::Action &&
@@ -532,6 +545,37 @@ bool ActionMove_TryBlinkEngage(int targetIdx, int attackRangeTiles)
            EntityName::Get((char*)tgt), key, Cheb(hero, tgt),
            attackRangeTiles, sent ? "sent" : "NOT SENT");
     return sent;
+}
+
+bool ActionMove_BlinkToTarget(int targetIdx)
+{
+    if (targetIdx < 0 || targetIdx >= 400 || !Hero || !CharactersClient)
+        return false;
+    CHARACTER* tgt = EntryAt(targetIdx);
+    if (tgt->Object.Live == 0 || tgt->Dead != 0) return false;
+    const bool sent = SendDashRequest(kDashModeTarget, (int)tgt->Key);
+    ActLog("ACTION: blink-to-lock %s (key %d) %s",
+           EntityName::Get((char*)tgt), (int)tgt->Key, sent ? "sent" : "NOT SENT");
+    return sent;
+}
+
+// Train 48: pad dash state — a stored screen-space direction the
+// drive tick honours while the burst runs and no key is held.
+int      gPadDashX = 0, gPadDashY = -1;
+unsigned gPadDashEnd = 0;
+
+void ActionMove_PadDashDir(int sx, int sy)
+{
+    if (sx == 0 && sy == 0) { gPadDashX = 0; gPadDashY = -1; }   // neutral stick: forward
+    else { gPadDashX = sx; gPadDashY = sy; }
+}
+
+void ActionMove_PadDash()
+{
+    const unsigned now = (unsigned)SDL_GetTicks();
+    NinjaRun::gDashBurstEndMs = now + kDashBurstMs;
+    gPadDashEnd = now + kDashBurstMs;
+    ActLog("ACTION: pad dash (burst %u ms)", kDashBurstMs);
 }
 
 bool ActionMove_CameraLocked()
@@ -747,7 +791,17 @@ void ActionMove_Tick()
         anyHeld = true;
         if (!gTaps[s].consumed) anyLive = true;
     }
-    if (!anyHeld || (wantX == 0 && wantY == 0) || !anyLive) {
+    // Train 48: an active pad dash with no held direction drives in
+    // its stored direction for the burst window.
+    const bool padDash = (gPadDashEnd != 0 && (int)(now - gPadDashEnd) < 0);
+    if (!padDash) gPadDashEnd = 0;
+    int effX = wantX, effY = wantY;
+    if (padDash && effX == 0 && effY == 0) { effX = gPadDashX; effY = gPadDashY; }
+    if ((!anyHeld || (wantX == 0 && wantY == 0) || !anyLive) && !padDash) {
+        StopDrive();
+        return;
+    }
+    if (!anyLive && !padDash) {
         StopDrive();
         return;
     }
@@ -758,8 +812,8 @@ void ActionMove_Tick()
     const float hy = hero->Object.Position[1];
     int hsx = 0, hsy = 0;
     Camera_ProjectWorldToScreen((float*)hero->Object.Position, &hsx, &hsy);
-    const float wl = sqrtf((float)(wantX * wantX + wantY * wantY));
-    const float wx = wantX / wl, wy = wantY / wl;
+    const float wl = sqrtf((float)(effX * effX + effY * effY));
+    const float wx = effX / wl, wy = effY / wl;   // Train 48: eff* carries the pad-dash override
 
     int   bestOct = -1;
     float bestDot = -2.0f;
