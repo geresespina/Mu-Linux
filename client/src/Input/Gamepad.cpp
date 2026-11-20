@@ -995,15 +995,16 @@ void Gamepad_RenderIndicator()
 }
 
 // ── ACTION-scheme pad map ────────────────────────────────────────────
-// Train 59 sheet (G, 2026-11-20; refines Train 57): RT Teleport
-// TARGETING (hold to aim, release to land) · LT HOLD = lock +
-// camera follow + Skill 2 cast-hold (Train 72) · X Skill
+// Train 81 sheet (G, 2026-11-20): THE TRIGGERS ARE SWAPPED --
+// RT HOLD = lock + camera follow + Skill 2 cast-hold + the
+// hunt (Train 72's triple verb, ex-LT) · LT = Teleport
+// TARGETING (hold to aim, release to land, ex-RT) · X Skill
 // 3 · Y Skill 4 · B Skill 5 · A Skill 6 · View Skill 7 · L3
 // Skill 8 · D-up Skill 9 · D-down Skill 10 · LB Target Lock ·
 // RB Dash · R3 Blink (Space mirror) · D-Left Fishing · Start =
 // scheme toggle · left stick = WASD (ActionMove drives,
 // camera-relative) · right stick = aim (the teleport marker
-// while RT is held). Classic: PADCAST, untouched. (An L3-toggle
+// while LT is held). Classic: PADCAST, untouched. (An L3-toggle
 // swap was built and CANCELLED by G the same morning -- "Start
 // is better" -- nothing moved.)
 struct ActPrev {
@@ -1027,8 +1028,9 @@ void ActionPadReleaseAll()
     TpTargetCancel("scheme flip");
 }
 
-// ── Train 59: TELEPORT TARGETING (Action scheme, RT hold) ────────────
-// G's spec (2026-11-20): RT is Skill 1 = Teleport. HOLDING RT raises
+// ── Train 59: TELEPORT TARGETING (Action scheme, LT hold since
+// Train 81's trigger swap; RT before it) ─────────────────────────────
+// G's spec (2026-11-20): LT is Skill 1 = Teleport. HOLDING LT raises
 // a landing marker at the spot a tap-blink would take him (facing
 // ray, max range); the RIGHT STICK walks the marker tile to tile;
 // RELEASING RT teleports to the marker -- through the very same
@@ -1194,9 +1196,10 @@ void ActMirror(int vk, bool down, bool& prev)
 void PadButtonsTick(unsigned now, float dt, bool actionPad)
 {
     (void)now;
-    // MEAMU Train 59 sheet (G, 2026-11-20; refines Train 57): his
-    // six stand -- LT = hold-to-lock verb (Train 68), RT = Skill 1 (Teleport, now a
-    // hold-to-aim targeting verb, below), X = Skill 3, Y = Skill 4,
+    // MEAMU Train 81 sheet (G, 2026-11-20): the triggers are
+    // SWAPPED -- RT = the hold-to-lock triple verb + hunt (Train
+    // 72, ex-LT), LT = Skill 1 Teleport TARGETING (hold-to-aim,
+    // below, ex-RT), X = Skill 3, Y = Skill 4,
     // B = Skill 5, A = Skill 6. RB = Dash, R3 = Blink, LB = Lock,
     // D-Left = Fishing, L3 = Skill 8, Start = scheme toggle --
     // the Train 57 layout, unchanged (an L3-toggle swap was built
@@ -1205,19 +1208,22 @@ void PadButtonsTick(unsigned now, float dt, bool actionPad)
     // TELEPORT TARGETING (wired after the skill block below).
     // Train 64: snapshot the skill mirrors for the auto-lock edge.
     const bool prevCastHeld = gActionPadCastHeld;
-    // MEAMU Train 72 (G's refined spec, 2026-11-20): LT hold is
-    // ONE combined verb -- auto-target + camera follow + SKILL 2
-    // CAST-HOLD, all at once, for as long as LT is held. This
-    // supersedes Train 68's verb-only call (no tap/hold split:
-    // the hold IS the action). The mirror presses digit '2'
-    // (KbPlay cast-holds the slot-2 skill at the lock through
-    // ComputeAim); LtHold fills the lock on this same tick, ahead
-    // of the sim step that resolves the cast, and drives the
-    // camera follow. Release: the cast stops, the lock STAYS
-    // (Train 68), the follow ends.
-    const bool ltNow = PadAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > kTriggerOn;
-    ActMirror(0x32, ltNow, gActPrev.lt);   // LT = Skill 2 cast-hold (Train 72)
-    TargetLock_LtHold(ltNow);              // LT = lock + follow (Train 68)
+    // MEAMU Train 72 (G's refined spec, 2026-11-20): the trigger
+    // hold is ONE combined verb -- auto-target + camera follow +
+    // SKILL 2 CAST-HOLD (+ the Train 78 hunt), all at once, for
+    // as long as it is held (no tap/hold split: the hold IS the
+    // action). The mirror presses digit '2' (KbPlay cast-holds
+    // the slot-2 skill at the lock through ComputeAim); LtHold
+    // fills the lock on this same tick, ahead of the sim step
+    // that resolves the cast, and drives the camera follow.
+    // Release: the cast stops, the lock STAYS (Train 68), the
+    // follow ends.
+    // MEAMU Train 81 (G, 2026-11-20): THIS VERB NOW RIDES RT --
+    // the triggers are swapped. (The LtHold name is Train 68's;
+    // it is the verb, not the trigger.)
+    const bool huntNow = PadAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > kTriggerOn;
+    ActMirror(0x32, huntNow, gActPrev.lt);   // RT = Skill 2 cast-hold (Train 81)
+    TargetLock_LtHold(huntNow);              // RT = lock + follow + hunt (Train 81)
     ActMirror(0x33, PadButton(SDL_GAMEPAD_BUTTON_WEST),          gActPrev.x);     // X  = Skill 3 (G)
     ActMirror(0x34, PadButton(SDL_GAMEPAD_BUTTON_NORTH),         gActPrev.y);     // Y  = Skill 4 (G)
     ActMirror(0x35, PadButton(SDL_GAMEPAD_BUTTON_EAST),          gActPrev.b);     // B  = Skill 5 (G)
@@ -1242,8 +1248,9 @@ void PadButtonsTick(unsigned now, float dt, bool actionPad)
         if (!actionPad) Rumble(4000, 0, 50);   // Classic cast-engage thump (kept from the PADCAST era)
     }
 
-    {   // Train 59: RT hold = teleport targeting (see TpTarget block).
-        const bool rt = PadAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > kTriggerOn;
+    {   // Train 59: teleport targeting (see TpTarget block).
+        // Train 81: THIS VERB NOW RIDES LT (trigger swap).
+        const bool rt = PadAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > kTriggerOn;
         if (rt && !gActPrev.rt) {
             if (InputEnable == 0 && DAT_083a7c24 == 0) TpTargetBegin();
         } else if (rt && gTpT.active) {
