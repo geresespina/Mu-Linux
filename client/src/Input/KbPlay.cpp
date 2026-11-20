@@ -407,7 +407,12 @@ bool ValidLatchTarget(int idx)
     if ((char*)c == (char*)(uintptr_t)Hero) return false;
     if (c->Object.Live == 0) return false;
     if (c->Dead != 0) return false;
-    if (!FabricatedMark::Is(c)) return false;
+    // MEAMU Train 55: REAL players are latch-legal. Train 48
+    // admitted only fabricated marks (phantoms/followers) and
+    // monsters, so the lock could never take a real rival --
+    // in Clan War PvP it simply found nobody. NPC kinds stay out.
+    if (!FabricatedMark::Is(c))
+        return c->Object.Type == 390 && c->Object.Kind == 1;
     if (FabricatedMark::Kind(c) == FabricatedMark::kFollower &&
         FabricatedMark::Owner(c) == (int)HeroC()->Key) return false;
     return true;
@@ -431,8 +436,13 @@ int AcquireTarget(int skillDist)
 
     // Train 48: a VERB lock (TargetLock) may hold a fabricated rival
     // (ValidLatchTarget), not only a monster — same precedence slot.
-    if ((ValidMonster(gLockIdx) || (TargetLock_Active() && ValidLatchTarget(gLockIdx)))
-        && Cheb(hero, EntryAt(gLockIdx)) <= acq + 2)
+    // Train 55: while the verb lock is ACTIVE it is honored out to
+    // its own break range (22 tiles) -- Train 48 capped casts at
+    // acq + 2 (16), so a lock taken at 17-22 tiles steered the
+    // facing but casts silently fell through to nearest.
+    const bool verbLock = TargetLock_Active() && ValidLatchTarget(gLockIdx);
+    if ((ValidMonster(gLockIdx) || verbLock)
+        && Cheb(hero, EntryAt(gLockIdx)) <= (verbLock ? 22 : acq + 2))
         return gLockIdx;
     if (ValidLatchTarget(gLastIdx) && Cheb(hero, EntryAt(gLastIdx)) <= acq)
         return gLastIdx;

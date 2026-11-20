@@ -141,6 +141,21 @@ void CActionJump::Update()
     // MEAMU Train 48: target-lock break conditions, per frame.
     TargetLock_Tick();
 
+    // MEAMU Train 55 (2026-11-19, G's order): Q = TARGET LOCK
+    // engage/cycle on keyboard+mouse (middle mouse and pad LB
+    // remain the other two doors into the same verb). Same gates
+    // as Space: Action scheme, no chat/text focus.
+    {
+        static bool s_QPrev = false;
+        const bool qHeld = ((unsigned short)Platform::GetInput().KeyState(0x51) & 0x8000) != 0;
+        const bool qEdge = qHeld && !s_QPrev;
+        s_QPrev = qHeld;
+        if (qEdge && gActionCamera.SchemeIsAction()
+            && InputEnable == 0 && DAT_083a7c24 == 0) {
+            TargetLock_Engage();
+        }
+    }
+
     if (spaceEdge && gActionCamera.SchemeIsAction()
         && InputEnable == 0 && DAT_083a7c24 == 0) {
         // MEAMU Train 48: with a lock, Space blinks BESIDE the locked
