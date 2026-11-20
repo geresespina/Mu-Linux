@@ -72,6 +72,12 @@
 //   schemes; server half is Bounce 14.
 
 void ActionMove_Tick();
+void ActionMove_OnTeleportLanded();
+// Train 89: teleport round-trip flight API (impl in Combat.cpp).
+void Combat_NoteTeleportSent();
+void Combat_NoteTeleportLanded();
+bool Combat_TeleportInFlight();
+unsigned Combat_LastTeleportLandMs(); // Train 87: forget the direct-drive route on a landing
 
  // True while the ACTION scheme is live in-world. Read by
 // Player_InputTick (physical-click suppression) and KbPlay (Space latch
@@ -101,6 +107,17 @@ unsigned ActionMove_SchemeFlipSerial();
 // basic attack, the skill's distance for a cast). Returns true only on
 // the one frame per engagement that actually sends the request.
 bool ActionMove_TryBlinkEngage(int targetIdx, int attackRangeTiles);
+
+// Train 48: unconditional blink-to-target for the Space / pad-B verb
+// when a target lock is active (no engagement guard — the press IS
+// the order). Validates the target, sends the mode-1 dash frame.
+bool ActionMove_BlinkToTarget(int targetIdx);
+
+// Train 48: pad dash verb (button A). Sets the pure-dash burst; the
+// direction is the currently held drive direction, or the stored
+// pad-dash direction (sx, sy in screen space) when no key is held.
+void ActionMove_PadDashDir(int sx, int sy);
+void ActionMove_PadDash();
 
 // MEAMU Train 17: true while the Action Camera holds the pointer lock.
 // NavMove reads it to yield its arrow drive in ACTION+locked, where
