@@ -1,5 +1,6 @@
 // Network.cpp — CNetwork. Ver Network.h.
 
+#include "Input/PadMap.h" // Train 100
 #include "stdafx.h"
 #include "UI/BuffBar.h"
 #include "UI/BoostStrip.h"
@@ -166,6 +167,7 @@ void CNetwork::OnSocketEvent(WORD evt, WORD err)
 // (PacketArgumentEncrypt), TickCount, ClientVersion ofuscada y Serial.
 void CNetwork::SendLogin(const char* account, const char* password)
 {
+    PadMap_OnLogin(account, password); // Train 100: pull the account pad map (async; Default until it lands)
     BYTE user[10] = {}, pass[10] = {};
     // Cuenta y contraseña son ASCII de 10 bytes (no cambian en 0.97.40).
     NetText::ToServer(user, 10, account);

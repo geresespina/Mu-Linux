@@ -415,9 +415,12 @@
 //   CharData_RecalcStats @ 0x0047e3c0
 
 #include "stdafx.h"
+#include <SDL3/SDL.h>   // Train 89: SDL_GetTicks for the teleport flight gate
 #include "Party/Party.h"
 #include "Entity/EntityName.h"
 #include "Render/BijuTransform.h"   // MEAMU TRAIN 7: IsModeTransformSkill (casteo sin pose)
+#include "Input/TargetLock.h"       // MEAMU Train 73: verb lock writes the cast selection
+#include "Net/MoveMarkers.h"        // MEAMU Train 69: teleport vanish kick on the cast path
 #include "Platform/ITimer.h"
 #include "Item/ContentCatalog.h"
 #include "Item/Item_Equip.h"
@@ -553,8 +556,49 @@ static bool SendMove_ChaosBoxBlocks97k(const CHARACTER* character)
     return true;
 }
 
+// ── MEAMU Train 89: teleport round-trip flight state ──────────────────
+// A teleport the HERO initiates (blink/dash wire, Teleport spell) opens
+// a round-trip: the request is out, the 1C landing has not arrived.
+// Move packets composed inside that window are built from pre-teleport
+// state -- the crossed packets Bounce 33 now rejects server-side.
+// This gate kills them at the source: while a flight is open, the
+// hero emits NO move path packets at all (every emitter funnels
+// through Combat_SendMovePathPacket). The 1C handler closes the
+// flight (Combat_NoteTeleportLanded); a 1500 ms timeout covers a
+// refused teleport whose 1C never comes.
+static bool     gTpFlight = false;
+static unsigned gTpFlightT = 0;
+static unsigned gTpLandT = 0;
+
+void Combat_NoteTeleportSent()
+{
+    gTpFlight = true;
+    gTpFlightT = (unsigned)SDL_GetTicks();
+}
+
+void Combat_NoteTeleportLanded()
+{
+    gTpFlight = false;
+    gTpLandT = (unsigned)SDL_GetTicks();
+}
+
+bool Combat_TeleportInFlight()
+{
+    if (gTpFlight && (unsigned)SDL_GetTicks() - gTpFlightT > 1500) gTpFlight = false;
+    return gTpFlight;
+}
+
+unsigned Combat_LastTeleportLandMs()
+{
+    return gTpLandT;
+}
+
 void __cdecl Combat_SendMovePathPacket(CHARACTER* character, const OBJECT* object)
 {
+    // Train 89: no hero move emission during a teleport round-trip.
+    if (character != nullptr && Hero != 0 &&
+        (uintptr_t)character == (uintptr_t)Hero && Combat_TeleportInFlight())
+        return;
     auto* param_1 = reinterpret_cast<unsigned char*>(character);
     const auto* param_2 = reinterpret_cast<const unsigned char*>(object);
     // Saltea si la entidad en param_2+0x78 tiene el flag 0x20 seteado (entidad ocupada/bloqueada)
@@ -1017,7 +1061,7 @@ static Attack_Flow97k Attack_ElfBranch97k(char* entity, int iType)
 
     CheckTarget(AsCharacter(entity));               // IDA L1778 (retorno ignorado)
 
-    if (iType == 57 || iType == 58 || iType == 72 || iType == 73 || iType == 74 || iType == 75 || iType == 76) {
+    if (iType == 57 || iType == 58 || iType == 72 || iType == 73 || iType == 74 || iType == 75 || iType == 76 || iType == 77 || iType == 78 || iType == 79) {  // + 77/78/79 (Train 102)
         // MEAMU (2026-11-14): Omni Buff -- auto-cast sobre el heroe,
         // mismo envio 0x19 auto-objetivo que las invocaciones.
         // MEAMU (2026-11-18): + 72 Biju Bond, 73 Chakra Cloak,
@@ -1202,6 +1246,10 @@ static void Attack_WarriorBranch97k(char* entity)
         if (lowMana) { Attack_UseManaScroll97k(); return; }
         if (!hasAg) return;                                   // IDA L4397
         Attack_SendSkill19_97k(iType, (WORD)HeroKey);
+        // MEAMU TRAIN 65: a form cast (61 Biju / 74 Susanoo) loads
+        // the form models NOW, in input context -- not at first
+        // render (see BijuTransform::PreloadFormModels).
+        if (iType == 61 || iType == 74) BijuTransform::PreloadFormModels();
         // MEAMU TRAIN 7 (2026-11-19): los siete transforms de modo
         // (58-61, 73-75) castean SIN pose -- ni accion 63 ni freno
         // de movimiento; el modo se enciende alrededor del
@@ -1407,7 +1455,12 @@ static void Attack_Label1585_97k(char* entity, int iType, bool hasTarget)
         // binario. `Teleport` de IDA es 0x05826D14 (Teleport), el mismo flag que
         // limpian ReceiveTeleport, el 0x19/0x0F, ReceiveRevival y CheckGate (no
         // DAT_05826d04, que es otro global).
-        if (Teleport || DAT_07e11dc4 || (Platform::GetTimer().Ticks() - DAT_07e11dc8) < 3000)
+        // MEAMU Train 96 (G's law, 2026-11-21): teleport is ONE
+        // system -- the spell works exactly like the LT teleport:
+        // instant, chainable, no extra delay. The stock 3 s
+        // re-cast timer on this send (DAT_07e11dc8, stamped by
+        // every landing) is removed; the in-flight guards stay.
+        if (Teleport || DAT_07e11dc4)
             return;
         Teleport = 1;                                     // IDA L9307: Teleport = 1
         // IDA Attack @0x49CBF0 arma el buffer con longitud inicial 3 y luego
@@ -1417,10 +1470,16 @@ static void Attack_Label1585_97k(char* entity, int iType, bool hasTarget)
         BYTE packet[6] = { 0xC1, 0x06, 0x1C, 0x00,
                            (BYTE)TargetX, (BYTE)TargetY };
         gNetwork.Send(packet, sizeof(packet));
-        // IDA L9682 LABEL_1762 -> LABEL_1763: sub_444B30(c) = SetPlayerTeleport,
-        // o sea la animacion de casteo (accion 87) sobre el propio heroe.
-        // MU 5.2 ZzzInterface.cpp:6130 hace lo mismo tras SendRequestMagicTeleport.
-        SetPlayerTeleport(AsObject(entity));
+        // MEAMU Train 96: NO cast animation on the hero's own
+        // teleport send -- the LT teleport has none, and the law
+        // is one system: instant vanish here, reappear at the
+        // point. (Stock played SetPlayerTeleport, action 87, at
+        // this point; Bounce 41 also stops the server's
+        // skill-attack broadcast, so no begin effect returns.)
+        // The Train 89 round-trip gate, which that broadcast's
+        // return used to open via Skills.cpp, opens HERE at send
+        // instead -- exactly where the wire path opens it.
+        Combat_NoteTeleportSent();
         return;
     }
 
@@ -1555,6 +1614,9 @@ static void Attack_WizardBranch97k(char* entity)
         Attack_SendSkill19_97k(iType, (WORD)HeroKey);
         SetPlayerMagic(AsCharacter(entity));                 // IDA LABEL_1430
         return;
+    case 79:                                                  // MEAMU (2026-11-21, Train 102) -- Super Defense: auto-cast 0x19 sobre el heroe
+    case 78:                                                  // MEAMU (2026-11-21, Train 102) -- Super Healing: auto-cast 0x19 sobre el heroe
+    case 77:                                                  // MEAMU (2026-11-21, Train 102) -- Dragon Form: auto-cast 0x19 sobre el heroe
     case 76:                                                  // MEAMU (2026-11-18) -- Biju Legion: auto-cast 0x19 sobre el heroe
     case 75:                                                  // MEAMU (2026-11-18) -- Dragon Sage Mode: auto-cast 0x19 sobre el heroe
     case 74:                                                  // MEAMU (2026-11-18) -- Perfect Susanoo: auto-cast 0x19 sobre el heroe
@@ -1642,7 +1704,10 @@ static bool Combat_IsAllyTargetSkill97k(int iType)
            iType == 73 ||   // Chakra Cloak (self)
            iType == 74 ||   // Perfect Susanoo (self)
            iType == 75 ||   // Dragon Sage Mode (self)
-           iType == 76;     // Biju Legion (self) (MEAMU 2026-11-18, Train 6 prep)
+           iType == 76 ||   // Biju Legion (self) (MEAMU 2026-11-18, Train 6 prep)
+           iType == 77 ||   // Dragon Form (self) (MEAMU 2026-11-21, Train 102)
+           iType == 78 ||   // Super Healing (self) (MEAMU 2026-11-21, Train 102)
+           iType == 79;     // Super Defense (self) (MEAMU 2026-11-21, Train 102)
 }
 
 // C2 snap-targeting (STUDY §4a): when a cast starts with nothing selected,
@@ -2013,6 +2078,56 @@ void __cdecl Combat_DispatchHeroSkillAttack(void *entity_v /* IDA: c */)
     // MEAMU rival targeting C2 (2026-11-15): nothing selected -> snap the
     // nearest hostile player in range + front arc (also AUTO re-acquire).
     Combat_SnapHostileTarget97k(iType);
+    // ══════════════════════════════════════════════════════════════════
+    // MEAMU Train 80 (2026-11-20, G's law: "within range = always
+    // hit -- sometimes I have to look up to hit it; it should
+    // always hit if I'm within range"): the targeted-cast chain
+    // had exactly one pitch-dependent gate -- the screen-space
+    // aim pick that sets SelectedCharacter (in Action the cursor
+    // is pinned to the reticle and the pick runs through the
+    // pitched camera, so a high / flying / elevated target is
+    // unpickable until he pitches up at it). The safety nets did
+    // not cover monsters: Train 73's seam needs a standing lock,
+    // and Combat_SnapHostileTarget97k is PLAYERS ONLY
+    // (Client_IsHostilePlayer: Kind == 1 + PK >= 6). A missed
+    // pick therefore fell to CheckTarget's terrain ray and the
+    // cast whiffed at the ground while a monster stood in range.
+    // THE GUARANTEE, here in the common dispatch: a targeted,
+    // non-ally skill with NO selection resolves to the nearest
+    // monster inside the skill's own range -- tile distance
+    // only (Chebyshev, the server's measure). No screen space,
+    // no arc, no pitch. A successful pick still wins (aim
+    // chooses among targets); the lock still wins over both
+    // (Train 73 block below). Range is the only gate.
+    if (SelectedCharacter == -1 && KbPlay_SelectedSkillTargeted()
+        && !Combat_IsAllyTargetSkill97k(iType)) {
+        const int nearIdx = KbPlay_NearestMonsterInRange(
+            Combat_GetSkillRange97k(iType));
+        if (nearIdx >= 0) SelectedCharacter = nearIdx;
+    }
+    // ══════════════════════════════════════════════════════════════════
+    // MEAMU Train 73 (2026-11-20, G's play report: "Lock works --
+    // just not the cast while locked"): a standing VERB lock is the
+    // player's deliberate target, and casts now honor it HERE, in
+    // the common dispatch, ahead of every branch's CheckTarget --
+    // the C2 snap's own seam. Root cause of the report: the lock
+    // steered only the FACING (Train 48) and KbPlay's aim (whose
+    // Action park Train 31 lands on the hero), while the cast
+    // target itself came from the centre-screen HOVER pick in
+    // Action and the parked hover in Classic -- KbPlay's lock-
+    // honoring AcquireTarget never reached the packet. The lock
+    // now writes the selection directly: it wins over the hover
+    // and over the snap (both are transient; the lock is the
+    // standing order). Targeted skills only, per Train 70's
+    // classification: self skills never take a lock target, and
+    // ally-target skills (heals, Teleport Ally) keep their own
+    // selection. Range machinery downstream is untouched -- an
+    // out-of-range lock behaves exactly like an out-of-range
+    // hover pick (walk-in in Classic, blink-engage / hold in
+    // Action), inside the lock's own 22-tile break range.
+    if (TargetLock_Active() && KbPlay_SelectedSkillTargeted()
+        && !Combat_IsAllyTargetSkill97k(iType))
+        SelectedCharacter = TargetLock_Index();
     // IDA L1346-1484 — bucle de manos equipadas, comun a las clases != 0.
     // ══════════════════════════════════════════════════════════════════════════
     if ((*(char *)&AsCharacter(entity)->Class & 7) != 0) {

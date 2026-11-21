@@ -88,6 +88,24 @@ void DrawSkillIcon(int skill, float x, float y)
         GL_DrawTexture(0x106, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
         return;
     }
+    if (skill == 77) {
+        // MEAMU 2026-11-21 (Train 101): Dragon Form -- the form
+        // texture (0x106), same as 61/74.
+        GL_DrawTexture(0x106, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        return;
+    }
+    if (skill == 78) {
+        // MEAMU 2026-11-21 (Train 101): Super Healing -- the Sage
+        // leaf (0x134), its Senju mode family.
+        GL_DrawTexture(0x134, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        return;
+    }
+    if (skill == 79) {
+        // MEAMU 2026-11-21 (Train 101): Super Defense -- the
+        // Mangekyou texture (299), its Uchiha mode family.
+        GL_DrawTexture(299, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        return;
+    }
     if (skill == 75) {
         // MEAMU 2026-11-18 (Train 3): Dragon Sage Mode -- dedicated
         // texture (bitmap 0x0c9), see Model_SkillEffects.cpp.
@@ -208,7 +226,7 @@ void CBuffBar::Receive(const unsigned char* packet, int size)
     // never seen. Losses are not recorded (the record is only
     // consulted while the form bit is on; the next form cast
     // overwrites it).
-    if (msg.state && (msg.skill == 61 || msg.skill == 74))
+    if (msg.state && (msg.skill == 61 || msg.skill == 74 || msg.skill == 77))  // + 77 Dragon Form (Train 102)
         BijuTransform::NoteFormSource((void*)(uintptr_t)DAT_07abf5d8, (int)msg.skill);
     int slot = 0;
     while (slot < m_Count && m_Buffs[slot].effect != msg.effect) ++slot;
