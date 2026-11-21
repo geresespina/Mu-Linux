@@ -1739,6 +1739,20 @@ void KbPlay_LockSet(int idx)
 void KbPlay_LockClear() { gLockIdx = -1; }
 bool KbPlay_LatchLegal(int idx) { return ValidLatchTarget(idx); }
 bool KbPlay_IsMonster(int idx) { return ValidMonster(idx); }   // Train 64: auto-lock is monsters-only
+// Train 93 (G's RT amendment, 2026-11-21): the lock pool is every
+// ATTACKABLE body, not monsters only. For user-type bodies the
+// attackability signal is the presented PK byte -- the GS stamps
+// it viewer-relative (rival clan, rogue elites per Bounce 38, real
+// outlaws read 6; own clan and neutrals stay commoner) -- and
+// Client_IsHostilePlayer is the codebase's one reader of it
+// (party members excluded there by name). Fabricated bots are
+// user-type on the wire, so phantom villagers and Akatsuki
+// resolve through the same byte as real players.
+bool KbPlay_IsHostileUser(int idx)
+{
+    if (idx < 0 || idx >= 400 || !Hero) return false;
+    return Client_IsHostilePlayer(EntryAt(idx));
+}
 bool KbPlay_SelectedSkillTargeted() { return !IsSelfSkill(SelectedSkillType()); }   // Train 70: pad auto-lock fires only for targeted skills
 int KbPlay_TargetDist(int idx)
 {

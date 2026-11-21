@@ -21,6 +21,15 @@ void KbPlay_LockSet(int idx);
 void KbPlay_LockClear();
 bool KbPlay_LatchLegal(int idx);
 bool KbPlay_IsMonster(int idx);
+bool KbPlay_IsHostileUser(int idx);   // Train 93: PK-byte hostility (Combat's oracle)
+// Train 93: ONE lock pool for every acquisition fill -- a monster,
+// or a user-type body that reads PvP to the hero (phantom bot,
+// Akatsuki, rival or outlaw player). Own-clan members never read
+// PvP (Bounce 38 law), so they can never enter the pool.
+static bool InLockPool(int idx)
+{
+    return KbPlay_IsMonster(idx) || KbPlay_IsHostileUser(idx);
+}
 bool KbPlay_SelectedSkillTargeted();   // Train 70   // Train 64
 int  KbPlay_TargetDist(int idx);
 void KbPlay_TargetTile(int idx, int& tx, int& ty);
@@ -138,7 +147,7 @@ bool TargetLock_AutoLockClosest()
     if (KbPlay_LockIndex() >= 0) return false;   // manual lock wins
     int best = -1, bestD = kEngageRange + 1;
     for (int i = 0; i < 400; ++i) {
-        if (!KbPlay_IsMonster(i)) continue;
+        if (!InLockPool(i)) continue;   // Train 93: any attackable kind
         const int d = KbPlay_TargetDist(i);
         if (d < bestD) { bestD = d; best = i; }
     }
@@ -196,7 +205,7 @@ void TargetLock_LtHold(bool held)
     int best = -1, bestD = 9999;
     for (int i = 0; i < 400; ++i) {
         if (!KbPlay_LatchLegal(i)) continue;
-        if (!KbPlay_IsMonster(i)) continue;      // Train 79: monsters only
+        if (!InLockPool(i)) continue;   // Train 93: any attackable kind (was Train 79 monsters-only)
         const int d = KbPlay_TargetDist(i);
         if (d < bestD) { bestD = d; best = i; }
     }
