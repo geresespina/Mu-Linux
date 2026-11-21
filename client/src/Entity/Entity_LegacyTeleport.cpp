@@ -87,7 +87,6 @@ extern "C" void __cdecl CreateTeleportBegin(OBJECT* o)
                        o->Light, nullptr, nullptr,
                        (float*)(uintptr_t)0xFFFFFFFFu, nullptr, 0);
     PlayBuffer(88, 0, 0);                          // PlayBuffer(88) whoosh
-    MoveMarkers::OnTeleportDeparture(o);   // MEAMU MoveMarkers: shrinking ring at the origin tile
 }
 
 // FUN_00474310 @ 0x00474310 — CreateTeleportEnd(DWORD o)  (93 bytes)
@@ -106,7 +105,6 @@ extern "C" void __cdecl CreateTeleportEnd(OBJECT* o)
                        o->Light, nullptr, nullptr,
                        (float*)(uintptr_t)0xFFFFFFFFu, nullptr, 0);
     PlayBuffer(88, 0, 0);
-    MoveMarkers::OnTeleportArrival(o);     // MEAMU MoveMarkers: ring + pillar at the landing tile
 }
 
 // Combat_UseWarriorSkill @ 0x00485780 — UseSkillWarrior(c=CHARACTER*, o=OBJECT*)

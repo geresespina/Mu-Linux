@@ -475,6 +475,13 @@ static void HUD_PickUpNearestItem(void)
     }
 }
 
+// MEAMU Train 94 (G's ruling, 2026-11-21): R3 = PICK UP ITEMS.
+// The pad's R3 press calls the same nearest-item fetch Space
+// uses: nearest ground item first; while already fetching, the
+// next nearest -- soul pets ride the same ground-item pool, no
+// type filter anywhere on the path.
+void Meamu_PickUpNearestItem(void) { HUD_PickUpNearestItem(); }
+
 static void HUD_HotkeyTick(void)
 {
     ClampChatModeIME("HKT_enter");
