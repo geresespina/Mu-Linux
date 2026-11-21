@@ -226,7 +226,7 @@ void CBuffBar::Receive(const unsigned char* packet, int size)
     // never seen. Losses are not recorded (the record is only
     // consulted while the form bit is on; the next form cast
     // overwrites it).
-    if (msg.state && (msg.skill == 61 || msg.skill == 74))
+    if (msg.state && (msg.skill == 61 || msg.skill == 74 || msg.skill == 77))  // + 77 Dragon Form (Train 102)
         BijuTransform::NoteFormSource((void*)(uintptr_t)DAT_07abf5d8, (int)msg.skill);
     int slot = 0;
     while (slot < m_Count && m_Buffs[slot].effect != msg.effect) ++slot;

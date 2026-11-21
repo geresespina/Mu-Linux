@@ -1061,7 +1061,7 @@ static Attack_Flow97k Attack_ElfBranch97k(char* entity, int iType)
 
     CheckTarget(AsCharacter(entity));               // IDA L1778 (retorno ignorado)
 
-    if (iType == 57 || iType == 58 || iType == 72 || iType == 73 || iType == 74 || iType == 75 || iType == 76) {
+    if (iType == 57 || iType == 58 || iType == 72 || iType == 73 || iType == 74 || iType == 75 || iType == 76 || iType == 77 || iType == 78 || iType == 79) {  // + 77/78/79 (Train 102)
         // MEAMU (2026-11-14): Omni Buff -- auto-cast sobre el heroe,
         // mismo envio 0x19 auto-objetivo que las invocaciones.
         // MEAMU (2026-11-18): + 72 Biju Bond, 73 Chakra Cloak,
@@ -1614,6 +1614,9 @@ static void Attack_WizardBranch97k(char* entity)
         Attack_SendSkill19_97k(iType, (WORD)HeroKey);
         SetPlayerMagic(AsCharacter(entity));                 // IDA LABEL_1430
         return;
+    case 79:                                                  // MEAMU (2026-11-21, Train 102) -- Super Defense: auto-cast 0x19 sobre el heroe
+    case 78:                                                  // MEAMU (2026-11-21, Train 102) -- Super Healing: auto-cast 0x19 sobre el heroe
+    case 77:                                                  // MEAMU (2026-11-21, Train 102) -- Dragon Form: auto-cast 0x19 sobre el heroe
     case 76:                                                  // MEAMU (2026-11-18) -- Biju Legion: auto-cast 0x19 sobre el heroe
     case 75:                                                  // MEAMU (2026-11-18) -- Dragon Sage Mode: auto-cast 0x19 sobre el heroe
     case 74:                                                  // MEAMU (2026-11-18) -- Perfect Susanoo: auto-cast 0x19 sobre el heroe
@@ -1701,7 +1704,10 @@ static bool Combat_IsAllyTargetSkill97k(int iType)
            iType == 73 ||   // Chakra Cloak (self)
            iType == 74 ||   // Perfect Susanoo (self)
            iType == 75 ||   // Dragon Sage Mode (self)
-           iType == 76;     // Biju Legion (self) (MEAMU 2026-11-18, Train 6 prep)
+           iType == 76 ||   // Biju Legion (self) (MEAMU 2026-11-18, Train 6 prep)
+           iType == 77 ||   // Dragon Form (self) (MEAMU 2026-11-21, Train 102)
+           iType == 78 ||   // Super Healing (self) (MEAMU 2026-11-21, Train 102)
+           iType == 79;     // Super Defense (self) (MEAMU 2026-11-21, Train 102)
 }
 
 // C2 snap-targeting (STUDY §4a): when a cast starts with nothing selected,

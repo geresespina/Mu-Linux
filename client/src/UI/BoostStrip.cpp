@@ -70,6 +70,12 @@ void DrawSkillIcon(int skill, float x, float y)
     if (skill == 73) { GL_DrawTexture(0x0c8, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }
     if (skill == 74) { GL_DrawTexture(0x106, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }
     if (skill == 75) { GL_DrawTexture(0x0c9, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }
+    // MEAMU 2026-11-21 (Train 102): the Dragon Form wave -- same
+    // textures as BuffBar (77 form 0x106, 78 Sage leaf 0x134,
+    // 79 Mangekyou 299).
+    if (skill == 77) { GL_DrawTexture(0x106, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }
+    if (skill == 78) { GL_DrawTexture(0x134, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }
+    if (skill == 79) { GL_DrawTexture(299, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }
     if (skill >= 62 && skill <= 71) {
         // MEAMU Train 2 combiner: beast actives draw their cell of the
         // BijuPowers atlas (bitmap 0x102, 5x2 grid) -- the stock 298 atlas
