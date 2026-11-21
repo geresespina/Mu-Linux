@@ -1455,7 +1455,12 @@ static void Attack_Label1585_97k(char* entity, int iType, bool hasTarget)
         // binario. `Teleport` de IDA es 0x05826D14 (Teleport), el mismo flag que
         // limpian ReceiveTeleport, el 0x19/0x0F, ReceiveRevival y CheckGate (no
         // DAT_05826d04, que es otro global).
-        if (Teleport || DAT_07e11dc4 || (Platform::GetTimer().Ticks() - DAT_07e11dc8) < 3000)
+        // MEAMU Train 96 (G's law, 2026-11-21): teleport is ONE
+        // system -- the spell works exactly like the LT teleport:
+        // instant, chainable, no extra delay. The stock 3 s
+        // re-cast timer on this send (DAT_07e11dc8, stamped by
+        // every landing) is removed; the in-flight guards stay.
+        if (Teleport || DAT_07e11dc4)
             return;
         Teleport = 1;                                     // IDA L9307: Teleport = 1
         // IDA Attack @0x49CBF0 arma el buffer con longitud inicial 3 y luego
@@ -1465,10 +1470,16 @@ static void Attack_Label1585_97k(char* entity, int iType, bool hasTarget)
         BYTE packet[6] = { 0xC1, 0x06, 0x1C, 0x00,
                            (BYTE)TargetX, (BYTE)TargetY };
         gNetwork.Send(packet, sizeof(packet));
-        // IDA L9682 LABEL_1762 -> LABEL_1763: sub_444B30(c) = SetPlayerTeleport,
-        // o sea la animacion de casteo (accion 87) sobre el propio heroe.
-        // MU 5.2 ZzzInterface.cpp:6130 hace lo mismo tras SendRequestMagicTeleport.
-        SetPlayerTeleport(AsObject(entity));
+        // MEAMU Train 96: NO cast animation on the hero's own
+        // teleport send -- the LT teleport has none, and the law
+        // is one system: instant vanish here, reappear at the
+        // point. (Stock played SetPlayerTeleport, action 87, at
+        // this point; Bounce 41 also stops the server's
+        // skill-attack broadcast, so no begin effect returns.)
+        // The Train 89 round-trip gate, which that broadcast's
+        // return used to open via Skills.cpp, opens HERE at send
+        // instead -- exactly where the wire path opens it.
+        Combat_NoteTeleportSent();
         return;
     }
 
