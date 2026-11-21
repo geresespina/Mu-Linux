@@ -54,6 +54,7 @@
 #include "../Combat/Skills.h"
 #include "Render/BijuTransform.h"   // MEAMU TRAIN 8 ADDENDUM: NoteFormSource (0x19 witness feed)
 #include "Input/AnimTrace.h"        // MEAMU Train 42 (ANIMTRACE round 2)
+#include "Input/ActionMove.h"   // Train 89: teleport flight API
 
 
 // Forward declarations for functions identified in decompilation
@@ -234,6 +235,9 @@ void PacketHandler_0x19(BYTE* pkt)
         // Unlike the other cases, IDA returns immediately after the
         // teleport-begin animation rather than marking the common skill tail.
         CreateTeleportBegin(AsObject(caster));
+        // Train 89: the hero's own Teleport cast opens the round-trip
+        // gate (remote casters do not gate the hero's movement).
+        if (caster == (BYTE*)DAT_07abf5d8) Combat_NoteTeleportSent();
         return;
     }
 
@@ -464,6 +468,18 @@ void PacketHandler_0x19(BYTE* pkt)
         // form to the titan (228/229) even when a soul pet IS
         // equipped (G's ruling: Susanoo = always the titan).
         BijuTransform::NoteFormSource(caster, 74);
+        goto common_tail;
+    }
+
+    case 0x4D:  // 77 Dragon Form (MEAMU 2026-11-21, Train 99)
+    {
+        // Remote cast (pose-less, Train 7) -- mirror of 0x4A. The
+        // form itself is the BijuTransform render (bit 0x2000
+        // state, class 231).
+        // MEAMU TRAIN 99: witness feed -- with this cast
+        // recorded, BijuTransform resolves the form to the
+        // dragon (231) regardless of pet slot or name.
+        BijuTransform::NoteFormSource(caster, 77);
         goto common_tail;
     }
 
