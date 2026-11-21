@@ -1202,7 +1202,7 @@ bool TpTargetUpdate(float dt, bool kbdAim)
         // up/down terms (-fxv*rdy, -fyv*rdy) are byte-identical:
         // vertical was right and stays right.
         const float rxv = fyv, ryv = -fxv;                  // screen-right (X flipped)
-        const float kSpeed = 11.0f;                          // tiles / second
+        const float kSpeed = 17.0f;                          // tiles / second
         gTpT.fx += (rxv * rdx - fxv * rdy) * kSpeed * dt;
         gTpT.fy += (ryv * rdx - fyv * rdy) * kSpeed * dt;
         // Keep the marker inside the blink ring around the hero's

@@ -50,6 +50,11 @@ void DeliverSDLInput(const InputEvent& event);   // SDLWindow.cpp
 unsigned RealInputSerial();                      // SDLInput.cpp
 }
 
+// MEAMU Train 92: global forward declaration (definition beside
+// ActionMove_OnTeleportLanded, global scope).
+bool ActionMove_TryBufferTeleport(unsigned char mode, unsigned char b5,
+                                  unsigned char b6, bool airDash);
+
 namespace {
 
 // ── Tuning ───────────────────────────────────────────────────────────────────
@@ -403,6 +408,13 @@ bool SendDashRequest(unsigned char mode, int keyOrDir)
         b5 = (BYTE)(keyOrDir & 0xFF);          // engine Dir 0..7
         b6 = 0;
     }
+    // MEAMU Train 92: a dash pressed mid-flight is buffered and
+    // fired at the landing -- the server drops FD frames sent while
+    // a teleport is in progress, which ate chained dashes.
+    if (mode == 0 && ActionMove_TryBufferTeleport(mode, b5, b6, true)) {
+        ActLog("ACTION: dash buffered (teleport in flight)");
+        return true;
+    }
     const bool sent = EmitDashFrame(mode, b5, b6,
         mode == kDashModeTarget ? "blink-to-target" : "dash");
     // MEAMU Train 29: a direction dash in the air becomes an air-dash
@@ -561,6 +573,38 @@ void FlipScheme()
 // Defined at global scope (the header's declaration): the drive
 // state lives in the anonymous namespace above, visible in this
 // TU, so the reset is one call.
+// ── MEAMU Train 92: pending-teleport slot ──────────────────────────
+// One slot, latest wins, 1600 ms expiry (the flight timeout is
+// 1500 ms; a stale entry never fires on an unrelated landing).
+namespace {
+    bool          gPendValid = false;
+    unsigned char gPendMode = 0, gPendB5 = 0, gPendB6 = 0;
+    bool          gPendAirDash = false;
+    unsigned      gPendT = 0;
+}
+
+bool ActionMove_TryBufferTeleport(unsigned char mode, unsigned char b5,
+                                         unsigned char b6, bool airDash)
+{
+    if (!Combat_TeleportInFlight()) return false;
+    gPendValid = true; gPendMode = mode; gPendB5 = b5; gPendB6 = b6;
+    gPendAirDash = airDash; gPendT = (unsigned)SDL_GetTicks();
+    return true;
+}
+
+void ActionMove_FlushPendingTeleport()
+{
+    if (!gPendValid) return;
+    gPendValid = false;
+    if ((unsigned)SDL_GetTicks() - gPendT > 1600) return;   // stale
+    const bool sent = EmitDashFrame(gPendMode, gPendB5, gPendB6,
+                                    "buffered-teleport");
+    if (sent) {
+        if (gPendAirDash) gActionJump.OnAirDash();
+        else gActionJump.CancelAir();
+    }
+}
+
 void ActionMove_OnTeleportLanded()
 {
     ResetDirectDrive();
@@ -717,6 +761,13 @@ bool ActionMove_TeleportToPoint(int tileX, int tileY)
         clamped = true;
     }
     if (tx < 0 || ty < 0 || tx > 255 || ty > 255) return false;
+    // MEAMU Train 92: same mid-flight buffering for point teleports
+    // (marker fire / double-click during a flight).
+    if (ActionMove_TryBufferTeleport(kDashModeClickTp, (BYTE)tx, (BYTE)ty, false)) {
+        ActLog("ACTION: click-teleport buffered (teleport in flight)");
+        gActionJump.CancelAir();
+        return true;
+    }
     const bool sent = EmitDashFrame(kDashModeClickTp, (BYTE)tx, (BYTE)ty,
                                     "click-teleport");
     if (sent) gActionJump.CancelAir();   // Train 29: teleports land grounded

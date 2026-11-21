@@ -77,6 +77,11 @@ void ActionMove_OnTeleportLanded();
 void Combat_NoteTeleportSent();
 void Combat_NoteTeleportLanded();
 bool Combat_TeleportInFlight();
+
+// MEAMU Train 92: a dash / point-teleport pressed DURING a teleport
+// flight is buffered (one slot, latest wins) and fired by the 1C
+// landing handler -- chains no longer eat presses.
+void ActionMove_FlushPendingTeleport();
 unsigned Combat_LastTeleportLandMs(); // Train 87: forget the direct-drive route on a landing
 
  // True while the ACTION scheme is live in-world. Read by

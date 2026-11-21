@@ -1609,6 +1609,7 @@ void NetRecv_1C(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
     ActionMove_OnTeleportLanded();
     Combat_NoteTeleportLanded();     // Train 89: close the round-trip gate
     PadBuffer_FlushTeleport();       // Train 89: fire a cast buffered mid-flight
+    ActionMove_FlushPendingTeleport();   // Train 92: fire a dash / teleport buffered mid-flight
 
     if (gate != 0) {
         // ReceiveTeleport's gate branch clears the old viewport
