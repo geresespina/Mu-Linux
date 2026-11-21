@@ -30,11 +30,31 @@
 // Called from: Entity_DrawAt @ 0x00505A10
 
 #include "stdafx.h"
+#include "globals.h"
+#include "Entity/EntityTypes.h"
+#include "Render/BijuTransform.h"
 #include "Model/ModelTypes.h"
 #include "Render/Gfx.h"
 #include "Render/EquipmentVisuals.h"
 #include "Item/ContentCatalog.h"
 #include "Config/UserSettings.h"
+
+namespace {
+// MEAMU 2026-11-21 (Train 107): true when p is a character-pool slot
+// whose owner is form-transformed (Dragon Form / Perfect Susanoo /
+// Biju Mode beast). Range + alignment + active checks run first, so
+// monster, item and world-object pointers can never false-positive.
+bool IsTransformedCharacter(intptr_t p)
+{
+    const uintptr_t base = (uintptr_t)DAT_07abf5d0;
+    if (base == 0 || p == 0) return false;
+    const uintptr_t q = (uintptr_t)p;
+    if (q < base || q >= base + (uintptr_t)(400 * CHARACTER_STRIDE)) return false;
+    if ((q - base) % CHARACTER_STRIDE != 0) return false;
+    if (*(const BYTE*)q == 0) return false;
+    return BijuTransform::ModelForCharacter((const CHARACTER*)q) >= 0;
+}
+} // namespace
 
 void __cdecl RenderPartObjectEffect(intptr_t param_1, int param_2, float *param_3,
                            float param_4, uint param_5, byte param_6,
@@ -325,7 +345,11 @@ void __cdecl RenderPartObjectEffect(intptr_t param_1, int param_2, float *param_
             GL_ResetState();
             Gfx::Color3f(0.0f, 0.0f, 0.0f);
         }
-        if (gMapManager.GetCurrentMap() != 10)
+        // MEAMU 2026-11-21 (Train 107, G's order): a transformed
+        // player casts NO ground shadow -- the form's boss-scale
+        // silhouette blob is removed entirely. Normal characters,
+        // monsters and objects keep their shadows.
+        if (gMapManager.GetCurrentMap() != 10 && !IsTransformedCharacter(param_1))
             BMD__RenderBodyShadow(this_, *(int *)(param_1 + 100), *(int *)(param_1 + 88));
         return;
     }
