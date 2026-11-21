@@ -280,6 +280,18 @@ extern "C" void __cdecl sub_4BB940(float HeightArg, float xArg, float yArg,
         // MEAMU 2026-11-18 (Train 3): Dragon Sage Mode -- dedicated
         // texture (bitmap 0x0c9), see Model_SkillEffects.cpp.
         GL_DrawTexture(0x0c9, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+    } else if (v10 == 77) {
+        // MEAMU 2026-11-21 (Train 101): Dragon Form -- the form
+        // texture (0x106), same as 61/74; the model is its identity.
+        GL_DrawTexture(0x106, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+    } else if (v10 == 78) {
+        // MEAMU 2026-11-21 (Train 101): Super Healing -- the Sage
+        // leaf (0x134), its Senju mode family.
+        GL_DrawTexture(0x134, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+    } else if (v10 == 79) {
+        // MEAMU 2026-11-21 (Train 101): Super Defense -- the
+        // Mangekyou texture (299), its Uchiha mode family.
+        GL_DrawTexture(299, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
     } else if (v10 == 61) {
         // MEAMU 2026-11-17 (Train 4): Biju Mode -- dedicated texture
         // (the tailed-beast eye) full-frame.
