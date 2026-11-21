@@ -1239,6 +1239,8 @@ void TpTargetFire()
     }
 }
 
+void Meamu_PickUpNearestItem(void);   // Train 94: Player_InputTick's nearest-item fetch
+
 void ActMirror(int vk, bool down, bool& prev)
 {
     if (down != prev) { Platform::InjectVirtualKey(vk, down); prev = down; }
@@ -1360,7 +1362,15 @@ void PadButtonsTick(unsigned now, float dt, bool actionPad)
         gActPrev.rt = rt;
     }
 
-    ActMirror(0x20, PadButton(SDL_GAMEPAD_BUTTON_RIGHT_STICK), gActPrev.r3);   // R3 = Blink (Space)
+    // Train 94 (G's ruling): R3 = PICK UP ITEMS -- replaces the
+    // R3 = Blink Space mirror (teleport lives on LT hold-aim-
+    // release now). One press fetches the nearest ground item;
+    // pressing again while fetching steps to the next nearest.
+    {
+        const bool r3 = PadButton(SDL_GAMEPAD_BUTTON_RIGHT_STICK);
+        if (r3 && !gActPrev.r3) Meamu_PickUpNearestItem();
+        gActPrev.r3 = r3;
+    }
 
     const bool lb = PadButton(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);       // LB = Lock ON/OFF (Train 75)
     if (lb && !gActPrev.lb) {
