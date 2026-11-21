@@ -237,6 +237,28 @@ unsigned gBrakeArmedMs = 0;
 int      gBrakeTileX   = 0;
 int      gBrakeTileY   = 0;
 
+// ── Dash glide (MEAMU Train 95, G's report: "dash looks like
+// a teleport") ───────────────────────────────────────────────────────
+// The server answers a dash with the Teleport machinery, so the
+// landing handler snaps the hero to the end tile -- on screen a
+// dash and a teleport were the same vanish/reappear. The client is
+// the only side that knows which verb it sent, so it remembers
+// the wire mode + the hero's render position at send time; when
+// a DASH (mode 0) landing arrives promptly, the logical tile
+// still adopts the server's tile instantly (sync law untouched)
+// but the RENDERED body glides from the send position to the
+// landing tile at ~33 tiles/s, facing the travel direction --
+// visibly travelling every in-between tile, GunZ-style. Teleport
+// (modes 1/2) keeps the pure vanish/reappear.
+unsigned char gWireMode    = 0xFF;   // mode of the last F3 FD frame sent
+unsigned      gWireSentMs  = 0;
+float         gWireFromPos[3] = { 0.0f, 0.0f, 0.0f };
+bool          gGlideActive = false;
+float         gGlideFrom[3] = { 0.0f, 0.0f, 0.0f };
+float         gGlideTo[3]   = { 0.0f, 0.0f, 0.0f };
+unsigned      gGlideStartMs = 0;
+unsigned      gGlideDurMs   = 0;
+
 void ArmDashBrake(unsigned now)
 {
     gBrakeActive  = true;
@@ -390,6 +412,15 @@ bool EmitDashFrame(unsigned char mode, BYTE b5, BYTE b6, const char* label)
     // trip — the run-up G felt.)
     ReleaseDrive();
     ArmDashBrake((unsigned)SDL_GetTicks());
+    // Train 95: remember the verb + where the body was when it
+    // was sent, so the landing can glide a dash (and only a dash).
+    gWireMode   = mode;
+    gWireSentMs = (unsigned)SDL_GetTicks();
+    if (Hero) {
+        gWireFromPos[0] = HeroC()->Object.Position[0];
+        gWireFromPos[1] = HeroC()->Object.Position[1];
+        gWireFromPos[2] = HeroC()->Object.Position[2];
+    }
     const BYTE pkt[7] = { 0xC1, 0x07, kDashHead, kDashSub, mode, b5, b6 };
     gNetwork.SendC1(pkt, sizeof(pkt));
     Combat_NoteTeleportSent();   // Train 89: the wire teleport opens the round-trip gate
@@ -608,6 +639,38 @@ void ActionMove_FlushPendingTeleport()
 void ActionMove_OnTeleportLanded()
 {
     ResetDirectDrive();
+    // Train 95: a DASH landing starts the glide. The handler has
+    // already adopted the server's tile + render position; the
+    // glide rewinds the RENDER position to the send point and
+    // plays it forward in ActionMove_Tick. A landing that arrives
+    // late (> 1.5 s after the send) or barely moved (< 2 tiles)
+    // is not a dash landing -- no glide.
+    if (gWireMode == 0 && Hero) {
+        const unsigned now = (unsigned)SDL_GetTicks();
+        const float dx = HeroC()->Object.Position[0] - gWireFromPos[0];
+        const float dy = HeroC()->Object.Position[1] - gWireFromPos[1];
+        const float adx = dx < 0.0f ? -dx : dx;
+        const float ady = dy < 0.0f ? -dy : dy;
+        const float tiles = (adx > ady ? adx : ady) / 100.0f;
+        if (now - gWireSentMs <= 1500 && tiles >= 2.0f) {
+            gGlideFrom[0] = gWireFromPos[0];
+            gGlideFrom[1] = gWireFromPos[1];
+            gGlideFrom[2] = gWireFromPos[2];
+            gGlideTo[0] = HeroC()->Object.Position[0];
+            gGlideTo[1] = HeroC()->Object.Position[1];
+            gGlideTo[2] = HeroC()->Object.Position[2];
+            unsigned dur = (unsigned)(tiles * 30.0f);   // ~33 tiles/s
+            if (dur < 90) dur = 90;
+            if (dur > 240) dur = 240;
+            gGlideDurMs   = dur;
+            gGlideStartMs = now;
+            gGlideActive  = true;
+            HeroC()->Object.Angle[2] = CreateAngle(gGlideFrom[0], gGlideFrom[1],
+                                                   gGlideTo[0], gGlideTo[1]);
+            ActLog("ACTION: dash glide %.1f tiles over %u ms", tiles, dur);
+        }
+    }
+    gWireMode = 0xFF;   // consumed by this landing, whatever it was
 }
 
 bool ActionMove_IsAction()
@@ -866,6 +929,25 @@ bool ActionMove_TryEventTeleport(int uiX, int uiY)
 
 void ActionMove_Tick()
 {
+    // Train 95: advance the dash glide (render position only --
+    // the logical tile has been the server's since the landing).
+    if (gGlideActive && Hero) {
+        const unsigned now = (unsigned)SDL_GetTicks();
+        const unsigned el = now - gGlideStartMs;
+        if (el >= gGlideDurMs) {
+            HeroC()->Object.Position[0] = gGlideTo[0];
+            HeroC()->Object.Position[1] = gGlideTo[1];
+            HeroC()->Object.Position[2] = gGlideTo[2];
+            gGlideActive = false;
+        } else {
+            const float t = (float)el / (float)gGlideDurMs;
+            const float e = 1.0f - (1.0f - t) * (1.0f - t);   // ease-out: fast launch, settle in
+            HeroC()->Object.Position[0] = gGlideFrom[0] + (gGlideTo[0] - gGlideFrom[0]) * e;
+            HeroC()->Object.Position[1] = gGlideFrom[1] + (gGlideTo[1] - gGlideFrom[1]) * e;
+            HeroC()->Object.Position[2] = gGlideFrom[2] + (gGlideTo[2] - gGlideFrom[2]) * e;
+        }
+    }
+
     if (!gInit) {
         gInit = true;
         gScheme = gUserSettings.GetControlScheme();
