@@ -471,6 +471,18 @@ void PacketHandler_0x19(BYTE* pkt)
         goto common_tail;
     }
 
+    case 0x4D:  // 77 Dragon Form (MEAMU 2026-11-21, Train 99)
+    {
+        // Remote cast (pose-less, Train 7) -- mirror of 0x4A. The
+        // form itself is the BijuTransform render (bit 0x2000
+        // state, class 231).
+        // MEAMU TRAIN 99: witness feed -- with this cast
+        // recorded, BijuTransform resolves the form to the
+        // dragon (231) regardless of pet slot or name.
+        BijuTransform::NoteFormSource(caster, 77);
+        goto common_tail;
+    }
+
     case 0x4B:  // 75 Dragon Sage Mode (MEAMU 2026-11-18)
     {
         // Remote cast (pose-less, Train 7) -- mirror of 0x3B. The
