@@ -316,6 +316,21 @@ void CBuffBar::Receive(const unsigned char* packet, int size)
     std::memcpy(buff.name, msg.name, sizeof(msg.name));
 }
 
+bool CBuffBar::FormDamage(int& pct, int& skill) const
+{
+    for (int i = 0; i < m_Count; i++) {
+        const Buff& b = m_Buffs[i];
+        if (b.effect == 68 || b.effect == 71 || b.effect == 72) {
+            pct = b.value[0];
+            skill = b.skill;
+            return pct > 0;
+        }
+    }
+    pct = 0;
+    skill = 0;
+    return false;
+}
+
 void CBuffBar::Clear()
 {
     m_Count = 0;

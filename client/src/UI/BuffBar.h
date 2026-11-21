@@ -10,6 +10,10 @@ public:
     void Receive(const unsigned char* packet, int size);
     void Clear();
     void Render();
+    // MEAMU 2026-11-21 (Train 106): the active form's damage bonus
+    // (F3:F1 value[0] of effects 68 Biju Mode / 71 Perfect Susanoo /
+    // 72 Dragon Form) + its source skill, for the BoostStrip headline.
+    bool FormDamage(int& pct, int& skill) const;
 
 private:
     struct Buff {

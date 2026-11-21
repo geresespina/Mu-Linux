@@ -9,6 +9,7 @@
 #include "Core/Window.h"
 #include "UI/PanelAnchor.h"
 #include "Game/HeroVitals.h"
+#include "UI/BuffBar.h"
 #include "globals.h"
 
 #include <cstdio>
@@ -311,24 +312,35 @@ void CBoostStrip::Render()
 
     int x = gWindow.PanelOrigin(Ui::WindowLeft) + kOrbX;
 
-    // Headline FIRST, larger than the factor chips. In form the
-    // headline reads FORM (the form is not a multiplier); the
-    // product field stays live for the drop back to normal.
+    // MEAMU 2026-11-21 (Train 106, G's ruling): the form's own
+    // multiplier SHOWS -- "if it's on, it shows". The FORM headline
+    // product now folds the form factor in (Dragon Form x3.0,
+    // Susanoo x3.0, Biju Mode x2.5, from the live F3:F1 value), and
+    // the form also gets its own factor chip below, so the row's
+    // chips still multiply out to the headline. Supersedes the
+    // Train 8 addendum's "the form is not a multiplier" framing.
+    int formPct = 0, formSkill = 0;
+    if (form) gBuffBar.FormDamage(formPct, formSkill);
+    const int headlineMul = (form && formPct > 0)
+        ? (totalMul * (100 + formPct)) / 100 : totalMul;
+
+    // Headline FIRST, larger than the factor chips.
     if (headline) {
         char label[32];
         char mul[16];
-        FormatMul(totalMul, mul, sizeof(mul));
+        FormatMul(headlineMul, mul, sizeof(mul));
         if (form) {
-            // MEAMU TRAIN 8 ADDENDUM: in form the headline keeps
-            // the FORM word AND gains the product -- the form
-            // funnel composes this same product over the form's
-            // pool-% base, so the number his hits use stays
-            // visible while transformed.
             Platform::TextFormatSecure(label, sizeof(label), "FORM %s", mul);
         } else {
             Platform::TextFormatSecure(label, sizeof(label), "TOTAL %s", mul);
         }
         x += DrawChip(x, kStripBottom, kHeadlineH, 0, label, 0xFFFFC040u, true) + kChipGap;
+    }
+
+    if (form && formPct > 0 && formSkill > 0) {
+        char mul[16];
+        FormatMul(1000 + formPct * 10, mul, sizeof(mul));
+        x += DrawChip(x, kStripBottom, kFactorH, formSkill, mul, 0xFFFFC040u, false) + kChipGap;
     }
 
     if (jinchuriki) {
