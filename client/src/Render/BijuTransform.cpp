@@ -50,7 +50,10 @@
 #include "globals.h"
 #include "functions.h"
 #include <cmath>
+#include <cstdio>
 #include <cstring>
+
+extern "C" void DbgLogPublic(const char*);   // Train 65: hero form diagnostic
 
 namespace BijuTransform
 {
@@ -71,7 +74,8 @@ namespace
     constexpr int kBeastCount      = 10;
     constexpr int kFirstBeastClass = 155;             // Shukaku .. Ten-Tails
     constexpr int kSusanooClass    = 228;
-    constexpr int kKaraneCrimsonClass = 229;          // MEAMU TRAIN 7: Crimson Karane, forma personal de G (skill 74, nombres Gloccy/M4D4R4)             // MEAMU TRAIN 3: Perfect Susanoo form (skill 74)
+    constexpr int kKaraneCrimsonClass = 229;
+    constexpr int kMegazordClass = 230;   // MEAMU TRAIN 67: Eliger's Blue Megazord (skill 74)          // MEAMU TRAIN 7: Crimson Karane, forma personal de G (skill 74, nombres Gloccy/M4D4R4)             // MEAMU TRAIN 3: Perfect Susanoo form (skill 74)
 
     signed char s_beastBySlot[400];
     // MEAMU SKIN BODY FIX (2026-11-18): skin de cuerpo entero puesta en el
@@ -153,10 +157,51 @@ namespace
         const int formClass = FormClassForEntity(character);
         if (formClass < 0) return false;
         const CatalogMonster* cm = gContentCatalog.GetMonster(formClass);
-        if (!cm || cm->Model < 0) return false;
+        // Train 61: la forma carga su modelo la primera vez que se pide.
+        if (cm && cm->ModelPending) gContentCatalog.EnsureMonsterModel(formClass);
+        if (!cm || cm->Model < 0) {
+            // Train 65: hero diagnostic -- name the failing gate in
+            // the debug log, once per verdict change.
+            if (slot == 400) {
+                static int s_lastFail = -999;
+                const int failCode = cm ? -2 : -3;   // -2 model failed, -3 class absent
+                if (s_lastFail != failCode * 1000 + formClass) {
+                    s_lastFail = failCode * 1000 + formClass;
+                    char buf[192];
+                    std::snprintf(buf, sizeof(buf),
+                        "BijuTransform hero form FAIL: class=%d cm=%s model=%d (Train 65 diag)",
+                        formClass, cm ? "present" : "ABSENT", cm ? cm->Model : -99);
+                    DbgLogPublic(buf);
+                }
+            }
+            return false;
+        }
         const BMD* bm = AsModel((uintptr_t)DAT_05828d58) + cm->Model;
-        if (bm->NumActions <= 0 || bm->NumMeshs <= 0 || !bm->Actions || !bm->Bones)
+        if (bm->NumActions <= 0 || bm->NumMeshs <= 0 || !bm->Actions || !bm->Bones) {
+            if (slot == 400) {
+                static int s_lastBmdFail = -999;
+                if (s_lastBmdFail != formClass) {
+                    s_lastBmdFail = formClass;
+                    char buf[192];
+                    std::snprintf(buf, sizeof(buf),
+                        "BijuTransform hero form FAIL: class=%d model=%d BMD empty (actions=%d meshs=%d) (Train 65 diag)",
+                        formClass, cm->Model, (int)bm->NumActions, (int)bm->NumMeshs);
+                    DbgLogPublic(buf);
+                }
+            }
             return false;   // modelo no cargado → render normal del jugador
+        }
+        if (slot == 400) {
+            static int s_lastOk = -999;
+            if (s_lastOk != formClass) {
+                s_lastOk = formClass;
+                char buf[160];
+                std::snprintf(buf, sizeof(buf),
+                    "BijuTransform hero form OK: class=%d model=%d (Train 65 diag)",
+                    formClass, cm->Model);
+                DbgLogPublic(buf);
+            }
+        }
         if (modelOut) *modelOut = cm->Model;
         if (scaleOut) *scaleOut = (cm->Scale > 0.0f) ? cm->Scale : 1.0f;
         return true;
@@ -243,6 +288,27 @@ void Clear(void* character)
     }
 }
 
+void PreloadFormModels()
+{
+    // Train 65: load (or retry a cached failure of) every form
+    // class NOW, in cast/packet context -- never leave the load
+    // to Resolve() mid-render. See the header for the bug.
+    static const int kFormClasses[] = { kSusanooClass, kKaraneCrimsonClass, kMegazordClass };
+    for (int cls : kFormClasses) {
+        const CatalogMonster* cm = gContentCatalog.GetMonster(cls);
+        if (!cm) continue;
+        if (cm->ModelPending) gContentCatalog.EnsureMonsterModel(cls);
+        else if (cm->Model < 0) gContentCatalog.RetryMonsterModel(cls);
+    }
+    for (int beast = 0; beast < kBeastCount; ++beast) {
+        const int cls = kFirstBeastClass + beast;
+        const CatalogMonster* cm = gContentCatalog.GetMonster(cls);
+        if (!cm) continue;
+        if (cm->ModelPending) gContentCatalog.EnsureMonsterModel(cls);
+        else if (cm->Model < 0) gContentCatalog.RetryMonsterModel(cls);
+    }
+}
+
 void NoteFormSource(void* character, int skillType)
 {
     // Solo las dos skills de forma comparten el bit 0x2000; cualquier
@@ -252,6 +318,7 @@ void NoteFormSource(void* character, int skillType)
     const int slot = SlotOf(character);
     if (slot < 0) return;
     s_formSourceBySlot[slot] = (unsigned char)skillType;
+    PreloadFormModels();   // Train 65: a form was just witnessed -- load its models now
 }
 
 bool IsFullBodySkinItem(int itemType)
@@ -307,6 +374,14 @@ int FormClassForNamed(bool formBit, int beastIndex, const char* name)
     if (std::strcmp(name, "Gloccy") == 0 ||
         std::strcmp(name, "M4D4R4") == 0)
         return kKaraneCrimsonClass;
+    // MEAMU TRAIN 67 (2026-11-20, G's order): Eliger's Susanoo is
+    // the BLUE MEGAZORD -- the HurricaneBlue skin BMD (already in
+    // every client's Data as the (8,55) hero skin) registered as
+    // monster class 230 at titan scale. Same titan-path gate as
+    // the Karane diversion: only a pet-less / source-74 titan
+    // resolution diverts; a known beast still wins.
+    if (std::strcmp(name, "Eliger") == 0)
+        return kMegazordClass;
     return base;
 }
 

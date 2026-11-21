@@ -1,10 +1,13 @@
-// ActionJump.cpp — MEAMU Train 24 built SPACE = JUMP here; MEAMU
-// Train 35 (2026-11-19), DESIGN PIVOT by G: the jump is REMOVED and
-// Space in Action mode is a FACING TELEPORT — an instant blink to the
-// furthest reachable point along his facing (the Bounce 14 mode-2
-// furthest-point logic, direction = facing instead of a click).
-// What remains in this module: the Train 28 smoothing spring and the
-// Space edge that fires the blink. See ActionJump.h.
+// ActionJump.cpp — MEAMU Train 24 built SPACE = JUMP here; Train
+// 35 (2026-11-19) replaced it with the facing teleport. MEAMU
+// Train 82 (2026-11-20), G's keyboard-parity order: Space in
+// Action mode is now LT's verb -- HOLD-TO-AIM TELEPORT TARGETING
+// (hold raises the marker, mouse-look aims it, release lands);
+// the instant facing blink is REPLACED on the keyboard (the pad
+// keeps its blink on R3). This module also drives RMB = RT's
+// verb (the triple verb + hunt) for the same parity.
+// What remains: the Train 28 smoothing spring and the verb
+// drivers. See ActionJump.h.
 
 #include "stdafx.h"
 #include "Input/ActionJump.h"
@@ -13,7 +16,11 @@
 #include "Entity/EntityTypes.h"   // CHARACTER
 #include "Render/ActionCamera.h"  // gActionCamera (lock + scheme state)
 #include "Input/ActionMove.h"
-#include "Input/AnimTrace.h"   // MEAMU Train 39 diagnostic     // ActionMove_TeleportToPoint (Train 35 blink)
+#include "Input/AnimTrace.h"
+#include "Input/TargetLock.h"   // Train 48
+#include "Input/Fishing.h"      // Train 56: fishing verb   // MEAMU Train 39 diagnostic     // ActionMove_TeleportToPoint (Train 35 blink)
+#include "Input/Gamepad.h"      // Train 82: TpTarget verbs (shared with the pad)
+namespace Platform { void InjectVirtualKey(int vk, bool down); }   // Train 82: the '2' mirror for RMB
 #include "Game/NinjaRun.h"        // Train 37: dash burst flag refresh
 #include "globals.h"              // Hero, InputEnable, DAT_083a7c24
 #include <SDL3/SDL.h>             // SDL_GetTicks
@@ -124,6 +131,7 @@ void CActionJump::Update()
 
     const bool space = SpaceHeld();
     const bool spaceEdge = space && !m_SpacePrev;
+    const bool spaceRelease = !space && m_SpacePrev;
     m_SpacePrev = space;
 
     // MEAMU Train 35 — SPACE = FACING TELEPORT (Action mode). Gate:
@@ -137,16 +145,88 @@ void CActionJump::Update()
     // to the last walkable tile where the landing is blocked
     // (Bounce 14): max range, never a failed cast, no animation
     // (Train 23's instant arrivals cover the mode-2 wire).
-    if (spaceEdge && gActionCamera.SchemeIsAction()
-        && InputEnable == 0 && DAT_083a7c24 == 0) {
-        const float yawDeg = gActionCamera.PointerLocked()
-            ? gActionCamera.GetYaw() : hero->Object.Angle[2];
-        const float rad = yawDeg * (3.14159265f / 180.0f);
-        const float fx = sinf(rad), fy = cosf(rad);
-        const int hx = (int)hero->PositionX, hy = (int)hero->PositionY;
-        const int tx = hx + (int)lroundf(fx * 24.0f);
-        const int ty = hy + (int)lroundf(fy * 24.0f);
-        ActionMove_TeleportToPoint(tx, ty);
+    // MEAMU Train 48: target-lock break conditions, per frame.
+    TargetLock_Tick();
+
+    // MEAMU Train 84 (2026-11-20, G's ruling): Q = LB. Q is now
+    // the lock ON/OFF TOGGLE (Train 75), in both schemes --
+    // no lock -> engage; lock standing -> release. Train 55's
+    // engage/cycle on Q is REPLACED (cycling survives nowhere
+    // on the toggle doors; the hunt/RT-RMB fill and the cast
+    // auto-lock are untouched). The Classic arm calls the very
+    // same code LB calls (clear, or Gamepad's queued Tab
+    // pulse), so Q and LB can never drift apart. Same gates
+    // as the other verb drivers: no chat/text focus.
+    {
+        static bool s_QPrev = false;
+        const bool qHeld = ((unsigned short)Platform::GetInput().KeyState(0x51) & 0x8000) != 0;
+        const bool qEdge = qHeld && !s_QPrev;
+        s_QPrev = qHeld;
+        if (qEdge && InputEnable == 0 && DAT_083a7c24 == 0) {
+            if (gActionCamera.SchemeIsAction()) {
+                TargetLock_Toggle();
+            } else if (KbPlay_LockIndex() >= 0) {
+                KbPlay_LockClear();
+            } else {
+                PulseKeyShared(0x09, "Q lock on (Tab)");
+            }
+        }
+    }
+
+    // MEAMU Train 56 (2026-11-19): F = FISHING verb (cast / reel),
+    // both schemes -- the server validates the Lorencia bridge spot.
+    {
+        static bool s_FPrev = false;
+        const bool fHeld = ((unsigned short)Platform::GetInput().KeyState(0x46) & 0x8000) != 0;
+        const bool fEdge = fHeld && !s_FPrev;
+        s_FPrev = fHeld;
+        if (fEdge && InputEnable == 0 && DAT_083a7c24 == 0) {
+            Fishing_Verb();
+        }
+    }
+
+    // MEAMU Train 82 (2026-11-20, G's keyboard-parity order:
+    // "Spacebar = same as LT · RMB = same as RT"): Space in
+    // Action mode is LT's verb -- HOLD-TO-AIM TELEPORT
+    // TARGETING. Hold raises the marker (Train 59/66 state,
+    // shared with the pad), mouse-look aims it (the marker
+    // rides the camera aim at full blink range), release
+    // lands. This REPLACES the Train 35 instant facing blink
+    // -- and Train 48's Space blink-to-lock with it -- on the
+    // KEYBOARD; the pad keeps its blink on R3, and the
+    // double-click teleport is untouched. Classic Space (the
+    // KbPlay attack latch) is untouched: this block is
+    // Action-only, like the blink it replaces.
+    if (gActionCamera.SchemeIsAction()) {
+        const bool gates = (InputEnable == 0 && DAT_083a7c24 == 0);
+        if (spaceEdge && gates) TpTargetBegin();
+        if (space && TpTargetActive()) TpTargetUpdate(dt, true);
+        if (spaceRelease) TpTargetFire();   // no-op when not targeting
+        if (!gates && TpTargetActive() && !space) TpTargetCancel("gates closed");
+    }
+
+    // MEAMU Train 82: RMB in Action mode is RT's verb -- hold =
+    // auto-target + camera follow + SKILL 2 CAST-HOLD + the
+    // verb (TargetLock_LtHold + the '2' mirror, the exact pair
+    // the pad's RT drives since Train 81; in-range only since
+    // Train 88 removed the hunt). Release: the cast
+    // stops, the follow ends, and since Train 86 (G's rule) the
+    // LOCK CLEARS too -- RMB is RT's mirror, so its release
+    // unlocks exactly like RT's. Same gates as Q/F above.
+    {
+        static bool s_RmbPrev = false;
+        const bool rmb = ((unsigned short)Platform::GetInput().KeyState(0x02) & 0x8000) != 0;   // VK_RBUTTON
+        const bool gates = gActionCamera.SchemeIsAction()
+            && InputEnable == 0 && DAT_083a7c24 == 0;
+        const bool drive = rmb && gates;
+        if (drive != s_RmbPrev) {
+            Platform::InjectVirtualKey(0x32, drive);   // '2' cast-hold mirror
+            TargetLock_LtHold(drive);
+            if (!drive) TargetLock_ReleaseUnlock();   // Train 86
+            s_RmbPrev = drive;
+        } else if (drive) {
+            TargetLock_LtHold(true);   // per-frame: fill / follow / hunt
+        }
     }
 
     if (offX != 0.0f || offY != 0.0f) {
