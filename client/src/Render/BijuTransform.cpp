@@ -89,6 +89,56 @@ namespace
     // paquete de casteo 0x19 (eco del heroe + remotos) y el feed de
     // efectos F3/F1 del heroe; la limpia el mismo Clear.
     unsigned char s_formSourceBySlot[400];
+    // MEAMU TRAIN 104 (2026-11-21, G's live report): the slot table
+    // dies with the character object -- Entity_Spawn Clear() wipes
+    // it on every respawn (teleport, map move), while the form BIT
+    // lives in the state word and survives. On re-resolution the
+    // source read 0 and the form fell through to the legacy
+    // pet/named fallback (the dragon became Susanoo/beast after a
+    // teleport). This sister table is keyed by the character's
+    // visible NAME, which no respawn changes: NoteFormSource feeds
+    // it, ForgetFormSource (form effect loss) erases it, and the
+    // resolver consults it whenever the slot read is empty.
+    struct FormSourceByName { char name[16]; unsigned char source; };
+    FormSourceByName s_formSourceByName[64];
+    int              s_formSourceByNameCount = 0;
+
+    void RecordFormSourceByName(const char* name, int skillType)
+    {
+        if (!name || !name[0]) return;
+        for (int i = 0; i < s_formSourceByNameCount; ++i) {
+            if (std::strncmp(s_formSourceByName[i].name, name, 15) == 0) {
+                s_formSourceByName[i].source = (unsigned char)skillType;
+                return;
+            }
+        }
+        if (s_formSourceByNameCount >= 64) return;
+        FormSourceByName& e = s_formSourceByName[s_formSourceByNameCount++];
+        std::memset(e.name, 0, sizeof(e.name));
+        std::strncpy(e.name, name, 15);
+        e.source = (unsigned char)skillType;
+    }
+
+    int LookupFormSourceByName(const char* name)
+    {
+        if (!name || !name[0]) return 0;
+        for (int i = 0; i < s_formSourceByNameCount; ++i) {
+            if (std::strncmp(s_formSourceByName[i].name, name, 15) == 0)
+                return (int)s_formSourceByName[i].source;
+        }
+        return 0;
+    }
+
+    void EraseFormSourceByName(const char* name)
+    {
+        if (!name || !name[0]) return;
+        for (int i = 0; i < s_formSourceByNameCount; ++i) {
+            if (std::strncmp(s_formSourceByName[i].name, name, 15) == 0) {
+                s_formSourceByName[i] = s_formSourceByName[--s_formSourceByNameCount];
+                return;
+            }
+        }
+    }
     bool        s_init = false;
 
     void EnsureInit()
@@ -320,7 +370,19 @@ void NoteFormSource(void* character, int skillType)
     const int slot = SlotOf(character);
     if (slot < 0) return;
     s_formSourceBySlot[slot] = (unsigned char)skillType;
+    RecordFormSourceByName(EntityName::Get((const CHARACTER*)character), skillType);   // TRAIN 104: durable across respawns
     PreloadFormModels();   // Train 65: a form was just witnessed -- load its models now
+}
+
+void ForgetFormSource(void* character)
+{
+    // TRAIN 104: the form effect ended -- drop both records so a
+    // later form on this character starts from a clean slate (its
+    // own cast witness re-records the new source).
+    EnsureInit();
+    const int slot = SlotOf(character);
+    if (slot >= 0) s_formSourceBySlot[slot] = 0;
+    EraseFormSourceByName(EntityName::Get((const CHARACTER*)character));
 }
 
 bool IsFullBodySkinItem(int itemType)
@@ -421,7 +483,9 @@ int FormClassForEntity(const CHARACTER* character)
     EnsureInit();
     const int slot = SlotOf(character);
     const int beast = (slot >= 0) ? (int)s_beastBySlot[slot] : -1;
-    const int source = (slot >= 0) ? (int)s_formSourceBySlot[slot] : 0;
+    int source = (slot >= 0) ? (int)s_formSourceBySlot[slot] : 0;
+    if (source == 0)   // TRAIN 104: slot record died with a respawn -- ask the name table
+        source = LookupFormSourceByName(EntityName::Get(character));
     return FormClassForSource(true, beast, EntityName::Get(character),
                               source);
 }

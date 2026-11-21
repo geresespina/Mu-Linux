@@ -133,6 +133,9 @@ namespace BijuTransform
     // with the pet/skin tables; it is only consulted while the
     // form bit is on, so a stale record is inert.
     void NoteFormSource(void* character, int skillType);
+    // MEAMU TRAIN 104: forget the durable (name-keyed) form source
+    // for a character -- called when its form effect ends.
+    void ForgetFormSource(void* character);
 
     // MEAMU TRAIN 65 (2026-11-20): form-model preload. Train 61
     // deferred every catalog model load to first use -- for the

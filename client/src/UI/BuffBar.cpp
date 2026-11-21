@@ -288,6 +288,11 @@ void CBuffBar::Receive(const unsigned char* packet, int size)
     // overwrites it).
     if (msg.state && (msg.skill == 61 || msg.skill == 74 || msg.skill == 77))  // + 77 Dragon Form (Train 102)
         BijuTransform::NoteFormSource((void*)(uintptr_t)DAT_07abf5d8, (int)msg.skill);
+    // MEAMU TRAIN 104: a form effect LOSS erases the durable source
+    // record, so the name-keyed table can never resurrect a form
+    // the player has already left.
+    if (!msg.state && (msg.skill == 61 || msg.skill == 74 || msg.skill == 77))
+        BijuTransform::ForgetFormSource((void*)(uintptr_t)DAT_07abf5d8);
     int slot = 0;
     while (slot < m_Count && m_Buffs[slot].effect != msg.effect) ++slot;
     if (!msg.state) {
