@@ -1611,6 +1611,54 @@ void NetRecv_1C(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
     PadBuffer_FlushTeleport();       // Train 89: fire a cast buffered mid-flight
     ActionMove_FlushPendingTeleport();   // Train 92: fire a dash / teleport buffered mid-flight
 
+    // MEAMU Train 105 (2026-11-21, G's report: Sage clones "don't
+    // disappear"): the gate branch below clears the whole viewport
+    // pool (ClearCharacters), but a gate-0 landing (dash / point
+    // teleport -- the only way a Sage clone is ever left behind)
+    // historically cleared NOTHING. The server drops an out-of-view
+    // body from the hero's viewport set without a destroy the hero
+    // receives, so a body the caster teleports away from (a clone
+    // that dies 3 s later, 30 tiles behind him) renders forever --
+    // until a map switch. Retire every active non-hero body beyond
+    // viewport range of the landing tile; the server re-creates
+    // anything still in view in its post-landing create batches
+    // (measured on the wire), and a late destroy for a retired key
+    // is a no-op.
+    if (gate == 0 && DAT_07abf5d0) {
+        BYTE* poolBase = (BYTE*)(uintptr_t)DAT_07abf5d0;
+        for (int sIdx = 0; sIdx < 400; ++sIdx) {
+            BYTE* slotB = poolBase + sIdx * CHARACTER_STRIDE;
+            if (*(BYTE*)slotB == 0) continue;
+            CHARACTER* body = AsCharacter(slotB);
+            if ((BYTE*)body == hero) continue;
+            const int bdx = (int)body->PositionX - (int)gridX;
+            const int bdy = (int)body->PositionY - (int)gridY;
+            const int adx = bdx < 0 ? -bdx : bdx;
+            const int ady = bdy < 0 ? -bdy : bdy;
+            const int cheb = adx > ady ? adx : ady;
+            if (cheb <= 15) continue;
+            const int bodyKey = (int)*(short*)(slotB + EntityOffset(0x1DC));
+            NetLog("NET: 0x1C Train105 sweep: body key %d at (%d,%d) is %d tiles from landing (%d,%d) -- retiring",
+                   bodyKey, (int)body->PositionX, (int)body->PositionY, cheb,
+                   (int)gridX, (int)gridY);
+            // A destroy is authoritative for the whole key (Train 98
+            // lesson): retire every active slot carrying it.
+            for (int guard = 0; guard < 8; ++guard) {
+                bool found = false;
+                for (int s2 = 0; s2 < 400; ++s2) {
+                    BYTE* slot2 = poolBase + s2 * CHARACTER_STRIDE;
+                    if (*(BYTE*)slot2 != 0
+                        && *(short*)(slot2 + EntityOffset(0x1DC)) == (short)bodyKey) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) break;
+                DeleteCharacter(bodyKey);
+            }
+        }
+    }
+
     if (gate != 0) {
         // ReceiveTeleport's gate branch clears the old viewport
         // antes de aceptar el par mapa/posición del server. Esto
