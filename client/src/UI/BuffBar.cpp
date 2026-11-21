@@ -212,6 +212,66 @@ int ActiveBijuPassiveSkill()
 }
 }
 
+// MEAMU TRAIN 103 (2026-11-21): mode/buff DETAILS from the LIVE packet
+// values (G's buffs-row law extension: every icon's tooltip carries its
+// real numbers, pulled from the effect's value[] -- never hand-written
+// constants). The server populates value[] at AddEffect from the same
+// numbers the effects apply (Bounce 53 completes 73/74 + Sage lifesteal):
+//   value[0] = damage bonus % (modes) / regen % (73) / taken -% (74)
+//   value[1] = attack speed % (65/66/70) / lifesteal % (73)
+//   value[2] = lifesteal % (66 Sage)
+// Multiplier format matches the BoostStrip chips: (100 + v) / 100 with
+// trimmed decimals (125 -> x1.25, 200 -> x3, 150 -> x2.5). The x and
+// the middle dot are UTF-8 escapes, same as BoostStrip's.
+void FormatDetailMultiplier(int bonusPct, char* out, size_t size)
+{
+    const int total = 100 + bonusPct;
+    const int whole = total / 100;
+    const int frac = total % 100;
+    if (frac == 0)
+        Platform::TextFormatSecure(out, size, "\xC3\x97%d", whole);
+    else if (frac % 10 == 0)
+        Platform::TextFormatSecure(out, size, "\xC3\x97%d.%d", whole, frac / 10);
+    else
+        Platform::TextFormatSecure(out, size, "\xC3\x97%d.%02d", whole, frac);
+}
+
+// Returns true when a detail line was written for this effect.
+bool ModeDetailText(int effect, const unsigned short* value, char* out, size_t size)
+{
+    char mult[16];
+    switch (effect) {
+        case 65: // Mangekyo Sharingan
+        case 70: // Dragon Sage Mode
+            FormatDetailMultiplier(value[0], mult, sizeof(mult));
+            Platform::TextFormatSecure(out, size, "Damage %s \xC2\xB7 Attack speed +%d%%", mult, (int)value[1]);
+            return true;
+        case 66: // Sage Mode (+ lifesteal in value[2])
+            FormatDetailMultiplier(value[0], mult, sizeof(mult));
+            if (value[2])
+                Platform::TextFormatSecure(out, size, "Damage %s \xC2\xB7 Attack speed +%d%% \xC2\xB7 Lifesteal %d%%", mult, (int)value[1], (int)value[2]);
+            else
+                Platform::TextFormatSecure(out, size, "Damage %s \xC2\xB7 Attack speed +%d%%", mult, (int)value[1]);
+            return true;
+        case 67: // Jinchuriki Mode
+        case 68: // Biju Mode
+        case 69: // Chakra Cloak
+        case 71: // Perfect Susanoo
+        case 72: // Dragon Form
+            FormatDetailMultiplier(value[0], mult, sizeof(mult));
+            Platform::TextFormatSecure(out, size, "Damage %s", mult);
+            return true;
+        case 73: // Super Healing
+            Platform::TextFormatSecure(out, size, "Regen %d%% MaxLife/s \xC2\xB7 Lifesteal %d%%", (int)value[0], (int)value[1]);
+            return true;
+        case 74: // Super Defense
+            Platform::TextFormatSecure(out, size, "Damage taken -%d%%", (int)value[0]);
+            return true;
+        default:
+            return false;
+    }
+}
+
 void CBuffBar::Receive(const unsigned char* packet, int size)
 {
     if (size < (int)sizeof(Proto::PMSG_EFFECT_INFO_SEND)) return;
@@ -361,6 +421,10 @@ void CBuffBar::RenderTooltip(const Buff& buff, int x, int y) const
     const ClientTextId bonus = BonusText(buff.effect);
     if (bonus != ClientTextId::Count) {
         Platform::TextFormatSecure(text, sizeof(text), gClientText.Get(bonus), (int)buff.value[0]);
+        add(0, 0, text);
+    } else if (ModeDetailText(buff.effect, buff.value, text, sizeof(text))) {
+        // MEAMU TRAIN 103: custom modes carry their detail in the
+        // packet values (see ModeDetailText above).
         add(0, 0, text);
     }
     if (buff.seconds) {
