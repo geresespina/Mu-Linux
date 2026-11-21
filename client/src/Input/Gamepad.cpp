@@ -20,7 +20,7 @@
 //                 valid monster in that skill's range and hold-casts
 //                 until the key is released (see PADCAST below).
 //   D-pad         Up = Q (HP potion) · Right = W (MP) · Down = E (SD) · Left = C
-//   Start         Esc = main menu               Back = M move list (mirrored)
+//   Start         scheme toggle (Train 62)      Back = M move list (mirrored)
 //
 // PADCAST (2026-11-16, G's final layout — a chain of rulings the same
 // afternoon): EVERY skill button is a digit mirror into the one shared
@@ -75,6 +75,11 @@
 #include "Input/Gamepad.h"
 #include "Input/GamepadDI.h"     // DIPadState / DIPadTranslate (padfix)
 #include "Input/NavMove.h"       // NavMove_ArrowsHeld (movement yield)
+#include "Render/ActionCamera.h"  // Train 48: scheme + pointer lock + OnMouseDelta
+#include "Input/TargetLock.h"     // Train 64: pad-cast auto-lock
+#include "Input/ActionMove.h"     // Train 48: ActionMove_PadDash
+#include "Input/Fishing.h"        // Train 56: fishing verb
+#include "Input/PadMap.h"         // Train 100: the account pad map drives the sheet
 #include "Platform/IInput.h"     // Platform::InputEvent / InputEventType
 #include "Platform/NativeBridge.h" // Platform::NativeWindow/NativeInstance (DI coop level)
 #include "Core/Window.h"         // gWindow (real pixel size)
@@ -267,6 +272,11 @@ void PulseKey(int vk, const char* what)
     PadLog("PAD: key pulse %s (vk 0x%02X)", what, vk);
 }
 
+} // (Train 84 wrapper lives below the anonymous namespace)
+
+void PulseKeyShared(int vk, const char* what) { PulseKey(vk, what); }
+
+namespace {
 void ReleaseAllInputs()
 {
     if (gLeftOwners) { gLeftOwners = 0; SendMouse(Platform::InputEventType::LeftUp, gCursorX, gCursorY); }
@@ -974,8 +984,11 @@ bool Gamepad_IsDriving() { return gDriving; }
 // cast-streak latch reads this: a cast observed while a pad skill button
 // drives it is excluded from the AUTO latch (pad law, 2026-11-16),
 // exactly like a cast made while the physical right mouse button is held.
+bool gActionPadCastHeld = false;   // Train 48: set by ActionPadTick
+
 bool Gamepad_PadCastHeld()
 {
+    if (gActionCamera.SchemeIsAction()) return gActionPadCastHeld;
     for (const auto& mk : kSkillKeys)
         if (gPrevButtons[mk.btn]) return true;
     return gPrevRT || gPrevLT;
@@ -985,6 +998,510 @@ void Gamepad_RenderIndicator()
 {
     if (!Gamepad_IsActive()) return;
     UI_RenderText(578, 6, (char*)"PAD", (LPSIZE)0x0, '\0', 0);
+}
+
+// ── ACTION-scheme pad map ────────────────────────────────────────────
+// Train 81 sheet (G, 2026-11-20): THE TRIGGERS ARE SWAPPED --
+// RT HOLD = lock + camera follow + Skill 2 cast-hold + the
+// hunt (Train 72's triple verb, ex-LT) · LT = Teleport
+// TARGETING (hold to aim, release to land, ex-RT) · X Skill
+// 3 · Y Skill 4 · B Skill 5 · A Skill 6 · View Skill 7 · L3
+// Skill 8 · D-up Skill 9 · D-down Skill 10 · LB Target Lock ·
+// RB Dash · R3 Blink (Space mirror) · D-Left Fishing · Start =
+// scheme toggle · left stick = WASD (ActionMove drives,
+// camera-relative) · right stick = aim (the teleport marker
+// while LT is held). Classic: PADCAST, untouched. (An L3-toggle
+// swap was built and CANCELLED by G the same morning -- "Start
+// is better" -- nothing moved.)
+struct ActPrev {
+    bool rb=false, x=false, y=false, view=false, dup=false, ddown=false;
+    bool l3=false, r3=false, rt=false, lt=false;
+    bool a=false, b=false, lb=false, start=false;
+    int  wasdMask=0;
+};
+ActPrev gActPrev;
+
+void TpTargetCancel(const char* why);
+
+void ActionPadReleaseAll()
+{
+    const int vks[] = { 0x57, 0x53, 0x41, 0x44, 0x20,
+                        0x31, 0x32, 0x33, 0x34, 0x35,
+                        0x36, 0x37, 0x38, 0x39, 0x30 };
+    for (int vk : vks) Platform::InjectVirtualKey(vk, false);
+    gActPrev = ActPrev{};
+    gActionPadCastHeld = false;
+    TpTargetCancel("scheme flip");
+}
+
+// ── Train 59: TELEPORT TARGETING (Action scheme, LT hold since
+// Train 81's trigger swap; RT before it) ─────────────────────────────
+// G's spec (2026-11-20): LT is Skill 1 = Teleport. HOLDING LT raises
+// a landing marker at the spot a tap-blink would take him (facing
+// ray, max range); the RIGHT STICK walks the marker tile to tile;
+// RELEASING RT teleports to the marker -- through the very same
+// ActionMove_TeleportToPoint the double-click blink uses (mode 2
+// wire, Chebyshev clamp 8, DriveGates). The marker is honest: gold
+// while the tile is landable, RED while it is a wall / out of range
+// / the hero's own tile, and releasing on red fires NOTHING.
+// Cancels (no packet, marker dies): scheme flip (ActionPadReleaseAll
+// above runs on the way out; the Gamepad_Tick state-loss branch
+// cancels too), pad state loss, hero death, chat/UI opening mid-hold.
+// Keyboard Space blink and Classic RT are untouched.
+extern unsigned char* TerrainWall;   // world wall grid (TargetLock's)
+struct TpTargetState {
+    bool     active = false;
+    float    fx = 0.0f, fy = 0.0f;   // marker position, tile space
+    int      tx = 0, ty = 0;         // marker tile
+    bool     valid = false;
+    unsigned lastFxMs = 0;
+    int      lastHx = 0, lastHy = 0; // Train 66: hero tile at last anchor
+};
+TpTargetState gTpT;
+
+static bool TpTileLandable(int hx, int hy, int tx, int ty)
+{
+    if (tx < 0 || ty < 0 || tx > 255 || ty > 255) return false;
+    const int adx = tx > hx ? tx - hx : hx - tx;
+    const int ady = ty > hy ? ty - hy : hy - ty;
+    const int cheb = adx > ady ? adx : ady;
+    if (cheb < 1 || cheb > 8) return false;
+    if (!TerrainWall) return false;
+    const BYTE wall = TerrainWall[((ty & 0xFF) << 8) | (tx & 0xFF)];
+    return (wall & 0x0C) == 0;   // 0x04|0x08 = blocked, as TargetLock reads it
+}
+
+// MEAMU Train 85 (G's rule, 2026-11-20): "The marker should only
+// ever sit on spots I can ACTUALLY teleport to." The aim itself is
+// constrained now: resolve the wanted tile to the NEAREST landable
+// tile inside the blink ring -- nearest by Chebyshev ring around
+// the wanted tile, then by Manhattan distance, every candidate
+// passing the same TpTileLandable test the fire path trusts. The
+// marker can therefore never rest on a wall / blocked /
+// unstandable tile, and release always lands.
+static bool TpResolveLandable(int hx, int hy, int wx, int wy, int& outX, int& outY)
+{
+    if (TpTileLandable(hx, hy, wx, wy)) { outX = wx; outY = wy; return true; }
+    int bestScore = 0x7FFFFFFF;
+    bool found = false;
+    for (int cx = wx - 8; cx <= wx + 8; cx++) {
+        for (int cy = wy - 8; cy <= wy + 8; cy++) {
+            if (!TpTileLandable(hx, hy, cx, cy)) continue;
+            const int adx = cx > wx ? cx - wx : wx - cx;
+            const int ady = cy > wy ? cy - wy : wy - cy;
+            const int cheb = adx > ady ? adx : ady;
+            const int score = cheb * 100 + adx + ady;
+            if (score < bestScore) { bestScore = score; outX = cx; outY = cy; found = true; }
+        }
+    }
+    return found;
+}
+
+// Apply Train 85 to the shared marker state: resolve (wx,wy) and,
+// when the resolution moved the tile, pull the float anchor onto
+// the legal tile so stick/carry math continues FROM the legal
+// spot -- the marker slides along a wall's edge instead of
+// burying its anchor inside the wall (no dead zone on pull-back).
+static void TpApplyLandable(int hx, int hy, int wx, int wy)
+{
+    int rx = 0, ry = 0;
+    if (TpResolveLandable(hx, hy, wx, wy, rx, ry)) {
+        if (rx != gTpT.tx || ry != gTpT.ty) { gTpT.fx = (float)rx; gTpT.fy = (float)ry; }
+        gTpT.tx = rx; gTpT.ty = ry;
+        gTpT.valid = true;
+    } else {
+        // Nothing landable in the whole blink ring (the hero is
+        // walled in): keep the last tile and its verdict.
+        gTpT.tx = wx; gTpT.ty = wy;
+        gTpT.valid = TpTileLandable(hx, hy, wx, wy);
+    }
+}
+
+static void TpMarkerFx(CHARACTER* hero)
+{
+    float pos[3] = { (float)(gTpT.tx * 100 + 50), (float)(gTpT.ty * 100 + 50),
+                     hero->Object.Position[2] + 30.0f };
+    float ang[3] = { 0.0f, 0.0f, 0.0f };
+    float gold[3] = { 1.0f, 0.75f, 0.20f };
+    float red[3]  = { 1.0f, 0.15f, 0.15f };
+    CreateEffect(1176, pos, ang, gTpT.valid ? gold : red,
+                 nullptr, nullptr, (float*)(uintptr_t)0xFFFFFFFF, nullptr, 0);
+    gTpT.lastFxMs = (unsigned)SDL_GetTicks();
+}
+
+void TpTargetBegin()
+{
+    CHARACTER* hero = (CHARACTER*)(uintptr_t)Hero;
+    if (!hero) return;
+    const int hx = (int)hero->PositionX, hy = (int)hero->PositionY;
+    const float yawDeg = gActionCamera.PointerLocked()
+        ? gActionCamera.GetYaw() : hero->Object.Angle[2];
+    const float rad = yawDeg * (3.14159265f / 180.0f);
+    gTpT.fx = (float)hx + sinf(rad) * 8.0f;
+    gTpT.fy = (float)hy + cosf(rad) * 8.0f;
+    TpApplyLandable(hx, hy, (int)lroundf(gTpT.fx), (int)lroundf(gTpT.fy)); // Train 85
+    gTpT.lastHx = hx; gTpT.lastHy = hy;   // Train 66: anchor
+    gTpT.active = true;
+    TpMarkerFx(hero);
+    PadLog("PAD: teleport targeting - marker at (%d,%d)", gTpT.tx, gTpT.ty);
+}
+
+void TpTargetCancel(const char* why)
+{
+    if (!gTpT.active) return;
+    gTpT.active = false;
+    PadLog("PAD: teleport targeting cancelled (%s)", why);
+}
+
+// Per-tick while the targeting trigger is held (LT on the pad
+// since Train 81; Space on the keyboard since Train 82).
+// Returns false when targeting died (caller then treats the
+// coming release as a no-op). kbdAim (Train 82): no stick --
+// the marker rides the camera aim at full blink range, which
+// is where Begin anchored it; mouse-look IS the aim.
+bool TpTargetUpdate(float dt, bool kbdAim)
+{
+    CHARACTER* hero = (CHARACTER*)(uintptr_t)Hero;
+    if (!hero || hero->Dead || InputEnable != 0 || DAT_083a7c24 != 0) {
+        TpTargetCancel("gates closed");
+        return false;
+    }
+    const int hx = (int)hero->PositionX, hy = (int)hero->PositionY;
+    // MEAMU TRAIN 66 (G's refinement, 2026-11-20): "The tele marker
+    // should move with me if I hold RT and walk." The marker is
+    // anchored RELATIVE to the hero: every tick it is carried by
+    // the hero's tile delta, keeping its exact fractional offset,
+    // so walking (or a dash) travels the marker -- and its range
+    // ring -- with him. The stick walk below then adjusts the
+    // offset from wherever the carry left it; release fires at
+    // the marker's current spot as before.
+    const int dhx = hx - gTpT.lastHx, dhy = hy - gTpT.lastHy;
+    if (dhx != 0 || dhy != 0) {
+        gTpT.fx += (float)dhx;
+        gTpT.fy += (float)dhy;
+        gTpT.lastHx = hx;
+        gTpT.lastHy = hy;
+    }
+    if (kbdAim) {
+        const float yawDeg = gActionCamera.PointerLocked()
+            ? gActionCamera.GetYaw() : hero->Object.Angle[2];
+        const float rad = yawDeg * (3.14159265f / 180.0f);
+        gTpT.fx = (float)hx + sinf(rad) * 8.0f;
+        gTpT.fy = (float)hy + cosf(rad) * 8.0f;
+    }
+    float rdx, rdy;
+    const float rmag = kbdAim ? 0.0f : StickVector(PadAxis(SDL_GAMEPAD_AXIS_RIGHTX),
+                                   PadAxis(SDL_GAMEPAD_AXIS_RIGHTY), rdx, rdy);
+    if (rmag > 0.0f) {
+        const float yawDeg = gActionCamera.PointerLocked()
+            ? gActionCamera.GetYaw() : hero->Object.Angle[2];
+        const float rad = yawDeg * (3.14159265f / 180.0f);
+        const float fxv = sinf(rad), fyv = cosf(rad);       // screen-up on the ground
+        // G's play verdict (2026-11-20): stick left/right walked the
+        // marker BACKWARDS -- the screen-right vector is negated so
+        // the stick's X axis drives the marker the other way. The
+        // up/down terms (-fxv*rdy, -fyv*rdy) are byte-identical:
+        // vertical was right and stays right.
+        const float rxv = fyv, ryv = -fxv;                  // screen-right (X flipped)
+        const float kSpeed = 17.0f;                          // tiles / second
+        gTpT.fx += (rxv * rdx - fxv * rdy) * kSpeed * dt;
+        gTpT.fy += (ryv * rdx - fyv * rdy) * kSpeed * dt;
+        // Keep the marker inside the blink ring around the hero's
+        // CURRENT tile (same Chebyshev scaling TeleportToPoint uses).
+        const float dx = gTpT.fx - (float)hx, dy = gTpT.fy - (float)hy;
+        const float adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
+        const float cheb = adx > ady ? adx : ady;
+        if (cheb > 8.0f) {
+            const float s = 8.0f / cheb;
+            gTpT.fx = (float)hx + dx * s;
+            gTpT.fy = (float)hy + dy * s;
+        }
+    }
+    const int ntx = (int)lroundf(gTpT.fx), nty = (int)lroundf(gTpT.fy);
+    const int ptx = gTpT.tx, pty = gTpT.ty;
+    TpApplyLandable(hx, hy, ntx, nty); // Train 85: marker rests only on landable tiles
+    const bool tileChanged = (gTpT.tx != ptx || gTpT.ty != pty);
+    if (tileChanged || (unsigned)SDL_GetTicks() - gTpT.lastFxMs >= 110)
+        TpMarkerFx(hero);
+    return true;
+}
+
+bool TpTargetActive() { return gTpT.active; }
+
+void TpTargetFire()
+{
+    if (!gTpT.active) return;
+    gTpT.active = false;
+    if (gTpT.valid) {
+        PadLog("PAD: teleport to marker (%d,%d)", gTpT.tx, gTpT.ty);
+        ActionMove_TeleportToPoint(gTpT.tx, gTpT.ty);
+    } else {
+        PadLog("PAD: teleport release on invalid marker - no fire");
+    }
+}
+
+void Meamu_PickUpNearestItem(void);   // Train 94: Player_InputTick's nearest-item fetch
+
+void ActMirror(int vk, bool down, bool& prev)
+{
+    if (down != prev) { Platform::InjectVirtualKey(vk, down); prev = down; }
+}
+
+// ── MEAMU Train 89: landing buffer for pad skill presses ──────────────
+// A skill button pressed DURING a teleport round-trip used to be
+// eaten: the press landed inside the flight and never cast. Now the
+// latest such press is buffered and fired by the 1C landing handler
+// (PadBuffer_FlushTeleport): if the button is still held, the mirror
+// takes it over as a hold; if it was already released, the flush
+// fires a tap and the next pad tick releases it.
+static int            gBufVk = 0;
+static bool*          gBufPrev = nullptr;
+static bool           gBufTapOff = false;
+
+static void ActMirrorBuffered(int vk, bool down, bool& prev)
+{
+    if (Combat_TeleportInFlight()) {
+        if (down) { gBufVk = vk; gBufPrev = &prev; }   // latest press wins
+        return;   // swallowed while the flight is open (prev untouched)
+    }
+    ActMirror(vk, down, prev);
+}
+
+void PadBuffer_FlushTeleport()
+{
+    if (gBufVk == 0 || gBufPrev == nullptr) return;
+    const int vk = gBufVk;
+    bool* prev = gBufPrev;
+    gBufVk = 0; gBufPrev = nullptr;
+    Platform::InjectVirtualKey(vk, true);
+    *prev = true;
+    // If the physical button is already up, the next PadButtonsTick
+    // turns this into a tap (releases it); if it is still held, the
+    // buffered mirror call next tick sees prev == down and holds.
+    gBufTapOff = true;
+    PadLog("PAD: buffered cast fired at landing (vk 0x%02X)", vk);
+}
+
+// MEAMU Train 64 (G's ruling, 2026-11-20): ONE PAD MAP, ALWAYS.
+// This button tick now runs in BOTH schemes — the Action sheet IS
+// the pad sheet: RT teleport targeting · LT 2 · X 3 · Y 4 · B 5 ·
+// A Dash · RB 6 · R3 Blink · View 7 · L3 8 · D-up 9 · D-down 10 ·
+// LB lock · D-Left fishing · Start scheme toggle. What differs by
+// scheme is only the STICKS (Action: WASD + aim; Classic: cursor
+// steering) and LB's lock flavour (Action: the verb; Classic: a
+// Tab pulse cycling the native Tab lock — the verb is Action-only
+// by Train 48 design). Classic's PADCAST bindings retired here:
+// D-pad potions (Q/W/E), C (character) and Back=M (move list) lose
+// their pad buttons; the keyboard keeps every one of them.
+void PadButtonsTick(unsigned now, float dt, bool actionPad)
+{
+    (void)now;
+    // MEAMU Train 100 (2026-11-21): THE ACCOUNT MAP DRIVES THE
+    // SHEET. Every handler below reads the state of the CONTROL
+    // its action is bound to in the active pad map (PadMap --
+    // the player's saved account map once it lands, else the
+    // Default preset, which IS tonight's layout). With the
+    // Default, each handler receives exactly the control it
+    // used to read directly, in the same order -- behaviour is
+    // unchanged by construction. ONE PAD MAP, ALWAYS (Train 64)
+    // still holds: both schemes run this tick; what differs by
+    // scheme stays inside the lock and dash handlers, as before.
+    // Train 64: snapshot the cast state for the auto-lock edge.
+    bool ctl[PC_COUNT];
+    ctl[PC_LT] = PadAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > kTriggerOn;
+    ctl[PC_RT] = PadAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > kTriggerOn;
+    ctl[PC_LB] = PadButton(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+    ctl[PC_RB] = PadButton(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+    ctl[PC_L3] = PadButton(SDL_GAMEPAD_BUTTON_LEFT_STICK);
+    ctl[PC_R3] = PadButton(SDL_GAMEPAD_BUTTON_RIGHT_STICK);
+    ctl[PC_A] = PadButton(SDL_GAMEPAD_BUTTON_SOUTH);
+    ctl[PC_B] = PadButton(SDL_GAMEPAD_BUTTON_EAST);
+    ctl[PC_X] = PadButton(SDL_GAMEPAD_BUTTON_WEST);
+    ctl[PC_Y] = PadButton(SDL_GAMEPAD_BUTTON_NORTH);
+    ctl[PC_BACK] = PadButton(SDL_GAMEPAD_BUTTON_BACK);
+    ctl[PC_START] = PadButton(SDL_GAMEPAD_BUTTON_START);
+    ctl[PC_DUP] = PadButton(SDL_GAMEPAD_BUTTON_DPAD_UP);
+    ctl[PC_DDOWN] = PadButton(SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+    ctl[PC_DLEFT] = PadButton(SDL_GAMEPAD_BUTTON_DPAD_LEFT);
+    ctl[PC_DRIGHT] = PadButton(SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
+    const auto held = [&ctl](PadAction a) -> bool {
+        const int c = PadMap_ControlFor(a);
+        return c >= 0 && ctl[c];
+    };
+
+    const bool prevCastHeld = gActionPadCastHeld;
+    // Lock + pour (Train 72's triple verb: auto-target + camera
+    // follow + SKILL 2 CAST-HOLD, one combined hold -- the hold
+    // IS the action; release stops the cast, ends the follow and
+    // clears the lock, Train 86). Train 81 put it on RT; the map
+    // now decides where it lives.
+    static bool s_PourPrev = false;
+    {
+        const bool now_ = held(PA_LOCK_POUR);
+        const bool was = s_PourPrev;
+        ActMirror(0x32, now_, s_PourPrev);   // Skill 2 cast-hold mirror
+        TargetLock_LtHold(now_);             // lock + follow + pour, in-range only (Train 88)
+        if (was && !now_) TargetLock_ReleaseUnlock();   // Train 86
+    }
+    // Skills 1..10 as plain press mirrors (the Train 57/81 sheet
+    // carried 3..10 on fixed buttons; the map now places any of
+    // the ten on any button). Skill 2 bound as a plain button
+    // casts like any other; the pour above is its own action.
+    static bool s_SkillPrev[10] = {};
+    {
+        static const int kVk[10] = { 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30 };
+        bool any = s_PourPrev;
+        for (int i = 0; i < 10; i++) {
+            ActMirrorBuffered(kVk[i], held((PadAction)(PA_SKILL1 + i)), s_SkillPrev[i]);
+            any = any || s_SkillPrev[i];
+        }
+        gActionPadCastHeld = any;
+    }
+    // Train 64: PAD-CAST AUTO-LOCK -- a skill press with an empty
+    // lock fills it with the closest monster BEFORE KbPlay resolves
+    // the cast (the pad tick runs ahead of the sim step that reads
+    // the mirrored key). A held manual lock is never overridden:
+    // AutoLockClosest itself refuses while any lock stands.
+    if (gActionPadCastHeld && !prevCastHeld && KbPlay_SelectedSkillTargeted()) {
+        // Train 70: the auto-lock belongs to TARGETED skills only
+        // (G's scope ruling) -- a self/summon cast no longer
+        // manufactures a lock it cannot use.
+        if (TargetLock_AutoLockClosest()) PadLog("PAD: cast auto-lock -> closest monster");
+        if (!actionPad) Rumble(4000, 0, 50);   // Classic cast-engage thump (kept from the PADCAST era)
+    }
+
+    {   // Teleport targeting (Train 59; hold to aim, release to
+        // land -- Train 81 put it on LT; the map decides now).
+        static bool s_TpPrev = false;
+        const bool rt = held(PA_TELEPORT);
+        if (rt && !s_TpPrev) {
+            if (InputEnable == 0 && DAT_083a7c24 == 0) TpTargetBegin();
+        } else if (rt && gTpT.active) {
+            TpTargetUpdate(dt, false);
+        } else if (!rt && s_TpPrev) {
+            TpTargetFire();
+        }
+        s_TpPrev = rt;
+    }
+
+    // Pick up items (Train 94 put it on R3; the map decides
+    // now). One press fetches the nearest ground item; pressing
+    // again while fetching steps to the next nearest.
+    {
+        static bool s_PickPrev = false;
+        const bool r3 = held(PA_PICKUP);
+        if (r3 && !s_PickPrev) Meamu_PickUpNearestItem();
+        s_PickPrev = r3;
+    }
+
+    {   // Lock on/off (Train 75 put it on LB; the map decides
+        // now): press with a lock standing releases it, press
+        // with none engages. NOT a cycle, on any door. Action:
+        // the verb lock toggles in TargetLock. Classic: the plain
+        // lock toggles the same way -- standing lock clears,
+        // empty lock acquires the CLOSEST attackable target
+        // (Train 97: every door, both schemes, one fill).
+        static bool s_LockPrev = false;
+        const bool lb = held(PA_LOCK_TOGGLE);
+        if (lb && !s_LockPrev) {
+            if (actionPad) {
+                TargetLock_Toggle();
+                PadLog("PAD: lock toggle (mapped)");
+            } else if (KbPlay_LockIndex() >= 0) {
+                KbPlay_LockClear();
+                PadLog("PAD: lock OFF (Classic, mapped)");
+            } else {
+                const int best = TargetLock_ClosestAttackable(false);
+                if (best >= 0) {
+                    KbPlay_LockSet(best);
+                    PadLog("PAD: lock on closest (Classic, mapped)");
+                } else {
+                    PadLog("PAD: no attackable target in range (Classic, mapped)");
+                }
+            }
+        }
+        s_LockPrev = lb;
+    }
+
+    {   // Fishing verb (Train 56 put it on D-pad Left; the map
+        // decides now): cast / reel.
+        static bool s_FishPrev = false;
+        const bool dl = held(PA_FISHING);
+        if (dl && !s_FishPrev) { Fishing_Verb(); PadLog("PAD: fishing verb (mapped)"); }
+        s_FishPrev = dl;
+    }
+
+    {   // Dash (Train 90 put it on A; the map decides now). Both
+        // schemes -- it is a BUTTON, so it lives here, not in the
+        // sticks tick. In Action the left stick aims the dash; in
+        // Classic there is no WASD stick, so the dash takes the
+        // hero's facing.
+        static bool s_DashPrev = false;
+        const bool aBtn = held(PA_DASH);
+        if (aBtn && !s_DashPrev) {
+            if (actionPad) {
+                float ldx, ldy;
+                StickVector(PadAxis(SDL_GAMEPAD_AXIS_LEFTX),
+                            PadAxis(SDL_GAMEPAD_AXIS_LEFTY), ldx, ldy);
+                const int sx = (ldx >  0.38f) ? 1 : (ldx < -0.38f) ? -1 : 0;
+                const int sy = (ldy >  0.38f) ? 1 : (ldy < -0.38f) ? -1 : 0;
+                ActionMove_PadDashDir(sx, sy);
+            }
+            ActionMove_PadDash();
+        }
+        s_DashPrev = aBtn;
+    }
+
+    {   // Scheme toggle (Train 62 put it on Start; the map
+        // decides now).
+        static bool s_SchemePrev = false;
+        const bool st = held(PA_SCHEME_TOGGLE);
+        if (st && !s_SchemePrev) PulseKey(0xC0, "scheme toggle");
+        s_SchemePrev = st;
+    }
+}
+
+void ActionSticksTick(float dt)
+{
+    // Left stick -> WASD virtual keys (ActionMove owns the drive).
+    float ldx, ldy;
+    const float lmag = StickVector(PadAxis(SDL_GAMEPAD_AXIS_LEFTX),
+                                   PadAxis(SDL_GAMEPAD_AXIS_LEFTY), ldx, ldy);
+    int sx = 0, sy = 0;
+    if (lmag > 0.0f) {
+        sx = (ldx >  0.38f) ? 1 : (ldx < -0.38f) ? -1 : 0;
+        sy = (ldy >  0.38f) ? 1 : (ldy < -0.38f) ? -1 : 0;
+    }
+    const int mask = (sy < 0 ? 1 : 0) | (sy > 0 ? 2 : 0) | (sx < 0 ? 4 : 0) | (sx > 0 ? 8 : 0);
+    const int vks[4] = { 0x57, 0x53, 0x41, 0x44 };   // W S A D
+    for (int i = 0; i < 4; ++i) {
+        const bool want = ((mask >> i) & 1) != 0;
+        const bool had  = ((gActPrev.wasdMask >> i) & 1) != 0;
+        if (want != had) Platform::InjectVirtualKey(vks[i], want);
+    }
+    gActPrev.wasdMask = mask;
+    gDriving = false;   // the WASD keys drive; the cursor-steer yield stays off
+
+    // Right stick -> aim while pointer-locked; cursor while UI is open.
+    // Train 59: while teleport targeting is up, TpTargetUpdate owns
+    // the stick (it steers the landing marker) -- aim/cursor yield.
+    float rdx, rdy;
+    const float rmag = StickVector(PadAxis(SDL_GAMEPAD_AXIS_RIGHTX),
+                                   PadAxis(SDL_GAMEPAD_AXIS_RIGHTY), rdx, rdy);
+    if (rmag > 0.0f && !gTpT.active) {
+        if (gActionCamera.PointerLocked()) {
+            gActionCamera.OnMouseDelta((int)(rdx * rmag * 1500.0f * dt),
+                                       (int)(rdy * rmag * 1500.0f * dt));
+        } else {
+            const float winW = (float)gWindow.GetRealWidth();
+            const float winH = (float)gWindow.GetRealHeight();
+            float nx = gCursorX + rdx * rmag * gCursorSpd * dt;
+            float ny = gCursorY + rdy * rmag * gCursorSpd * dt;
+            if (nx < 0) nx = 0; if (ny < 0) ny = 0;
+            if (nx > winW - 1) nx = winW - 1; if (ny > winH - 1) ny = winH - 1;
+            MoveCursorTo(nx, ny, false);
+        }
+    }
 }
 
 void Gamepad_Tick()
@@ -1046,6 +1563,7 @@ void Gamepad_Tick()
         // same way the LMB did.
         if (AnyVirtualHeld()) {
             PadLog("PAD: pad state lost while inputs held - releasing all");
+            TpTargetCancel("pad state lost");
             ReleaseAllInputs();
         }
         gLastMs = SDL_GetTicks(); gDriving = false; return;
@@ -1061,16 +1579,25 @@ void Gamepad_Tick()
     if (!gCursorInit) { gCursorX = winW * 0.5f; gCursorY = winH * 0.5f; gCursorInit = true; }
 
     // ── Skill buttons + triggers + Back: digit/M mirrors (PADCAST) ──────────
-    // Every skill button feeds KbPlay's digit path, which selects the
-    // button's skill, auto-targets the closest valid monster in that
-    // skill's range and hold-casts until the key is released — the pad
-    // adds no targeting or casting logic of its own.
-    for (const auto& mk : kSkillKeys) MirrorKeyTick(mk);
-    MirrorKeyTick(kBackKey);
-    TriggerKeyTick("RT", SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, 0x37, gPrevRT);
-    const bool ltWas = gPrevLT;
-    TriggerKeyTick("LT", SDL_GAMEPAD_AXIS_LEFT_TRIGGER, 0x38, gPrevLT);
-    if (gPrevLT && !ltWas) Rumble(4000, 0, 50);   // cast-engage thump (kept from the RMB era)
+    // Every skill button feeds KbPlay's digit path, which selects
+    // the button's skill and hold-casts until the key is released.
+    // (Train 64 adds ONE piece of pad targeting of its own: the
+    // cast-press auto-lock in PadButtonsTick.)
+    // Train 48: in the Action scheme the pad runs G's Action map;
+    // the PADCAST sections below run only in Classic.
+    // Train 64: ONE PAD MAP, ALWAYS — PadButtonsTick (the Action
+    // sheet) runs in BOTH schemes; only the sticks differ. A scheme
+    // flip releases every mirrored input + any in-flight teleport
+    // targeting first, then the unified tick re-engages from the
+    // physical pad state.
+    static bool s_wasActionPad = false;
+    const bool actionPad = gActionCamera.SchemeIsAction();
+    if (actionPad != s_wasActionPad) ActionPadReleaseAll();
+    s_wasActionPad = actionPad;
+    PadButtonsTick(now, dt, actionPad);
+    if (actionPad) {
+        ActionSticksTick(dt);
+    } else {
 
     // ── Left stick: movement (owns the cursor while deflected) ───────────────
     // Arrow keys take movement precedence while held (either source can take
@@ -1116,26 +1643,7 @@ void Gamepad_Tick()
     // skill button, nothing is ever held without a physical hold.)
     gDriving = moving;
 
-    // ── Simple edge buttons ──────────────────────────────────────────────────
-    // Start pulses Esc: in this client Esc is the single back key — it closes
-    // the D-menu/chat log, closes the system menu, or opens it. These are
-    // one-shot pulses (not duals): their consumers are edge-triggered, so a
-    // pulse and a held key are indistinguishable to them.
-    static const struct { SDL_GamepadButton b; const char* name; int vk; const char* what; } kBtns[] = {
-        { SDL_GAMEPAD_BUTTON_START,      "Start",  27,   "Esc/menu"     },
-        { SDL_GAMEPAD_BUTTON_DPAD_UP,    "DUp",    0x51, "Q/HP-potion"  },
-        { SDL_GAMEPAD_BUTTON_DPAD_RIGHT, "DRight", 0x57, "W/MP-potion"  },
-        { SDL_GAMEPAD_BUTTON_DPAD_DOWN,  "DDown",  0x45, "E/SD-potion"  },
-        { SDL_GAMEPAD_BUTTON_DPAD_LEFT,  "DLeft",  0x43, "C/character"  },
-    };
-    for (const auto& kb : kBtns) {
-        const bool down = PadButton(kb.b);
-        if (down && !gPrevButtons[kb.b]) {
-            PadLog("PAD: button %s down", kb.name);
-            PulseKey(kb.vk, kb.what);
-        }
-        gPrevButtons[kb.b] = down;
-    }
+    }   // Train 64: end of the Classic sticks block (buttons above are unified)
 
     // ── PADFIX2: divergence watchdog (left button) ──────────────────────────
     // The game can drop its held flag (MouseLButton, DAT_083a42c4) behind

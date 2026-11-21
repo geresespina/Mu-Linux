@@ -671,7 +671,7 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
         }
 
 
-        // ── 0h. Aura Crimson Karane (DESVIACION, solo cliente;
+        // ── 0h. Aura BLACK GOLD Karane (Train 71: crimson retired) (DESVIACION, solo cliente;
         // MEAMU 2026-11-18, Train 7) ─────────────────────────────
         // La gemela carmesi del 0g: la forma personal de G. El
         // gate reproduce la decision con nombre de Resolve --
@@ -691,10 +691,20 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
             !gUserSettings.GetAntilag(ANTILAG_GLOW) &&
             (*(DWORD*)((BYTE*)puVar13 + 120) & 0x2000) != 0 &&
             BijuTransform::FormClassForEntity((const CHARACTER*)puVar13) == 229) {
+            // MEAMU Train 71 (2026-11-20): G picked BLACK GOLD for
+            // Gloccy's 229 and ordered a BIG aura/glow/effects
+            // package while the form is ON. The breath now runs
+            // deep antique gold (0.55, 0.38, 0.06) to bright gold
+            // (0.98, 0.76, 0.22); the core heats toward amber-white
+            // (1.00, 0.85, 0.45) below. Sizes: this form gets its
+            // OWN halo (kKaraneGoldHalo, ~1.65x the shared form
+            // halo) plus an extra ultra-soft outer glow sprite --
+            // 228/230 keep the shared 140 untouched.
+            static constexpr float kKaraneGoldHalo = 230.0f;
             const float ct7 = 0.5f - 0.5f * cosf(WorldTime * (2.0f * 3.14159265f / 1500.0f));
-            float kcBase[3] = { 0.50f + (0.74f - 0.50f) * ct7,
-                                0.04f + (0.08f - 0.04f) * ct7,
-                                0.07f + (0.12f - 0.07f) * ct7 };
+            float kcBase[3] = { 0.55f + (0.98f - 0.55f) * ct7,
+                                0.38f + (0.76f - 0.38f) * ct7,
+                                0.06f + (0.22f - 0.06f) * ct7 };
             const float kcPulse = 0.85f + 0.25f * ct7;
             float kcLight[3] = { kcBase[0] * kcPulse,
                                  kcBase[1] * kcPulse,
@@ -703,25 +713,31 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
                                AsObject(puVar13)->Position[1],
                                AsObject(puVar13)->Position[2] };
             float kcHalo[3] = { kcBase[0] * 0.16f, kcBase[1] * 0.16f, kcBase[2] * 0.16f };
-            Equipment_AddSprite(0x47e, kcPos, kFormAuraHalo, kcHalo,
+            Equipment_AddSprite(0x47e, kcPos, kKaraneGoldHalo, kcHalo,
+                                (intptr_t)puVar13, 0.0f, 0);
+            // Train 71: the BIG outer glow -- a second disc at
+            // 1.6x the halo, barely-there alpha, so the form sits
+            // inside a gold bloom you can see across the map.
+            float kcOuter[3] = { kcBase[0] * 0.07f, kcBase[1] * 0.07f, kcBase[2] * 0.07f };
+            Equipment_AddSprite(0x47e, kcPos, kKaraneGoldHalo * 1.6f, kcOuter,
                                 (intptr_t)puVar13, 0.0f, 0);
             float kcGround[3] = { kcLight[0] * 0.45f, kcLight[1] * 0.45f, kcLight[2] * 0.45f };
-            Equipment_AddSprite(0x47e, kcPos, kFormAuraHalo * 0.739f, kcGround,
+            Equipment_AddSprite(0x47e, kcPos, kKaraneGoldHalo * 0.739f, kcGround,
                                 (intptr_t)puVar13, 0.0f, 0);
             float kcOff[3] = { 0.0f, 0.0f, 0.0f };
             float kcBody[3];
             BMD_TransformPosition(pvVar23,
                 (float *)((intptr_t)AsObject(puVar13)->BoneMatrices + 0 * 0x30),
                 kcOff, kcBody, '\x01');
-            Equipment_AddSprite(0x47e, kcBody, kFormAuraHalo * 0.5f, kcLight,
+            Equipment_AddSprite(0x47e, kcBody, kKaraneGoldHalo * 0.5f, kcLight,
                                 (intptr_t)puVar13, 0.0f, 0);
             float kcCore[3] = { kcBase[0] + (1.00f - kcBase[0]) * 0.45f,
-                                kcBase[1] + (0.38f - kcBase[1]) * 0.45f,
-                                kcBase[2] + (0.18f - kcBase[2]) * 0.45f };
-            Equipment_AddSprite(0x47e, kcBody, kFormAuraHalo * 0.239f, kcCore,
+                                kcBase[1] + (0.85f - kcBase[1]) * 0.45f,
+                                kcBase[2] + (0.45f - kcBase[2]) * 0.45f };
+            Equipment_AddSprite(0x47e, kcBody, kKaraneGoldHalo * 0.239f, kcCore,
                                 (intptr_t)puVar13, 0.0f, 0);
             const int kcPhase = (int)(((intptr_t)puVar13 >> 5) & 0x3F);
-            if ((((int)WorldTime + kcPhase) % 120) < 16) {
+            if ((((int)WorldTime + kcPhase) % 80) < 16) {   // Train 71: denser gold embers (120 -> 80 ms cadence)
                 float kcEmber[3] = { kcBase[0], kcBase[1], kcBase[2] };
                 const float kcAng = (WorldTime + (float)kcPhase * 61.0f) *
                                     (2.0f * 3.14159265f / 2400.0f);
@@ -730,10 +746,75 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
                                       kcBody[1] + sinf(kcAng) * kcRad,
                                       kcBody[2] };
                 Particle_Spawn(0x4ab, emberPos, (float *)(puVar13 + 7),
-                               kcEmber, 0, 0.9f, 0);
+                               kcEmber, 0, 1.3f, 0);   // Train 71: bigger embers (0.9 -> 1.3)
+                // Train 71: a counter-rotating twin ember -- the
+                // pair reads as a storm of gold sparks around him.
+                float emberPos2[3] = { kcBody[0] - cosf(kcAng) * kcRad,
+                                       kcBody[1] - sinf(kcAng) * kcRad,
+                                       kcBody[2] };
+                Particle_Spawn(0x4ab, emberPos2, (float *)(puVar13 + 7),
+                               kcEmber, 0, 1.3f, 0);
             }
         }
 
+
+
+        // ── 0i. Aura Blue Megazord (DESVIACION, solo cliente;
+        // MEAMU 2026-11-20, Train 67) ──────────────────────────
+        // Eliger's personal Susanoo: the BLUE MEGAZORD (class
+        // 230, the HurricaneBlue skin BMD at titan scale). Twin
+        // of the 0g/0h stack -- same 4 sprites 0x47e, same halo,
+        // same ember cadence -- in Megazord blue: deep blue
+        // (0.10, 0.30, 0.78) breathing to bright zord blue
+        // (0.16, 0.48, 1.00), core lightened toward cyan-white
+        // (0.55, 0.82, 1.00). Gate == 230 exactly, so it follows
+        // the Megazord body and nothing else.
+        if (bVar7 == 0xFF && AsCharacter(puVar13)->Dead == 0 &&
+            !gUserSettings.GetAntilag(ANTILAG_GLOW) &&
+            (*(DWORD*)((BYTE*)puVar13 + 120) & 0x2000) != 0 &&
+            BijuTransform::FormClassForEntity((const CHARACTER*)puVar13) == 230) {
+            const float mz7 = 0.5f - 0.5f * cosf(WorldTime * (2.0f * 3.14159265f / 1500.0f));
+            float mzBase[3] = { 0.10f + (0.16f - 0.10f) * mz7,
+                                0.30f + (0.48f - 0.30f) * mz7,
+                                0.78f + (1.00f - 0.78f) * mz7 };
+            const float mzPulse = 0.85f + 0.25f * mz7;
+            float mzLight[3] = { mzBase[0] * mzPulse,
+                                 mzBase[1] * mzPulse,
+                                 mzBase[2] * mzPulse };
+            float mzPos[3] = { AsObject(puVar13)->Position[0],
+                               AsObject(puVar13)->Position[1],
+                               AsObject(puVar13)->Position[2] };
+            float mzHalo[3] = { mzBase[0] * 0.16f, mzBase[1] * 0.16f, mzBase[2] * 0.16f };
+            Equipment_AddSprite(0x47e, mzPos, kFormAuraHalo, mzHalo,
+                                (intptr_t)puVar13, 0.0f, 0);
+            float mzGround[3] = { mzLight[0] * 0.45f, mzLight[1] * 0.45f, mzLight[2] * 0.45f };
+            Equipment_AddSprite(0x47e, mzPos, kFormAuraHalo * 0.739f, mzGround,
+                                (intptr_t)puVar13, 0.0f, 0);
+            float mzOff[3] = { 0.0f, 0.0f, 0.0f };
+            float mzBody[3];
+            BMD_TransformPosition(pvVar23,
+                (float *)((intptr_t)AsObject(puVar13)->BoneMatrices + 0 * 0x30),
+                mzOff, mzBody, '\x01');
+            Equipment_AddSprite(0x47e, mzBody, kFormAuraHalo * 0.5f, mzLight,
+                                (intptr_t)puVar13, 0.0f, 0);
+            float mzCore[3] = { mzBase[0] + (0.55f - mzBase[0]) * 0.45f,
+                                mzBase[1] + (0.82f - mzBase[1]) * 0.45f,
+                                mzBase[2] + (1.00f - mzBase[2]) * 0.45f };
+            Equipment_AddSprite(0x47e, mzBody, kFormAuraHalo * 0.239f, mzCore,
+                                (intptr_t)puVar13, 0.0f, 0);
+            const int mzPhase = (int)(((intptr_t)puVar13 >> 5) & 0x3F);
+            if ((((int)WorldTime + mzPhase) % 120) < 16) {
+                float mzEmber[3] = { mzBase[0], mzBase[1], mzBase[2] };
+                const float mzAng = (WorldTime + (float)mzPhase * 61.0f) *
+                                    (2.0f * 3.14159265f / 2400.0f);
+                const float mzRad = 23.0f * 18.0f;
+                float emberPos[3] = { mzBody[0] + cosf(mzAng) * mzRad,
+                                      mzBody[1] + sinf(mzAng) * mzRad,
+                                      mzBody[2] };
+                Particle_Spawn(0x4ab, emberPos, (float *)(puVar13 + 7),
+                               mzEmber, 0, 0.9f, 0);
+            }
+        }
 
         // ── 1. Glove sparkle: class byte (cls&7)==0 + (cls_skin&0xF8)==8 ───
         // (DK 2nd-tier with specific skin range): sprite + sin halo at bone 19
