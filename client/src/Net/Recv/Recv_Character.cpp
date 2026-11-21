@@ -5,6 +5,9 @@
 #include "stdafx.h"
 #include "UI/BuffBar.h"
 #include "Net/BijuProcVisuals.h"
+#include "Input/Fishing.h"   // Train 56: F3 FE fishing signals
+#include "Input/ActionMove.h" // Train 87: landing resets the drive state
+#include "Input/Gamepad.h"   // Train 89: PadBuffer_FlushTeleport
 #include "UI/ChatListBox.h"
 #include "Net/NetText.h"
 #include "Entity/EntityName.h"
@@ -1351,6 +1354,10 @@ void NetRecv_F3(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
             BijuProcVisuals::Receive((const BYTE*)Msg, Size);
             break;
         }
+        case 0xFE: {  // MEAMU Train 56: fishing signals (F3:FE) -- bobber + bite
+            Fishing_Receive((const BYTE*)Msg, Size);
+            break;
+        }
         case 0xFA: {  // MEAMU Train 8: Rena balance push (F3:FA) — subcode is a
                        // placeholder pending RENA-REPORT.md; see UI/RenaHud.h
             RenaHud::Receive((const uint8_t*)Msg, Size);
@@ -1577,6 +1584,33 @@ void NetRecv_1C(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
     *(DWORD *)&AsCharacter(hero)->PositionY = gridY;
     AsCharacter(hero)->Object.Angle[2] = ((float)direction - 1.0f) * 45.0f;
 
+    // MEAMU Train 87 (G's order, 2026-11-20): the landing is
+    // authoritative for MOVEMENT too, not just for the render
+    // position. Measured on the trace rig before this train: of
+    // 138 landings followed by a move, 21 opened with the client
+    // claiming the PRE-teleport tile as its path origin (d = 3-8,
+    // worst after blink-to-target fired mid-walk) -- and the
+    // server, which walks from the claimed origin (PathX[0]), 
+    // dragged its own record back to the stale tile: the blink
+    // was undone in the movement record, ~100 ms of flip-flop.
+    // Root: this handler adopted the tile into Position/PositionX/Y
+    // but left the path state stale (PathNum / PathX[0] /
+    // TargetX/Y), and SetPlayerStop at the tail does not clear
+    // it. Kill the path and rebase every movement anchor onto the
+    // server's tile, so the first move or cast after a landing
+    // starts from the server's true tile. Both branches (gate and
+    // gate-0) share this adoption, so both get the rebase.
+    AsCharacter(hero)->PathNum = 0;
+    AsCharacter(hero)->PathCurrent = 0;
+    AsCharacter(hero)->PathX[0] = gridX;
+    AsCharacter(hero)->PathY[0] = gridY;
+    AsCharacter(hero)->TargetX = gridX;
+    AsCharacter(hero)->TargetY = gridY;
+    ActionMove_OnTeleportLanded();
+    Combat_NoteTeleportLanded();     // Train 89: close the round-trip gate
+    PadBuffer_FlushTeleport();       // Train 89: fire a cast buffered mid-flight
+    ActionMove_FlushPendingTeleport();   // Train 92: fire a dash / teleport buffered mid-flight
+
     if (gate != 0) {
         // ReceiveTeleport's gate branch clears the old viewport
         // antes de aceptar el par mapa/posición del server. Esto
@@ -1695,25 +1729,22 @@ void NetRecv_1C(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         // for ~1.85 s, and its Teleport=3 state + Alpha fade feed
         // the same click gates (Alpha < 0.7 discards clicks) — the
         // package made every teleport feel ~2 s late. What remains
-        // is the pure read of a teleport: sparkle 1176 + chime 88 +
-        // the landing marker, Alpha pinned fully opaque, no action,
-        // no state, no fade.
+        // is the pure read of a teleport: sparkle 1176 + chime 88,
+        // Alpha pinned fully opaque, no action, no state, no fade.
+        // (Train 77 removed the landing marker that used to ride
+        // here -- G ordered the custom teleport visuals out.)
         CreateEffect(1176, AsObject(hero)->Position, AsObject(hero)->Angle,
                      AsObject(hero)->Light, nullptr, nullptr,
                      (float*)(uintptr_t)0xFFFFFFFFu, nullptr, 0);
         PlayBuffer(88, 0, 0);
         AsObject(hero)->Alpha = 1.0f;
         AsObject(hero)->AlphaTarget = 1.0f;
-        MoveMarkers::OnTeleportArrival(AsObject(hero));
         Teleport = 0;                 // IDA L508: Teleport = 0 (0x05826D14)
     }
 
-    // MEAMU MoveMarkers: las llegadas por gate (map move) no llaman a
-    // CreateTeleportEnd a proposito; el marcador de llegada se dispara
-    // aca, con el mundo ya cargado y la posicion final puesta. La rama
-    // gate=0 ya lo disparo dentro de CreateTeleportEnd.
-    if (gate != 0)
-        MoveMarkers::OnTeleportArrival(AsObject(hero));
+    // MEAMU Train 77: gate arrivals used to fire the MoveMarkers
+    // landing dressing here; G removed the custom teleport visuals
+    // (ring + pillar + vanish) -- arrivals are stock now.
 
     // Este store es común a las dos ramas en el original.
     AsCharacter(hero)->Movement = 0;

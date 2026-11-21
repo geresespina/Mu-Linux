@@ -34,7 +34,9 @@
 #include "Input/ActionJump.h"     // Train 29: air-dash glide / teleport air-cancel (gActionJump)
 #include "Game/NinjaRun.h"        // Train 37: pure-dash burst window (gDashBurstEndMs)
 #include "Input/KbPlay.h"         // Train 31: latch release on scheme flip (KbPlay_ClearAttackLatch)
+#include "Input/TargetLock.h"     // Train 91: TargetLock_FollowHeld (the RT pour gate)
 #include <SDL3/SDL.h>             // SDL_GetTicks
+#include "Net/MoveMarkers.h"        // MEAMU Train 63: teleport vanish kick
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
@@ -47,6 +49,11 @@ namespace Platform {
 void DeliverSDLInput(const InputEvent& event);   // SDLWindow.cpp
 unsigned RealInputSerial();                      // SDLInput.cpp
 }
+
+// MEAMU Train 92: global forward declaration (definition beside
+// ActionMove_OnTeleportLanded, global scope).
+bool ActionMove_TryBufferTeleport(unsigned char mode, unsigned char b5,
+                                  unsigned char b6, bool airDash);
 
 namespace {
 
@@ -230,6 +237,28 @@ unsigned gBrakeArmedMs = 0;
 int      gBrakeTileX   = 0;
 int      gBrakeTileY   = 0;
 
+// ── Dash glide (MEAMU Train 95, G's report: "dash looks like
+// a teleport") ───────────────────────────────────────────────────────
+// The server answers a dash with the Teleport machinery, so the
+// landing handler snaps the hero to the end tile -- on screen a
+// dash and a teleport were the same vanish/reappear. The client is
+// the only side that knows which verb it sent, so it remembers
+// the wire mode + the hero's render position at send time; when
+// a DASH (mode 0) landing arrives promptly, the logical tile
+// still adopts the server's tile instantly (sync law untouched)
+// but the RENDERED body glides from the send position to the
+// landing tile at ~33 tiles/s, facing the travel direction --
+// visibly travelling every in-between tile, GunZ-style. Teleport
+// (modes 1/2) keeps the pure vanish/reappear.
+unsigned char gWireMode    = 0xFF;   // mode of the last F3 FD frame sent
+unsigned      gWireSentMs  = 0;
+float         gWireFromPos[3] = { 0.0f, 0.0f, 0.0f };
+bool          gGlideActive = false;
+float         gGlideFrom[3] = { 0.0f, 0.0f, 0.0f };
+float         gGlideTo[3]   = { 0.0f, 0.0f, 0.0f };
+unsigned      gGlideStartMs = 0;
+unsigned      gGlideDurMs   = 0;
+
 void ArmDashBrake(unsigned now)
 {
     gBrakeActive  = true;
@@ -289,6 +318,7 @@ void ResetDirectDrive()
     gDirectValid = false;
     gDirectTx = gDirectTy = -1;
 }
+
 
 // MEAMU Train 27: cancel the hero's issued path — the actual stop.
 // Releasing the virtual button never cancelled the route the engine
@@ -382,8 +412,18 @@ bool EmitDashFrame(unsigned char mode, BYTE b5, BYTE b6, const char* label)
     // trip — the run-up G felt.)
     ReleaseDrive();
     ArmDashBrake((unsigned)SDL_GetTicks());
+    // Train 95: remember the verb + where the body was when it
+    // was sent, so the landing can glide a dash (and only a dash).
+    gWireMode   = mode;
+    gWireSentMs = (unsigned)SDL_GetTicks();
+    if (Hero) {
+        gWireFromPos[0] = HeroC()->Object.Position[0];
+        gWireFromPos[1] = HeroC()->Object.Position[1];
+        gWireFromPos[2] = HeroC()->Object.Position[2];
+    }
     const BYTE pkt[7] = { 0xC1, 0x07, kDashHead, kDashSub, mode, b5, b6 };
     gNetwork.SendC1(pkt, sizeof(pkt));
+    Combat_NoteTeleportSent();   // Train 89: the wire teleport opens the round-trip gate
     ActLog("ACTION-WIRE: %s sent — C1 07 F3 FD %02X %02X %02X",
            label, (unsigned)mode, (unsigned)b5, (unsigned)b6);
     return true;
@@ -398,6 +438,13 @@ bool SendDashRequest(unsigned char mode, int keyOrDir)
     } else {
         b5 = (BYTE)(keyOrDir & 0xFF);          // engine Dir 0..7
         b6 = 0;
+    }
+    // MEAMU Train 92: a dash pressed mid-flight is buffered and
+    // fired at the landing -- the server drops FD frames sent while
+    // a teleport is in progress, which ate chained dashes.
+    if (mode == 0 && ActionMove_TryBufferTeleport(mode, b5, b6, true)) {
+        ActLog("ACTION: dash buffered (teleport in flight)");
+        return true;
     }
     const bool sent = EmitDashFrame(mode, b5, b6,
         mode == kDashModeTarget ? "blink-to-target" : "dash");
@@ -436,6 +483,55 @@ int OctantOf(int dx, int dy)
     return 7;   // dx<0, dy==0
 }
 
+// MEAMU Train 90: screen-vector -> world Dir byte, using the drive's
+// own projection method (project the 8 world steps to screen, pick
+// by dot) -- the dash goes exactly where the drive would walk.
+static int DashDirFromScreenVec(int sx, int sy)
+{
+    if (!Hero || (sx == 0 && sy == 0)) return -1;
+    CHARACTER* hero = HeroC();
+    const float hx = hero->Object.Position[0];
+    const float hy = hero->Object.Position[1];
+    int hsx = 0, hsy = 0;
+    Camera_ProjectWorldToScreen((float*)hero->Object.Position, &hsx, &hsy);
+    const float wl = sqrtf((float)(sx * sx + sy * sy));
+    const float wx = sx / wl, wy = sy / wl;
+    int bestOct = -1; float bestDot = -2.0f;
+    for (int oy = -1; oy <= 1; ++oy)
+        for (int ox = -1; ox <= 1; ++ox) {
+            if (ox == 0 && oy == 0) continue;
+            float wp[3] = { hx + (float)ox * 100.0f, hy + (float)oy * 100.0f,
+                            hero->Object.Position[2] };
+            int px = 0, py = 0;
+            Camera_ProjectWorldToScreen(wp, &px, &py);
+            const float dx = (float)(px - hsx), dy = (float)(py - hsy);
+            const float len = sqrtf(dx * dx + dy * dy);
+            if (len < 1.0f) continue;
+            const float dot = (dx / len) * wx + (dy / len) * wy;
+            if (dot > bestDot) { bestDot = dot; bestOct = OctantOf(ox, oy); }
+        }
+    return (bestOct >= 0 && bestDot > 0.3f) ? bestOct : -1;
+}
+
+// Classic fallback: dash along the hero's facing (the yaw convention
+// the LT sweep used: forward = (sin, cos) of 180 - Angle[2]).
+static int DashDirFromFacing()
+{
+    if (!Hero) return -1;
+    CHARACTER* hero = HeroC();
+    const float rad = (180.0f - hero->Object.Angle[2]) * 0.017453292f;
+    const float fx = sinf(rad), fy = cosf(rad);
+    int bestOct = -1; float bestDot = -2.0f;
+    for (int oy = -1; oy <= 1; ++oy)
+        for (int ox = -1; ox <= 1; ++ox) {
+            if (ox == 0 && oy == 0) continue;
+            const float len = sqrtf((float)(ox * ox + oy * oy));
+            const float dot = ((float)ox / len) * fx + ((float)oy / len) * fy;
+            if (dot > bestDot) { bestDot = dot; bestOct = OctantOf(ox, oy); }
+        }
+    return bestOct;
+}
+
 // Feed the four direction slots; returns true when a double-tap fired
 // this tick. History: Train 15 fired the dash WIRE (a server
 // teleport); Train 36 (G's ruling) removed the teleport — Space owns
@@ -462,11 +558,15 @@ bool DashScan(unsigned now, int wantX, int wantY)
             t.pressT = now;
             if (t.releaseT != 0 && now - t.releaseT <= kDashWindowMs &&
                 t.pressDur <= kTapMaxMs) {
-                // Double-tap: PURE DASH (Train 37). Open/refresh the
-                // burst window; the drive tick + render seam keep
-                // NinjaRun::gDashBurst live until it lapses.
-                NinjaRun::gDashBurstEndMs = now + kDashBurstMs;
-                ActLog("ACTION: pure dash (slot %d, burst %u ms)", s, kDashBurstMs);
+                // Double-tap: WIRE DASH (Train 90). Train 37's pure
+                // burst died with Train 53's lockstep (the factor
+                // machinery was retired; the flag drove nothing).
+                // The dash is the F3 FD mode-0 relocation again, in
+                // the tapped direction (slot screen vectors W/S/A/D).
+                static const int kSlotVec[4][2] = { {0,-1}, {0,1}, {-1,0}, {1,0} };
+                const int ddir = DashDirFromScreenVec(kSlotVec[s][0], kSlotVec[s][1]);
+                if (ddir >= 0) SendDashRequest(0, ddir);
+                ActLog("ACTION: double-tap dash (slot %d, dir %d)", s, ddir);
                 t.releaseT = 0;                      // no triple-tap chain
                 fired = true;
             }
@@ -498,6 +598,81 @@ void FlipScheme()
 
 } // namespace
 
+// MEAMU Train 87: a teleport landing forgets the direct-drive
+// route state, so the drive's next issue is built fresh from the
+// landing tile (the 1C handler kills + rebases the path itself).
+// Defined at global scope (the header's declaration): the drive
+// state lives in the anonymous namespace above, visible in this
+// TU, so the reset is one call.
+// ── MEAMU Train 92: pending-teleport slot ──────────────────────────
+// One slot, latest wins, 1600 ms expiry (the flight timeout is
+// 1500 ms; a stale entry never fires on an unrelated landing).
+namespace {
+    bool          gPendValid = false;
+    unsigned char gPendMode = 0, gPendB5 = 0, gPendB6 = 0;
+    bool          gPendAirDash = false;
+    unsigned      gPendT = 0;
+}
+
+bool ActionMove_TryBufferTeleport(unsigned char mode, unsigned char b5,
+                                         unsigned char b6, bool airDash)
+{
+    if (!Combat_TeleportInFlight()) return false;
+    gPendValid = true; gPendMode = mode; gPendB5 = b5; gPendB6 = b6;
+    gPendAirDash = airDash; gPendT = (unsigned)SDL_GetTicks();
+    return true;
+}
+
+void ActionMove_FlushPendingTeleport()
+{
+    if (!gPendValid) return;
+    gPendValid = false;
+    if ((unsigned)SDL_GetTicks() - gPendT > 1600) return;   // stale
+    const bool sent = EmitDashFrame(gPendMode, gPendB5, gPendB6,
+                                    "buffered-teleport");
+    if (sent) {
+        if (gPendAirDash) gActionJump.OnAirDash();
+        else gActionJump.CancelAir();
+    }
+}
+
+void ActionMove_OnTeleportLanded()
+{
+    ResetDirectDrive();
+    // Train 95: a DASH landing starts the glide. The handler has
+    // already adopted the server's tile + render position; the
+    // glide rewinds the RENDER position to the send point and
+    // plays it forward in ActionMove_Tick. A landing that arrives
+    // late (> 1.5 s after the send) or barely moved (< 2 tiles)
+    // is not a dash landing -- no glide.
+    if (gWireMode == 0 && Hero) {
+        const unsigned now = (unsigned)SDL_GetTicks();
+        const float dx = HeroC()->Object.Position[0] - gWireFromPos[0];
+        const float dy = HeroC()->Object.Position[1] - gWireFromPos[1];
+        const float adx = dx < 0.0f ? -dx : dx;
+        const float ady = dy < 0.0f ? -dy : dy;
+        const float tiles = (adx > ady ? adx : ady) / 100.0f;
+        if (now - gWireSentMs <= 1500 && tiles >= 2.0f) {
+            gGlideFrom[0] = gWireFromPos[0];
+            gGlideFrom[1] = gWireFromPos[1];
+            gGlideFrom[2] = gWireFromPos[2];
+            gGlideTo[0] = HeroC()->Object.Position[0];
+            gGlideTo[1] = HeroC()->Object.Position[1];
+            gGlideTo[2] = HeroC()->Object.Position[2];
+            unsigned dur = (unsigned)(tiles * 30.0f);   // ~33 tiles/s
+            if (dur < 90) dur = 90;
+            if (dur > 240) dur = 240;
+            gGlideDurMs   = dur;
+            gGlideStartMs = now;
+            gGlideActive  = true;
+            HeroC()->Object.Angle[2] = CreateAngle(gGlideFrom[0], gGlideFrom[1],
+                                                   gGlideTo[0], gGlideTo[1]);
+            ActLog("ACTION: dash glide %.1f tiles over %u ms", tiles, dur);
+        }
+    }
+    gWireMode = 0xFF;   // consumed by this landing, whatever it was
+}
+
 bool ActionMove_IsAction()
 {
     return gInit && gScheme == ControlScheme::Action &&
@@ -515,6 +690,18 @@ unsigned ActionMove_SchemeFlipSerial() { return gFlipSerial; }
 
 bool ActionMove_TryBlinkEngage(int targetIdx, int attackRangeTiles)
 {
+    // MEAMU Train 91 (G's law: RT NEVER teleports): Train 13's
+    // blink-engage survived Train 88's hunt removal underneath the
+    // pour -- both callers (KbPlay's AimAndPark and the stock
+    // attack branch in Player_InputTick, which the mirrored '2'
+    // cast-hold routes through) blink the hero onto any aim target
+    // beyond reach, so an RT pour at a monster that stepped out of
+    // Skill 2's range teleported him onto it. While the RT/RMB
+    // pour drives, blink-engage is OFF, centrally, for every
+    // caller: the pour locks + follows + casts in range only, and
+    // an out-of-range target is never blinked onto. Keyboard casts
+    // and AUTO keep the closer when RT is not held.
+    if (TargetLock_FollowHeld()) return false;
     if (targetIdx < 0 || targetIdx >= 400 || !Hero || !CharactersClient)
         return false;
     CHARACTER* hero = HeroC();
@@ -532,6 +719,42 @@ bool ActionMove_TryBlinkEngage(int targetIdx, int attackRangeTiles)
            EntityName::Get((char*)tgt), key, Cheb(hero, tgt),
            attackRangeTiles, sent ? "sent" : "NOT SENT");
     return sent;
+}
+
+bool ActionMove_BlinkToTarget(int targetIdx)
+{
+    if (targetIdx < 0 || targetIdx >= 400 || !Hero || !CharactersClient)
+        return false;
+    CHARACTER* tgt = EntryAt(targetIdx);
+    if (tgt->Object.Live == 0 || tgt->Dead != 0) return false;
+    const bool sent = SendDashRequest(kDashModeTarget, (int)tgt->Key);
+    ActLog("ACTION: blink-to-lock %s (key %d) %s",
+           EntityName::Get((char*)tgt), (int)tgt->Key, sent ? "sent" : "NOT SENT");
+    return sent;
+}
+
+// Train 48: pad dash state — a stored screen-space direction the
+// Train 90: read by ActionMove_PadDash at the press to aim the wire dash.
+int      gPadDashX = 0, gPadDashY = -1;
+
+void ActionMove_PadDashDir(int sx, int sy)
+{
+    if (sx == 0 && sy == 0) { gPadDashX = 0; gPadDashY = -1; }   // neutral stick: forward
+    else { gPadDashX = sx; gPadDashY = sy; }
+}
+
+void ActionMove_PadDash()
+{
+    // MEAMU Train 90: the pad dash is the WIRE dash (see DashScan).
+    // Action: the left-stick direction, camera-relative via the
+    // projection picker (neutral stick = screen-up = camera
+    // forward). Classic: the hero's facing. Server-paced relocation
+    // with the step-back landing; Bounce 33's window covers it.
+    int dir = -1;
+    if (gActionCamera.SchemeIsAction()) dir = DashDirFromScreenVec(gPadDashX, gPadDashY);
+    if (dir < 0) dir = DashDirFromFacing();
+    if (dir >= 0) SendDashRequest(0, dir);
+    ActLog("ACTION: pad dash (dir %d)", dir);
 }
 
 bool ActionMove_CameraLocked()
@@ -601,6 +824,13 @@ bool ActionMove_TeleportToPoint(int tileX, int tileY)
         clamped = true;
     }
     if (tx < 0 || ty < 0 || tx > 255 || ty > 255) return false;
+    // MEAMU Train 92: same mid-flight buffering for point teleports
+    // (marker fire / double-click during a flight).
+    if (ActionMove_TryBufferTeleport(kDashModeClickTp, (BYTE)tx, (BYTE)ty, false)) {
+        ActLog("ACTION: click-teleport buffered (teleport in flight)");
+        gActionJump.CancelAir();
+        return true;
+    }
     const bool sent = EmitDashFrame(kDashModeClickTp, (BYTE)tx, (BYTE)ty,
                                     "click-teleport");
     if (sent) gActionJump.CancelAir();   // Train 29: teleports land grounded
@@ -699,6 +929,25 @@ bool ActionMove_TryEventTeleport(int uiX, int uiY)
 
 void ActionMove_Tick()
 {
+    // Train 95: advance the dash glide (render position only --
+    // the logical tile has been the server's since the landing).
+    if (gGlideActive && Hero) {
+        const unsigned now = (unsigned)SDL_GetTicks();
+        const unsigned el = now - gGlideStartMs;
+        if (el >= gGlideDurMs) {
+            HeroC()->Object.Position[0] = gGlideTo[0];
+            HeroC()->Object.Position[1] = gGlideTo[1];
+            HeroC()->Object.Position[2] = gGlideTo[2];
+            gGlideActive = false;
+        } else {
+            const float t = (float)el / (float)gGlideDurMs;
+            const float e = 1.0f - (1.0f - t) * (1.0f - t);   // ease-out: fast launch, settle in
+            HeroC()->Object.Position[0] = gGlideFrom[0] + (gGlideTo[0] - gGlideFrom[0]) * e;
+            HeroC()->Object.Position[1] = gGlideFrom[1] + (gGlideTo[1] - gGlideFrom[1]) * e;
+            HeroC()->Object.Position[2] = gGlideFrom[2] + (gGlideTo[2] - gGlideFrom[2]) * e;
+        }
+    }
+
     if (!gInit) {
         gInit = true;
         gScheme = gUserSettings.GetControlScheme();
@@ -747,7 +996,15 @@ void ActionMove_Tick()
         anyHeld = true;
         if (!gTaps[s].consumed) anyLive = true;
     }
+    // Train 90: the Train 48 pad-dash drive override is GONE -- the
+    // dash is a wire relocation now; nothing auto-drives after it
+    // (the manual-movement law).
+    int effX = wantX, effY = wantY;
     if (!anyHeld || (wantX == 0 && wantY == 0) || !anyLive) {
+        StopDrive();
+        return;
+    }
+    if (!anyLive) {
         StopDrive();
         return;
     }
@@ -758,8 +1015,8 @@ void ActionMove_Tick()
     const float hy = hero->Object.Position[1];
     int hsx = 0, hsy = 0;
     Camera_ProjectWorldToScreen((float*)hero->Object.Position, &hsx, &hsy);
-    const float wl = sqrtf((float)(wantX * wantX + wantY * wantY));
-    const float wx = wantX / wl, wy = wantY / wl;
+    const float wl = sqrtf((float)(effX * effX + effY * effY));
+    const float wx = effX / wl, wy = effY / wl;
 
     int   bestOct = -1;
     float bestDot = -2.0f;
