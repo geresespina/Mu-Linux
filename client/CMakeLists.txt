@@ -323,6 +323,7 @@ set(MU_SOURCES
     src/Input/Input.cpp
     src/Input/Mouse_Hover.cpp
     src/Input/Gamepad.cpp
+    src/Input/PadMap.cpp
     src/Input/NavMove.cpp
     src/Input/KbPlay.cpp
     src/Input/ActionMove.cpp

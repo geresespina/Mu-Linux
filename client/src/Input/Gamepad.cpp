@@ -79,6 +79,7 @@
 #include "Input/TargetLock.h"     // Train 64: pad-cast auto-lock
 #include "Input/ActionMove.h"     // Train 48: ActionMove_PadDash
 #include "Input/Fishing.h"        // Train 56: fishing verb
+#include "Input/PadMap.h"         // Train 100: the account pad map drives the sheet
 #include "Platform/IInput.h"     // Platform::InputEvent / InputEventType
 #include "Platform/NativeBridge.h" // Platform::NativeWindow/NativeInstance (DI coop level)
 #include "Core/Window.h"         // gWindow (real pixel size)
@@ -1295,48 +1296,68 @@ void PadBuffer_FlushTeleport()
 void PadButtonsTick(unsigned now, float dt, bool actionPad)
 {
     (void)now;
-    // MEAMU Train 81 sheet (G, 2026-11-20): the triggers are
-    // SWAPPED -- RT = the hold-to-lock triple verb + hunt (Train
-    // 72, ex-LT), LT = Skill 1 Teleport TARGETING (hold-to-aim,
-    // below, ex-RT), X = Skill 3, Y = Skill 4,
-    // B = Skill 5, A = Skill 6. RB = Dash, R3 = Blink, LB = Lock,
-    // D-Left = Fishing, L3 = Skill 8, Start = scheme toggle --
-    // the Train 57 layout, unchanged (an L3-toggle swap was built
-    // and cancelled by G the same morning: "Start is better").
-    // Train 59: RT no longer mirrors Skill 1 -- holding it runs
-    // TELEPORT TARGETING (wired after the skill block below).
-    // Train 64: snapshot the skill mirrors for the auto-lock edge.
+    // MEAMU Train 100 (2026-11-21): THE ACCOUNT MAP DRIVES THE
+    // SHEET. Every handler below reads the state of the CONTROL
+    // its action is bound to in the active pad map (PadMap --
+    // the player's saved account map once it lands, else the
+    // Default preset, which IS tonight's layout). With the
+    // Default, each handler receives exactly the control it
+    // used to read directly, in the same order -- behaviour is
+    // unchanged by construction. ONE PAD MAP, ALWAYS (Train 64)
+    // still holds: both schemes run this tick; what differs by
+    // scheme stays inside the lock and dash handlers, as before.
+    // Train 64: snapshot the cast state for the auto-lock edge.
+    bool ctl[PC_COUNT];
+    ctl[PC_LT] = PadAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > kTriggerOn;
+    ctl[PC_RT] = PadAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > kTriggerOn;
+    ctl[PC_LB] = PadButton(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+    ctl[PC_RB] = PadButton(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+    ctl[PC_L3] = PadButton(SDL_GAMEPAD_BUTTON_LEFT_STICK);
+    ctl[PC_R3] = PadButton(SDL_GAMEPAD_BUTTON_RIGHT_STICK);
+    ctl[PC_A] = PadButton(SDL_GAMEPAD_BUTTON_SOUTH);
+    ctl[PC_B] = PadButton(SDL_GAMEPAD_BUTTON_EAST);
+    ctl[PC_X] = PadButton(SDL_GAMEPAD_BUTTON_WEST);
+    ctl[PC_Y] = PadButton(SDL_GAMEPAD_BUTTON_NORTH);
+    ctl[PC_BACK] = PadButton(SDL_GAMEPAD_BUTTON_BACK);
+    ctl[PC_START] = PadButton(SDL_GAMEPAD_BUTTON_START);
+    ctl[PC_DUP] = PadButton(SDL_GAMEPAD_BUTTON_DPAD_UP);
+    ctl[PC_DDOWN] = PadButton(SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+    ctl[PC_DLEFT] = PadButton(SDL_GAMEPAD_BUTTON_DPAD_LEFT);
+    ctl[PC_DRIGHT] = PadButton(SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
+    const auto held = [&ctl](PadAction a) -> bool {
+        const int c = PadMap_ControlFor(a);
+        return c >= 0 && ctl[c];
+    };
+
     const bool prevCastHeld = gActionPadCastHeld;
-    // MEAMU Train 72 (G's refined spec, 2026-11-20): the trigger
-    // hold is ONE combined verb -- auto-target + camera follow +
-    // SKILL 2 CAST-HOLD (+ the Train 78 hunt), all at once, for
-    // as long as it is held (no tap/hold split: the hold IS the
-    // action). The mirror presses digit '2' (KbPlay cast-holds
-    // the slot-2 skill at the lock through ComputeAim); LtHold
-    // fills the lock on this same tick, ahead of the sim step
-    // that resolves the cast, and drives the camera follow.
-    // Release: the cast stops, the follow ends -- and since
-    // Train 86 (G's rule) the LOCK CLEARS too (ReleaseUnlock).
-    // MEAMU Train 81 (G, 2026-11-20): THIS VERB NOW RIDES RT --
-    // the triggers are swapped. (The LtHold name is Train 68's;
-    // it is the verb, not the trigger.)
-    const bool huntNow = PadAxis(SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > kTriggerOn;
-    const bool huntWas = gActPrev.lt;        // Train 86: RT release edge
-    ActMirror(0x32, huntNow, gActPrev.lt);   // RT = Skill 2 cast-hold (Train 81)
-    TargetLock_LtHold(huntNow);              // RT = lock + follow + pour, in-range only (Train 88)
-    if (huntWas && !huntNow) TargetLock_ReleaseUnlock();   // Train 86
-    ActMirrorBuffered(0x33, PadButton(SDL_GAMEPAD_BUTTON_WEST),          gActPrev.x);     // X  = Skill 3 (G)
-    ActMirrorBuffered(0x34, PadButton(SDL_GAMEPAD_BUTTON_NORTH),         gActPrev.y);     // Y  = Skill 4 (G)
-    ActMirrorBuffered(0x35, PadButton(SDL_GAMEPAD_BUTTON_EAST),          gActPrev.b);     // B  = Skill 5 (G)
-    ActMirrorBuffered(0x36, PadButton(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER), gActPrev.rb);   // RB = Skill 6 (Train 90 swap: A took dash)
-    ActMirrorBuffered(0x37, PadButton(SDL_GAMEPAD_BUTTON_BACK),          gActPrev.view);  // View = Skill 7
-    ActMirrorBuffered(0x38, PadButton(SDL_GAMEPAD_BUTTON_LEFT_STICK),    gActPrev.l3);    // L3 = Skill 8
-    ActMirrorBuffered(0x39, PadButton(SDL_GAMEPAD_BUTTON_DPAD_UP),       gActPrev.dup);   // D-up = Skill 9
-    ActMirrorBuffered(0x30, PadButton(SDL_GAMEPAD_BUTTON_DPAD_DOWN),     gActPrev.ddown); // D-down = Skill 10
-    gActionPadCastHeld = gActPrev.lt || gActPrev.x || gActPrev.y
-                      || gActPrev.b || gActPrev.rb || gActPrev.view || gActPrev.l3
-                      || gActPrev.dup || gActPrev.ddown;
-    // Train 64: PAD-CAST AUTO-LOCK — a skill press with an empty
+    // Lock + pour (Train 72's triple verb: auto-target + camera
+    // follow + SKILL 2 CAST-HOLD, one combined hold -- the hold
+    // IS the action; release stops the cast, ends the follow and
+    // clears the lock, Train 86). Train 81 put it on RT; the map
+    // now decides where it lives.
+    static bool s_PourPrev = false;
+    {
+        const bool now_ = held(PA_LOCK_POUR);
+        const bool was = s_PourPrev;
+        ActMirror(0x32, now_, s_PourPrev);   // Skill 2 cast-hold mirror
+        TargetLock_LtHold(now_);             // lock + follow + pour, in-range only (Train 88)
+        if (was && !now_) TargetLock_ReleaseUnlock();   // Train 86
+    }
+    // Skills 1..10 as plain press mirrors (the Train 57/81 sheet
+    // carried 3..10 on fixed buttons; the map now places any of
+    // the ten on any button). Skill 2 bound as a plain button
+    // casts like any other; the pour above is its own action.
+    static bool s_SkillPrev[10] = {};
+    {
+        static const int kVk[10] = { 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30 };
+        bool any = s_PourPrev;
+        for (int i = 0; i < 10; i++) {
+            ActMirrorBuffered(kVk[i], held((PadAction)(PA_SKILL1 + i)), s_SkillPrev[i]);
+            any = any || s_SkillPrev[i];
+        }
+        gActionPadCastHeld = any;
+    }
+    // Train 64: PAD-CAST AUTO-LOCK -- a skill press with an empty
     // lock fills it with the closest monster BEFORE KbPlay resolves
     // the cast (the pad tick runs ahead of the sim step that reads
     // the mirrored key). A held manual lock is never overridden:
@@ -1349,70 +1370,75 @@ void PadButtonsTick(unsigned now, float dt, bool actionPad)
         if (!actionPad) Rumble(4000, 0, 50);   // Classic cast-engage thump (kept from the PADCAST era)
     }
 
-    {   // Train 59: teleport targeting (see TpTarget block).
-        // Train 81: THIS VERB NOW RIDES LT (trigger swap).
-        const bool rt = PadAxis(SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > kTriggerOn;
-        if (rt && !gActPrev.rt) {
+    {   // Teleport targeting (Train 59; hold to aim, release to
+        // land -- Train 81 put it on LT; the map decides now).
+        static bool s_TpPrev = false;
+        const bool rt = held(PA_TELEPORT);
+        if (rt && !s_TpPrev) {
             if (InputEnable == 0 && DAT_083a7c24 == 0) TpTargetBegin();
         } else if (rt && gTpT.active) {
             TpTargetUpdate(dt, false);
-        } else if (!rt && gActPrev.rt) {
+        } else if (!rt && s_TpPrev) {
             TpTargetFire();
         }
-        gActPrev.rt = rt;
+        s_TpPrev = rt;
     }
 
-    // Train 94 (G's ruling): R3 = PICK UP ITEMS -- replaces the
-    // R3 = Blink Space mirror (teleport lives on LT hold-aim-
-    // release now). One press fetches the nearest ground item;
-    // pressing again while fetching steps to the next nearest.
+    // Pick up items (Train 94 put it on R3; the map decides
+    // now). One press fetches the nearest ground item; pressing
+    // again while fetching steps to the next nearest.
     {
-        const bool r3 = PadButton(SDL_GAMEPAD_BUTTON_RIGHT_STICK);
-        if (r3 && !gActPrev.r3) Meamu_PickUpNearestItem();
-        gActPrev.r3 = r3;
+        static bool s_PickPrev = false;
+        const bool r3 = held(PA_PICKUP);
+        if (r3 && !s_PickPrev) Meamu_PickUpNearestItem();
+        s_PickPrev = r3;
     }
 
-    const bool lb = PadButton(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);       // LB = Lock ON/OFF (Train 75)
-    if (lb && !gActPrev.lb) {
-        // MEAMU Train 75 (G's ruling): LB toggles the lock -- press
-        // with a lock standing releases it, press with none
-        // engages. NOT a cycle, on any door. Action: the verb
-        // lock toggles in TargetLock. Classic: the plain lock
-        // toggles the same way -- standing lock clears, empty
-        // lock acquires the CLOSEST attackable target (Train 97:
-        // every door, both schemes, one fill).
-        if (actionPad) {
-            TargetLock_Toggle();
-            PadLog("PAD: LB - target lock toggle");
-        } else if (KbPlay_LockIndex() >= 0) {
-            KbPlay_LockClear();
-            PadLog("PAD: LB - lock OFF (Classic)");
-        } else {
-            const int best = TargetLock_ClosestAttackable(false);
-            if (best >= 0) {
-                KbPlay_LockSet(best);
-                PadLog("PAD: LB - lock on closest (Classic)");
+    {   // Lock on/off (Train 75 put it on LB; the map decides
+        // now): press with a lock standing releases it, press
+        // with none engages. NOT a cycle, on any door. Action:
+        // the verb lock toggles in TargetLock. Classic: the plain
+        // lock toggles the same way -- standing lock clears,
+        // empty lock acquires the CLOSEST attackable target
+        // (Train 97: every door, both schemes, one fill).
+        static bool s_LockPrev = false;
+        const bool lb = held(PA_LOCK_TOGGLE);
+        if (lb && !s_LockPrev) {
+            if (actionPad) {
+                TargetLock_Toggle();
+                PadLog("PAD: lock toggle (mapped)");
+            } else if (KbPlay_LockIndex() >= 0) {
+                KbPlay_LockClear();
+                PadLog("PAD: lock OFF (Classic, mapped)");
             } else {
-                PadLog("PAD: LB - no attackable target in range (Classic)");
+                const int best = TargetLock_ClosestAttackable(false);
+                if (best >= 0) {
+                    KbPlay_LockSet(best);
+                    PadLog("PAD: lock on closest (Classic, mapped)");
+                } else {
+                    PadLog("PAD: no attackable target in range (Classic, mapped)");
+                }
             }
         }
-    }
-    gActPrev.lb = lb;
-
-    {   // Train 56: D-pad Left = FISHING verb (cast / reel)
-        static bool s_DLeftPrev = false;
-        const bool dl = PadButton(SDL_GAMEPAD_BUTTON_DPAD_LEFT);
-        if (dl && !s_DLeftPrev) { Fishing_Verb(); PadLog("PAD: DLeft - fishing verb"); }
-        s_DLeftPrev = dl;
+        s_LockPrev = lb;
     }
 
-    {   // A = Dash (Train 90 remap -- the dash moved here from RB;
-        // RB took Skill 6 in the mirror list above). Both schemes --
-        // it is a BUTTON, so it lives here, not in the sticks tick.
-        // In Action the left stick aims the dash; in Classic there
-        // is no WASD stick, so the dash takes the hero's facing.
-        const bool aBtn = PadButton(SDL_GAMEPAD_BUTTON_SOUTH);
-        if (aBtn && !gActPrev.a) {
+    {   // Fishing verb (Train 56 put it on D-pad Left; the map
+        // decides now): cast / reel.
+        static bool s_FishPrev = false;
+        const bool dl = held(PA_FISHING);
+        if (dl && !s_FishPrev) { Fishing_Verb(); PadLog("PAD: fishing verb (mapped)"); }
+        s_FishPrev = dl;
+    }
+
+    {   // Dash (Train 90 put it on A; the map decides now). Both
+        // schemes -- it is a BUTTON, so it lives here, not in the
+        // sticks tick. In Action the left stick aims the dash; in
+        // Classic there is no WASD stick, so the dash takes the
+        // hero's facing.
+        static bool s_DashPrev = false;
+        const bool aBtn = held(PA_DASH);
+        if (aBtn && !s_DashPrev) {
             if (actionPad) {
                 float ldx, ldy;
                 StickVector(PadAxis(SDL_GAMEPAD_AXIS_LEFTX),
@@ -1423,12 +1449,16 @@ void PadButtonsTick(unsigned now, float dt, bool actionPad)
             }
             ActionMove_PadDash();
         }
-        gActPrev.a = aBtn;
+        s_DashPrev = aBtn;
     }
 
-    const bool st = PadButton(SDL_GAMEPAD_BUTTON_START);               // Start = scheme toggle
-    if (st && !gActPrev.start) PulseKey(0xC0, "scheme toggle");
-    gActPrev.start = st;
+    {   // Scheme toggle (Train 62 put it on Start; the map
+        // decides now).
+        static bool s_SchemePrev = false;
+        const bool st = held(PA_SCHEME_TOGGLE);
+        if (st && !s_SchemePrev) PulseKey(0xC0, "scheme toggle");
+        s_SchemePrev = st;
+    }
 }
 
 void ActionSticksTick(float dt)
