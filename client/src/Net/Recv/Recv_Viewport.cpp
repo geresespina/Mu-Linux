@@ -766,6 +766,29 @@ void NetRecv_14(BYTE* Msg, int Size, BYTE hdr, BYTE sub, bool bEncrypted)
         const int offset = 4 + i * 2;
         const int entityId = ((Msg[offset] << 8) | Msg[offset + 1]) & 0x7FFF;
         DeleteCharacter(entityId);
+        // MEAMU Train 98 (clone-ghost hunt, G's verdict 2026-11-21:
+        // Sage clones kept rendering until a map switch, though the
+        // server sends this destroy on schedule): DeleteCharacter
+        // retires only the FIRST active slot carrying the key. If
+        // a second active slot ever carries the same key (a slot
+        // re-stamped after creation, a create that landed on a
+        // recycled slot without retiring the previous body), the
+        // surviving body renders forever -- no second destroy is
+        // ever sent for it. A destroy is authoritative: sweep any
+        // remaining active slot with this key and retire it too.
+        if (DAT_07abf5d0) {
+            BYTE* base = (BYTE*)(uintptr_t)DAT_07abf5d0;
+            for (int sIdx = 0; sIdx < 400; ++sIdx) {
+                BYTE* slotB = base + sIdx * CHARACTER_STRIDE;
+                if (*(BYTE*)slotB != 0
+                    && *(short*)(slotB + EntityOffset(0x1DC)) == (short)entityId) {
+                    NetLog("NET:  -> 0x14 Train98 sweep: extra active slot %d still carries key %d -- retiring",
+                           sIdx, entityId);
+                    *(BYTE*)slotB = 0;
+                    DeleteCloth(AsCharacter(slotB), AsObject(slotB), nullptr);
+                }
+            }
+        }
     }
     NetLog("NET:  -> 0x14 ViewportDestroy count=%d processed=%d size=%d",
            count, entries, Size);

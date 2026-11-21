@@ -99,6 +99,17 @@ struct ItemExtraData
     bool  HasPose = false;
     CatalogItemPose Pose = {};
     int   Model = -1;
+    // Train 61 (2026-11-20): carga diferida -- ApplyItem guarda la
+    // ruta y el slot fijo; el BMD se carga en el primer GetItemModel /
+    // SetEntityPart (ResolvePendingModels). Model/EntityModel = -2
+    // mientras la carga esta pendiente.
+    char  ModelFolder[40] = {};
+    char  ModelName[24] = {};
+    int   ModelFixedSlot = -1;
+    bool  ModelPending = false;
+    char  EntityFolder[40] = {};
+    char  EntityName[24] = {};
+    bool  EntityPending = false;
     bool  HasWing = false;
     CatalogWing Wing = {};
     int   EntityModel = -1;
@@ -758,10 +769,15 @@ void CContentCatalog::Publish()
         monster.Model = -1;
         NetText::FromServer(monster.Name, sizeof(monster.Name), row.Name, sizeof(row.Name));
         if (row.Flags & Proto::CATALOG_MONSTER_HAS_MODEL) {
+            // Train 61: diferido -- Publish guarda la ruta y marca el
+            // modelo pendiente; EnsureMonsterModel lo carga al primer
+            // spawn / primer uso de la forma. Publish ya no toca disco.
             row.ModelFolder[sizeof(row.ModelFolder) - 1] = 0;
             row.ModelName[sizeof(row.ModelName) - 1] = 0;
-            monster.Model = LoadModel(row.ModelFolder, row.ModelName, -1);
-            SetMonsterSpeeds(monster.Model, row.Kind == 0);
+            memcpy(monster.ModelFolder, row.ModelFolder, sizeof(monster.ModelFolder));
+            memcpy(monster.ModelName, row.ModelName, sizeof(monster.ModelName));
+            monster.Model = -2;
+            monster.ModelPending = true;
         }
     }
 
@@ -909,11 +925,14 @@ void CContentCatalog::ApplyItem(const BYTE* record, int recordSize)
                        row.WingIncDamageConstB, row.WingDecDamageConstA, row.WingDecDamageConstB };
     }
     if (row.Flags & Proto::CATALOG_ITEM_HAS_ENTITY) {
+        // Train 61: diferido -- se guarda la ruta; la carga ocurre en
+        // ResolvePendingModels, al primer uso real del item.
         row.EntityFolder[sizeof(row.EntityFolder) - 1] = 0;
         row.EntityName[sizeof(row.EntityName) - 1] = 0;
-        extra.EntityModel = LoadModel(row.EntityFolder, row.EntityName, -1);
-        if (extra.EntityModel >= MODEL_MAX_VANILLA && !s_DynamicModelItem.count(extra.EntityModel))
-            s_DynamicModelItem[extra.EntityModel] = row.Index;
+        memcpy(extra.EntityFolder, row.EntityFolder, sizeof(extra.EntityFolder));
+        memcpy(extra.EntityName, row.EntityName, sizeof(extra.EntityName));
+        extra.EntityModel = -2;
+        extra.EntityPending = true;
     }
     if (row.Flags & Proto::CATALOG_ITEM_HAS_MODEL) {
         row.ModelFolder[sizeof(row.ModelFolder) - 1] = 0;
@@ -921,9 +940,13 @@ void CContentCatalog::ApplyItem(const BYTE* record, int recordSize)
         // Un vanilla (o un índice libre por debajo de 512) usa su slot de
         // siempre, type + 400: así lo dibujan todos los caminos del binario.
         const int fixedSlot = (row.Index < ITEM_MAX_VANILLA) ? row.Index + ITEM_MODEL_BASE : -1;
-        extra.Model = LoadModel(row.ModelFolder, row.ModelName, fixedSlot);
-        if (extra.Model >= MODEL_MAX_VANILLA && !s_DynamicModelItem.count(extra.Model))
-            s_DynamicModelItem[extra.Model] = row.Index;
+        // Train 61: diferido -- la ruta y el slot fijo quedan guardados;
+        // el BMD se carga en el primer GetItemModel de este tipo.
+        memcpy(extra.ModelFolder, row.ModelFolder, sizeof(extra.ModelFolder));
+        memcpy(extra.ModelName, row.ModelName, sizeof(extra.ModelName));
+        extra.ModelFixedSlot = fixedSlot;
+        extra.Model = -2;
+        extra.ModelPending = true;
     }
 }
 
@@ -1042,9 +1065,70 @@ int CContentCatalog::GetItemBehavior(int type) const
     return s_Items[type].Behavior;
 }
 
-int CContentCatalog::GetItemModel(int type) const
+// Train 61 (2026-11-20): resuelve las cargas diferidas de un item la
+// primera vez que algo pide su modelo. LoadModel ya cachea por ruta,
+// asi que cada BMD se lee de disco UNA vez por proceso -- pero cuando
+// se necesita (preview del char-select, primer render en el mundo),
+// no durante el login. Esto es lo que saco los ~15 s del camino
+// login -> lista de personajes: Publish aplicaba ~430 items y ~237
+// monstruos cargando cada BMD en el hilo de paquetes, ANTES de que el
+// cliente procesara el F1/01 y pidiera la lista (el server respondia
+// la lista en 2 ms; la espera era 100% este Publish sincrono).
+void CContentCatalog::ResolvePendingModels(int type)
+{
+    if (type < 0 || type >= ITEM_MAX_EX) return;
+    ItemExtraData& extra = s_Items[type];
+    if (extra.ModelPending) {
+        extra.ModelPending = false;
+        extra.Model = LoadModel(extra.ModelFolder, extra.ModelName, extra.ModelFixedSlot);
+        if (extra.Model >= MODEL_MAX_VANILLA && !s_DynamicModelItem.count(extra.Model))
+            s_DynamicModelItem[extra.Model] = type;
+    }
+    if (extra.EntityPending) {
+        extra.EntityPending = false;
+        extra.EntityModel = LoadModel(extra.EntityFolder, extra.EntityName, -1);
+        if (extra.EntityModel >= MODEL_MAX_VANILLA && !s_DynamicModelItem.count(extra.EntityModel))
+            s_DynamicModelItem[extra.EntityModel] = type;
+    }
+}
+
+int CContentCatalog::EnsureMonsterModel(int index)
+{
+    if (index < 0 || index >= MAX_CATALOG_MONSTER) return -1;
+    CatalogMonster& monster = s_Monsters[index];
+    if (!monster.Present) return -1;
+    if (monster.ModelPending) {
+        monster.ModelPending = false;
+        monster.Model = LoadModel(monster.ModelFolder, monster.ModelName, -1);
+        if (monster.Model >= 0) SetMonsterSpeeds(monster.Model, monster.Kind == 0);
+    }
+    return monster.Model;
+}
+
+int CContentCatalog::RetryMonsterModel(int index)
+{
+    if (index < 0 || index >= MAX_CATALOG_MONSTER) return -1;
+    CatalogMonster& monster = s_Monsters[index];
+    if (!monster.Present) return -1;
+    if (monster.Model >= 0) return monster.Model;
+    if (monster.ModelPending) return this->EnsureMonsterModel(index);
+    // Model < 0 with nothing pending = a cached failure. Rebuild
+    // LoadModel's cache key (normalized folder + name + "#-1", the
+    // fixedSlot every monster load uses), drop it, and load again.
+    char sub[96];
+    if (NormalizeFolder(monster.ModelFolder, sub, sizeof(sub))) {
+        const std::string key = std::string(sub) + monster.ModelName + "#-1";
+        s_LoadedModels.erase(key);
+    }
+    monster.Model = -2;
+    monster.ModelPending = true;
+    return this->EnsureMonsterModel(index);
+}
+
+int CContentCatalog::GetItemModel(int type)
 {
     if (type < 0 || type >= ITEM_MAX_EX) return type + ITEM_MODEL_BASE;
+    ResolvePendingModels(type);
     const ItemExtraData& extra = s_Items[type];
     if (extra.Model >= 0) return extra.Model;
     if (type < ITEM_MAX_VANILLA) return type + ITEM_MODEL_BASE;
@@ -1185,6 +1269,7 @@ void CContentCatalog::SetEntityPart(const void* c, int part, int itemType)
     EntityPart& entry = s_EntityParts[idx][part];
     entry = { -1, -1 };
     if (itemType < 0 || itemType >= ITEM_MAX_EX) return;
+    ResolvePendingModels(itemType);
     const ItemExtraData& extra = s_Items[itemType];
     const int own = (extra.EntityModel >= 0) ? extra.EntityModel : extra.Model;
     if (own < 0) return;
