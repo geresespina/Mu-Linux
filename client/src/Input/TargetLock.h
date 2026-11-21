@@ -40,6 +40,8 @@ void KbPlay_LockClear();
 // housekeeping), because verb locks are Action-only by design.
 // Returns true when it set a lock.
 bool TargetLock_AutoLockClosest();
+int  TargetLock_ClosestAttackable(bool respectKillLatch);   // Train 97: the one acquisition fill
+void KbPlay_LockSet(int idx);   // Train 97: for the Classic LB/Q arms (def in KbPlay.cpp)
 // MEAMU Train 76 (G's lock rule): a KILL clears the lock with
 // NO automatic re-fill -- after the locked target dies, neither
 // the LT-hold re-engage (Train 72) nor the pad-cast auto-lock

@@ -1376,10 +1376,11 @@ void PadButtonsTick(unsigned now, float dt, bool actionPad)
     if (lb && !gActPrev.lb) {
         // MEAMU Train 75 (G's ruling): LB toggles the lock -- press
         // with a lock standing releases it, press with none
-        // engages. NOT a cycle (Q keeps engage/cycle on the
-        // keyboard). Action: the verb lock toggles in TargetLock.
-        // Classic: the plain Tab-style lock toggles the same way --
-        // standing lock clears, empty lock takes the Tab target.
+        // engages. NOT a cycle, on any door. Action: the verb
+        // lock toggles in TargetLock. Classic: the plain lock
+        // toggles the same way -- standing lock clears, empty
+        // lock acquires the CLOSEST attackable target (Train 97:
+        // every door, both schemes, one fill).
         if (actionPad) {
             TargetLock_Toggle();
             PadLog("PAD: LB - target lock toggle");
@@ -1387,8 +1388,13 @@ void PadButtonsTick(unsigned now, float dt, bool actionPad)
             KbPlay_LockClear();
             PadLog("PAD: LB - lock OFF (Classic)");
         } else {
-            PulseKey(0x09, "lock on (Tab)");
-            PadLog("PAD: LB - Tab lock on (Classic)");
+            const int best = TargetLock_ClosestAttackable(false);
+            if (best >= 0) {
+                KbPlay_LockSet(best);
+                PadLog("PAD: LB - lock on closest (Classic)");
+            } else {
+                PadLog("PAD: LB - no attackable target in range (Classic)");
+            }
         }
     }
     gActPrev.lb = lb;

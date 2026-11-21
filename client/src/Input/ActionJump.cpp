@@ -154,8 +154,8 @@ void CActionJump::Update()
     // engage/cycle on Q is REPLACED (cycling survives nowhere
     // on the toggle doors; the hunt/RT-RMB fill and the cast
     // auto-lock are untouched). The Classic arm calls the very
-    // same code LB calls (clear, or Gamepad's queued Tab
-    // pulse), so Q and LB can never drift apart. Same gates
+    // same code LB calls (clear, or the closest-target
+    // acquire), so Q and LB can never drift apart. Same gates
     // as the other verb drivers: no chat/text focus.
     {
         static bool s_QPrev = false;
@@ -168,7 +168,8 @@ void CActionJump::Update()
             } else if (KbPlay_LockIndex() >= 0) {
                 KbPlay_LockClear();
             } else {
-                PulseKeyShared(0x09, "Q lock on (Tab)");
+                const int best = TargetLock_ClosestAttackable(false);
+                if (best >= 0) KbPlay_LockSet(best);
             }
         }
     }

@@ -139,18 +139,39 @@ void TargetLock_ReleaseUnlock()
     if (KbPlay_LockIndex() >= 0) KbPlay_LockClear();
 }
 
-bool TargetLock_AutoLockClosest()
+// MEAMU Train 97 (G's ruling): lock acquisition is ONE fill for
+// EVERY door -- the closest attackable target to the hero inside
+// Skill 2's range (latch-legal + the Train 93 pool), the same
+// argmin the RT fill has always run. Aim-pick wins nowhere now:
+// middle-mouse, LB/Q (both schemes) and the cast auto-lock all
+// acquire through here. Latch rules are untouched: this runs
+// only at acquisition; a standing lock is never re-picked or
+// stolen. respectKillLatch separates the AUTOMATIC fills (RT
+// hold, cast auto-lock: a kill mid-hold never auto-refills,
+// Train 76) from a DELIBERATE engage press (middle-mouse / LB /
+// Q), which is itself the fresh acquisition.
+int TargetLock_ClosestAttackable(bool respectKillLatch)
 {
-    if (!Hero) return false;
-    WatchLockKill();                             // Train 76
-    if (gKillLatch) return false;                // killed: no auto re-fill
-    if (KbPlay_LockIndex() >= 0) return false;   // manual lock wins
-    int best = -1, bestD = kEngageRange + 1;
+    if (!Hero) return -1;
+    WatchLockKill();
+    if (respectKillLatch && gKillLatch) return -1;
+    const int range = KbPlay_DigitSkillDist(2);
+    if (range <= 0) return -1;
+    int best = -1, bestD = range + 1;
     for (int i = 0; i < 400; ++i) {
-        if (!InLockPool(i)) continue;   // Train 93: any attackable kind
+        if (!KbPlay_LatchLegal(i)) continue;
+        if (!InLockPool(i)) continue;
         const int d = KbPlay_TargetDist(i);
         if (d < bestD) { bestD = d; best = i; }
     }
+    return best;
+}
+
+bool TargetLock_AutoLockClosest()
+{
+    if (!Hero) return false;
+    if (KbPlay_LockIndex() >= 0) return false;   // manual lock wins
+    const int best = TargetLock_ClosestAttackable(true);
     if (best < 0) return false;
     if (gActionCamera.SchemeIsAction()) {
         SetLock(best);              // verb lock: break rules + facing
@@ -198,18 +219,11 @@ void TargetLock_LtHold(bool held)
     if (!held) { gKillLatch = false; return; }   // Train 76 latch reset
     if (!Hero) return;
     if (KbPlay_LockIndex() >= 0) return;   // a standing lock wins
-    WatchLockKill();                             // Train 76
-    if (gKillLatch) return;                      // killed mid-hold: no re-engage
-    const int range = KbPlay_DigitSkillDist(2);  // Train 88: Skill 2's range
-    if (range <= 0) return;
-    int best = -1, bestD = 9999;
-    for (int i = 0; i < 400; ++i) {
-        if (!KbPlay_LatchLegal(i)) continue;
-        if (!InLockPool(i)) continue;   // Train 93: any attackable kind (was Train 79 monsters-only)
-        const int d = KbPlay_TargetDist(i);
-        if (d < bestD) { bestD = d; best = i; }
-    }
-    if (best < 0 || bestD > range) return;       // nothing in range: no hunt
+    // The shared Train 97 fill: closest attackable to the hero
+    // inside Skill 2's range (the kill latch rides inside --
+    // a kill mid-hold never re-engages, Train 76).
+    const int best = TargetLock_ClosestAttackable(true);
+    if (best < 0) return;                        // nothing in range: no hunt
     if (gActionCamera.SchemeIsAction()) {
         SetLock(best);              // verb lock: break rules + facing
     } else {
@@ -220,41 +234,16 @@ void TargetLock_LtHold(bool held)
 void TargetLock_Engage()
 {
     if (!Hero || !gActionCamera.SchemeIsAction()) return;
-
-    // Candidates: latch-legal enemies within engage range, by distance.
-    int idxs[400];
-    int n = 0;
-    for (int i = 0; i < 400; ++i) {
-        if (!KbPlay_LatchLegal(i)) continue;
-        if (KbPlay_TargetDist(i) <= kEngageRange) idxs[n++] = i;
-    }
-    if (n == 0) {                       // aimed at nothing: clear
-        if (gEngaged) { TargetLock_Clear(); KbPlay_SayText("Target lock cleared"); }
-        return;
-    }
-    // Distance sort (insertion; n is small in practice).
-    for (int a = 1; a < n; ++a) {
-        const int iv = idxs[a], dv = KbPlay_TargetDist(iv);
-        int b = a - 1;
-        while (b >= 0 && KbPlay_TargetDist(idxs[b]) > dv) { idxs[b + 1] = idxs[b]; --b; }
-        idxs[b + 1] = iv;
-    }
-
-    // Aim first: the reticle pick wins when it names a candidate
-    // other than the current lock.
-    const int cur = KbPlay_LockIndex();
-    const int pick = gActionCamera.ReticlePick();
-    if (pick >= 0 && pick != cur) {
-        for (int a = 0; a < n; ++a)
-            if (idxs[a] == pick) { SetLock(pick); return; }
-    }
-    // Otherwise cycle: nearest, or the next after the current lock.
-    int next = idxs[0];
-    if (gEngaged) {
-        for (int a = 0; a < n; ++a)
-            if (idxs[a] == cur) { next = idxs[(a + 1) % n]; break; }
-    }
-    SetLock(next);
+    // MEAMU Train 97 (G's ruling): middle-mouse acquires the
+    // CLOSEST attackable target, exactly like every other door.
+    // The aim-pick and the press-to-cycle are gone. A standing
+    // lock is never re-picked (the latch + break rules govern
+    // its life); a deliberate press ignores the kill latch --
+    // the press IS the fresh acquisition.
+    if (KbPlay_LockIndex() >= 0) return;
+    const int best = TargetLock_ClosestAttackable(false);
+    if (best < 0) return;
+    SetLock(best);
 }
 
 // MEAMU Train 75: LB ON/OFF (Action side). A standing verb lock
