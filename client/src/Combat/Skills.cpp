@@ -471,6 +471,18 @@ void PacketHandler_0x19(BYTE* pkt)
         goto common_tail;
     }
 
+    case 0x52:  // 82 Thousand Hands (MEAMU 2026-11-21, Train 109)
+    {
+        // Remote cast (pose-less, Train 7) -- mirror of 0x4D. The
+        // form itself is the BijuTransform render (bit 0x2000
+        // state, class 232).
+        // MEAMU TRAIN 109: witness feed -- with this cast
+        // recorded, BijuTransform resolves the form to the
+        // statue (232) regardless of pet slot or name.
+        BijuTransform::NoteFormSource(caster, 82);
+        goto common_tail;
+    }
+
     case 0x4D:  // 77 Dragon Form (MEAMU 2026-11-21, Train 99)
     {
         // Remote cast (pose-less, Train 7) -- mirror of 0x4A. The

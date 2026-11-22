@@ -76,7 +76,8 @@ namespace
     constexpr int kSusanooClass    = 228;
     constexpr int kKaraneCrimsonClass = 229;
     constexpr int kMegazordClass = 230;
-    constexpr int kDragonFormClass = 231;   // MEAMU TRAIN 99: Dragon Form (skill 77) -- the Kaido boss model (server class 193) as the Senju form   // MEAMU TRAIN 67: Eliger's Blue Megazord (skill 74)          // MEAMU TRAIN 7: Crimson Karane, forma personal de G (skill 74, nombres Gloccy/M4D4R4)             // MEAMU TRAIN 3: Perfect Susanoo form (skill 74)
+    constexpr int kDragonFormClass = 231;
+    constexpr int kThousandHandsClass = 232;  // MEAMU TRAIN 109: Thousand Hands (skill 82) -- the Oozaru Gold model as the Senju evolved form (server class 232)   // MEAMU TRAIN 99: Dragon Form (skill 77) -- the Kaido boss model (server class 193) as the Senju form   // MEAMU TRAIN 67: Eliger's Blue Megazord (skill 74)          // MEAMU TRAIN 7: Crimson Karane, forma personal de G (skill 74, nombres Gloccy/M4D4R4)             // MEAMU TRAIN 3: Perfect Susanoo form (skill 74)
 
     signed char s_beastBySlot[400];
     // MEAMU SKIN BODY FIX (2026-11-18): skin de cuerpo entero puesta en el
@@ -344,7 +345,7 @@ void PreloadFormModels()
     // Train 65: load (or retry a cached failure of) every form
     // class NOW, in cast/packet context -- never leave the load
     // to Resolve() mid-render. See the header for the bug.
-    static const int kFormClasses[] = { kSusanooClass, kKaraneCrimsonClass, kMegazordClass, kDragonFormClass };
+    static const int kFormClasses[] = { kSusanooClass, kKaraneCrimsonClass, kMegazordClass, kDragonFormClass, kThousandHandsClass };   // + Thousand Hands (Train 109)
     for (int cls : kFormClasses) {
         const CatalogMonster* cm = gContentCatalog.GetMonster(cls);
         if (!cm) continue;
@@ -365,7 +366,7 @@ void NoteFormSource(void* character, int skillType)
     // Solo las skills de forma comparten el bit 0x2000; cualquier
     // otro valor no es un origen de forma y se ignora.
     // MEAMU TRAIN 99: skill 77 (Dragon Form) joins 61/74.
-    if (skillType != 61 && skillType != 74 && skillType != 77) return;
+    if (skillType != 61 && skillType != 74 && skillType != 77 && skillType != 82) return;   // + 82 Thousand Hands (Train 109 fix: the witness gate itself -- without it the source is never recorded and the form falls through to the legacy 228 fallback)
     EnsureInit();
     const int slot = SlotOf(character);
     if (slot < 0) return;
@@ -462,6 +463,8 @@ int FormClassForSource(bool formBit, int beastIndex, const char* name,
     // respaldo, como hoy. Sin origen conocido (0 u otro), la
     // decision heredada de Train 3/7 queda byte-identica.
     if (!formBit) return -1;
+    if (sourceSkill == 82)
+        return kThousandHandsClass;
     if (sourceSkill == 77)
         return kDragonFormClass;
     if (sourceSkill == 74)
@@ -501,7 +504,8 @@ bool IsModeTransformSkill(int skillType)
     // fuera: conservan su pose.
     return skillType == 58 || skillType == 59 || skillType == 60 ||
            skillType == 61 || skillType == 72 || skillType == 73 ||
-           skillType == 74 || skillType == 75 || skillType == 77;
+           skillType == 74 || skillType == 75 || skillType == 77 ||
+           skillType == 82;  // MEAMU TRAIN 109: Thousand Hands -- pose-less mode toggle like the rest of the family
 }
 
 bool JinchurikiTint(const CHARACTER* character, float out[3])

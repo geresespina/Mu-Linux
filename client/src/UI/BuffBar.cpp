@@ -276,6 +276,7 @@ bool ModeDetailText(int effect, const unsigned short* value, char* out, size_t s
         case 69: // Chakra Cloak
         case 71: // Perfect Susanoo
         case 72: // Dragon Form
+        case 77: // Thousand Hands (Train 109): value[0] = 300 -> Damage x4.000
             FormatDetailMultiplier(value[0], mult, sizeof(mult));
             Platform::TextFormatSecure(out, size, "Damage %s", mult);
             return true;
@@ -307,12 +308,12 @@ void CBuffBar::Receive(const unsigned char* packet, int size)
     // never seen. Losses are not recorded (the record is only
     // consulted while the form bit is on; the next form cast
     // overwrites it).
-    if (msg.state && (msg.skill == 61 || msg.skill == 74 || msg.skill == 77))  // + 77 Dragon Form (Train 102)
+    if (msg.state && (msg.skill == 61 || msg.skill == 74 || msg.skill == 77 || msg.skill == 82))  // + 77 Dragon Form (Train 102), + 82 Thousand Hands (Train 109)
         BijuTransform::NoteFormSource((void*)(uintptr_t)DAT_07abf5d8, (int)msg.skill);
     // MEAMU TRAIN 104: a form effect LOSS erases the durable source
     // record, so the name-keyed table can never resurrect a form
     // the player has already left.
-    if (!msg.state && (msg.skill == 61 || msg.skill == 74 || msg.skill == 77))
+    if (!msg.state && (msg.skill == 61 || msg.skill == 74 || msg.skill == 77 || msg.skill == 82))
         BijuTransform::ForgetFormSource((void*)(uintptr_t)DAT_07abf5d8);
     int slot = 0;
     while (slot < m_Count && m_Buffs[slot].effect != msg.effect) ++slot;

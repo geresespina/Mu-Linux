@@ -1061,7 +1061,7 @@ static Attack_Flow97k Attack_ElfBranch97k(char* entity, int iType)
 
     CheckTarget(AsCharacter(entity));               // IDA L1778 (retorno ignorado)
 
-    if (iType == 57 || iType == 58 || iType == 72 || iType == 73 || iType == 74 || iType == 75 || iType == 76 || iType == 77 || iType == 78 || iType == 79 || iType == 81) {  // + 77/78/79 (Train 102), + 81 Deep Forest Bloom (Train 108 fix)
+    if (iType == 57 || iType == 58 || iType == 72 || iType == 73 || iType == 74 || iType == 75 || iType == 76 || iType == 77 || iType == 78 || iType == 79 || iType == 81 || iType == 82) {  // + 77/78/79 (Train 102), + 81 Deep Forest Bloom (Train 108 fix), + 82 Thousand Hands (Train 109)
         // MEAMU (2026-11-14): Omni Buff -- auto-cast sobre el heroe,
         // mismo envio 0x19 auto-objetivo que las invocaciones.
         // MEAMU (2026-11-18): + 72 Biju Bond, 73 Chakra Cloak,
@@ -1233,6 +1233,7 @@ static void Attack_WarriorBranch97k(char* entity)
         return;
     }
     case 76:                                                  // MEAMU (2026-11-18) -- Biju Legion: self-cast, comparte el cuerpo del 48
+    case 82:                                                  // MEAMU (2026-11-21, Train 109) -- Thousand Hands: self-cast form toggle, comparte el cuerpo del 48
     case 81:                                                  // MEAMU (2026-11-21, Train 108 fix) -- Deep Forest Bloom: self-AoE cast, comparte el cuerpo del 48
     case 79:                                                  // MEAMU (2026-11-21, Train 108 fix) -- Super Defense: self-cast, comparte el cuerpo del 48 (faltaba en esta rama)
     case 78:                                                  // MEAMU (2026-11-21, Train 108 fix) -- Super Healing: self-cast, comparte el cuerpo del 48 (faltaba en esta rama)
@@ -1648,6 +1649,7 @@ static void Attack_WizardBranch97k(char* entity)
         Attack_SendSkill19_97k(iType, (WORD)HeroKey);
         SetPlayerMagic(AsCharacter(entity));                 // IDA LABEL_1430
         return;
+    case 82:                                                  // MEAMU (2026-11-21, Train 109) -- Thousand Hands: auto-cast 0x19 sobre el heroe
     case 81:                                                  // MEAMU (2026-11-21, Train 108 fix) -- Deep Forest Bloom: auto-cast 0x19 sobre el heroe
     case 79:                                                  // MEAMU (2026-11-21, Train 102) -- Super Defense: auto-cast 0x19 sobre el heroe
     case 78:                                                  // MEAMU (2026-11-21, Train 102) -- Super Healing: auto-cast 0x19 sobre el heroe
