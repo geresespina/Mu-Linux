@@ -106,6 +106,24 @@ void DrawSkillIcon(int skill, float x, float y)
         GL_DrawTexture(299, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
         return;
     }
+    if (skill == 80 || skill == 83) {
+        // MEAMU 2026-11-21 (Train 108): Amaterasu / Tsukuyomi --
+        // the Mangekyou texture (299), their Uchiha family.
+        GL_DrawTexture(299, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        return;
+    }
+    if (skill == 81) {
+        // MEAMU 2026-11-21 (Train 108): Deep Forest Bloom -- the
+        // Sage leaf (0x134), its Senju family.
+        GL_DrawTexture(0x134, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        return;
+    }
+    if (skill == 82) {
+        // MEAMU 2026-11-21 (Train 108): Thousand Hands -- the
+        // form texture (0x106), like the other form skills.
+        GL_DrawTexture(0x106, x, y, (float)IconW, (float)IconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+        return;
+    }
     if (skill == 75) {
         // MEAMU 2026-11-18 (Train 3): Dragon Sage Mode -- dedicated
         // texture (bitmap 0x0c9), see Model_SkillEffects.cpp.
@@ -266,6 +284,9 @@ bool ModeDetailText(int effect, const unsigned short* value, char* out, size_t s
             return true;
         case 74: // Super Defense
             Platform::TextFormatSecure(out, size, "Damage taken -%d%%", (int)value[0]);
+            return true;
+        case 75: // Amaterasu (Bounce 57): value[2] = burn % of MaxLife per second
+            Platform::TextFormatSecure(out, size, "Burn %d%% MaxLife/s \xC2\xB7 Cannot be cleansed", (int)value[2]);
             return true;
         default:
             return false;

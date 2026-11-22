@@ -77,6 +77,13 @@ void DrawSkillIcon(int skill, float x, float y)
     if (skill == 77) { GL_DrawTexture(0x106, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }
     if (skill == 78) { GL_DrawTexture(0x134, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }
     if (skill == 79) { GL_DrawTexture(299, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }
+    // MEAMU 2026-11-21 (Train 108): the clan-skill wave -- same
+    // textures as BuffBar (80/83 Mangekyou 299, 81 Sage leaf
+    // 0x134, 82 form 0x106).
+    if (skill == 80) { GL_DrawTexture(299, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }
+    if (skill == 83) { GL_DrawTexture(299, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }
+    if (skill == 81) { GL_DrawTexture(0x134, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }
+    if (skill == 82) { GL_DrawTexture(0x106, x, y, (float)kIconW, (float)kIconH, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1); return; }
     if (skill >= 62 && skill <= 71) {
         // MEAMU Train 2 combiner: beast actives draw their cell of the
         // BijuPowers atlas (bitmap 0x102, 5x2 grid) -- the stock 298 atlas

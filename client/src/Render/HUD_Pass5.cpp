@@ -292,6 +292,18 @@ extern "C" void __cdecl sub_4BB940(float HeightArg, float xArg, float yArg,
         // MEAMU 2026-11-21 (Train 101): Super Defense -- the
         // Mangekyou texture (299), its Uchiha mode family.
         GL_DrawTexture(299, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+    } else if (v10 == 80 || v10 == 83) {
+        // MEAMU 2026-11-21 (Train 108): Amaterasu / Tsukuyomi --
+        // the Mangekyou texture (299), their Uchiha family.
+        GL_DrawTexture(299, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+    } else if (v10 == 81) {
+        // MEAMU 2026-11-21 (Train 108): Deep Forest Bloom -- the
+        // Sage leaf (0x134), its Senju family.
+        GL_DrawTexture(0x134, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
+    } else if (v10 == 82) {
+        // MEAMU 2026-11-21 (Train 108): Thousand Hands -- the
+        // form texture (0x106), like the other form skills.
+        GL_DrawTexture(0x106, fx, fy, fw, fh, 0.0f, 0.0f, 1.0f, 1.0f, 1, 1);
     } else if (v10 == 61) {
         // MEAMU 2026-11-17 (Train 4): Biju Mode -- dedicated texture
         // (the tailed-beast eye) full-frame.

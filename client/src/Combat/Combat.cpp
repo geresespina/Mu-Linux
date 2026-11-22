@@ -1061,7 +1061,7 @@ static Attack_Flow97k Attack_ElfBranch97k(char* entity, int iType)
 
     CheckTarget(AsCharacter(entity));               // IDA L1778 (retorno ignorado)
 
-    if (iType == 57 || iType == 58 || iType == 72 || iType == 73 || iType == 74 || iType == 75 || iType == 76 || iType == 77 || iType == 78 || iType == 79) {  // + 77/78/79 (Train 102)
+    if (iType == 57 || iType == 58 || iType == 72 || iType == 73 || iType == 74 || iType == 75 || iType == 76 || iType == 77 || iType == 78 || iType == 79 || iType == 81) {  // + 77/78/79 (Train 102), + 81 Deep Forest Bloom (Train 108 fix)
         // MEAMU (2026-11-14): Omni Buff -- auto-cast sobre el heroe,
         // mismo envio 0x19 auto-objetivo que las invocaciones.
         // MEAMU (2026-11-18): + 72 Biju Bond, 73 Chakra Cloak,
@@ -1176,7 +1176,7 @@ static void Attack_WarriorBranch97k(char* entity)
         // MEAMU rev.4 (2026-11-12): las invocaciones (30-37, 44) tampoco
         // dependen del arma en mano — las ramas Elf/Wizard las castean sin
         // gate de arma — asi que pasan este filtro junto al 48.
-        if (iType != 48 && iType != 57 && !(iType >= 30 && iType <= 37) && iType != 44 && iType != 45)
+        if (iType != 48 && iType != 57 && !(iType >= 30 && iType <= 37) && iType != 44 && iType != 45 && iType != 80 && iType != 83)  // + 80/83 clan targeted (Train 108): weapon-independent like the summons
             return;
     }
     // IDA L2930-2937: v222 / HIBYTE(v1025) = "alcanza el AG del skill".
@@ -1233,6 +1233,10 @@ static void Attack_WarriorBranch97k(char* entity)
         return;
     }
     case 76:                                                  // MEAMU (2026-11-18) -- Biju Legion: self-cast, comparte el cuerpo del 48
+    case 81:                                                  // MEAMU (2026-11-21, Train 108 fix) -- Deep Forest Bloom: self-AoE cast, comparte el cuerpo del 48
+    case 79:                                                  // MEAMU (2026-11-21, Train 108 fix) -- Super Defense: self-cast, comparte el cuerpo del 48 (faltaba en esta rama)
+    case 78:                                                  // MEAMU (2026-11-21, Train 108 fix) -- Super Healing: self-cast, comparte el cuerpo del 48 (faltaba en esta rama)
+    case 77:                                                  // MEAMU (2026-11-21, Train 108 fix) -- Dragon Form: self-cast, comparte el cuerpo del 48 (faltaba en esta rama)
     case 75:                                                  // MEAMU (2026-11-18) -- Dragon Sage Mode: self-cast, comparte el cuerpo del 48
     case 74:                                                  // MEAMU (2026-11-18) -- Perfect Susanoo: self-cast, comparte el cuerpo del 48
     case 73:                                                  // MEAMU (2026-11-18) -- Chakra Cloak: self-cast, comparte el cuerpo del 48
@@ -1284,6 +1288,36 @@ static void Attack_WarriorBranch97k(char* entity)
         SetAttackSpeed();                                       // IDA LABEL_497 / LABEL_715
         SetAction(AsObject(entity), (iType == 55) ? 61 : 81);
         *(char *)&AsCharacter(entity)->Movement = 0;
+        return;
+    }
+    case 80:                                                  // MEAMU (2026-11-21, Train 108) -- Amaterasu: targeted hostile clan skill
+    case 83:                                                  // MEAMU (2026-11-21, Train 108) -- Tsukuyomi: targeted hostile clan skill
+    {
+        if (lowMana) { Attack_UseManaScroll97k(); return; }
+        if (!hasAg) return;
+        if (SelectedCharacter == -1)
+            return;
+        Attack_SeedSkillTarget97k();
+        const int rangeT108 = Combat_GetSkillRange97k(iType);
+        if (Attack_OutOfRange97k(entity, rangeT108)) {
+            if (CheckAttack()) {
+                if (Path_FindRoute(AsCharacter(entity)->PositionX, AsCharacter(entity)->PositionY,
+                                   (int)TargetX, (int)TargetY,
+                                   (unsigned char*)(entity + EntityOffset(852)), (float)rangeT108)) {
+                    *(char *)&AsCharacter(entity)->Movement = 1;
+                    *(char *)&AsCharacter(entity)->MovementType = 5;
+                    Combat_SendMovePathPacket(AsCharacter(entity), AsObject(entity));
+                }
+            }
+            return;
+        }
+        if (!Path_IsLineClear(AsCharacter(entity)->PositionX, AsCharacter(entity)->PositionY,
+                              (int)TargetX, (int)TargetY))
+            return;
+        const WORD targetKey108 = *(WORD*)((BYTE*)(uintptr_t)CharactersClient +
+                                        CHARACTER_STRIDE * (int)MovementSkillTarget + EntityOffset(476));
+        Attack_SendSkill19_97k(iType, targetKey108);
+        SetPlayerMagic(AsCharacter(entity));
         return;
     }
     default:
@@ -1560,7 +1594,7 @@ static void Attack_WizardBranch97k(char* entity)
     // Ally (15) para DK y Elf - caen por el default a LABEL_1158 y de ahi a la
     // cola de teletransporte, cuyo gate tambien se abrio para esos dos skills.
     // Todos los demas skills siguen DW/MG como en el original (IDA L5921).
-    if (heroClass != 0 && heroClass != 3 && iType != 6 && iType != 15)
+    if (heroClass != 0 && heroClass != 3 && iType != 6 && iType != 15 && iType != 80 && iType != 83)  // + 80/83 clan targeted admitted for every class (Train 108)
         return;                                               // IDA L5921
     int piMana = 0, piSkillMana = 0;                          // IDA: v1035 / v1033
     GetSkillInformation(iType, 1, 0, &piMana, 0, &piSkillMana);   // IDA L5951
@@ -1614,6 +1648,7 @@ static void Attack_WizardBranch97k(char* entity)
         Attack_SendSkill19_97k(iType, (WORD)HeroKey);
         SetPlayerMagic(AsCharacter(entity));                 // IDA LABEL_1430
         return;
+    case 81:                                                  // MEAMU (2026-11-21, Train 108 fix) -- Deep Forest Bloom: auto-cast 0x19 sobre el heroe
     case 79:                                                  // MEAMU (2026-11-21, Train 102) -- Super Defense: auto-cast 0x19 sobre el heroe
     case 78:                                                  // MEAMU (2026-11-21, Train 102) -- Super Healing: auto-cast 0x19 sobre el heroe
     case 77:                                                  // MEAMU (2026-11-21, Train 102) -- Dragon Form: auto-cast 0x19 sobre el heroe
@@ -1633,6 +1668,34 @@ static void Attack_WizardBranch97k(char* entity)
         if (!BijuTransform::IsModeTransformSkill(iType))
             SetPlayerMagic(AsCharacter(entity));
         return;
+    case 80:                                                  // MEAMU (2026-11-21, Train 108) -- Amaterasu: targeted hostile clan skill
+    case 83:                                                  // MEAMU (2026-11-21, Train 108) -- Tsukuyomi: targeted hostile clan skill
+    {
+        if (SelectedCharacter == -1)
+            return;
+        Attack_SeedSkillTarget97k();
+        const int rangeT108 = Combat_GetSkillRange97k(iType);
+        if (Attack_OutOfRange97k(entity, rangeT108)) {
+            if (CheckAttack()) {
+                if (Path_FindRoute(AsCharacter(entity)->PositionX, AsCharacter(entity)->PositionY,
+                                   (int)TargetX, (int)TargetY,
+                                   (unsigned char*)(entity + EntityOffset(852)), (float)rangeT108)) {
+                    *(char *)&AsCharacter(entity)->Movement = 1;
+                    *(char *)&AsCharacter(entity)->MovementType = 5;
+                    Combat_SendMovePathPacket(AsCharacter(entity), AsObject(entity));
+                }
+            }
+            return;
+        }
+        if (!Path_IsLineClear(AsCharacter(entity)->PositionX, AsCharacter(entity)->PositionY,
+                              (int)TargetX, (int)TargetY))
+            return;
+        const WORD targetKey108 = *(WORD*)((BYTE*)(uintptr_t)CharactersClient +
+                                        CHARACTER_STRIDE * (int)MovementSkillTarget + EntityOffset(476));
+        Attack_SendSkill19_97k(iType, targetKey108);
+        SetPlayerMagic(AsCharacter(entity));
+        return;
+    }
     default:                                                  // IDA L10109
         Attack_Label1158_97k(entity, iType, hasTarget);
         return;
