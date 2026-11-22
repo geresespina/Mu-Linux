@@ -683,9 +683,32 @@ bool PreparePose(OBJECT* entity, float* bones, char translate)
     const Family fam = PlayerFamily(cur);
     const Family priFam = PlayerFamily(pri);
     const int mapped    = BeastAction(bm, fam);
-    const int mappedPri = BeastAction(bm, priFam);
+    int mappedPri = BeastAction(bm, priFam);
     const float frame = RemapFrame(playerModel, cur, entity->AnimationFrame, bm, mapped, fam);
-    const float prior = RemapFrame(playerModel, pri, entity->PriorAnimationFrame, bm, mappedPri, priFam);
+    float prior = RemapFrame(playerModel, pri, entity->PriorAnimationFrame, bm, mappedPri, priFam);
+    // MEAMU TRAIN 110: locomotion pose smoothing. BMD_Animation slerps the
+    // PRIOR action/frame sample into the current one with the current
+    // frame's fraction as the weight -- a contract built for samples one
+    // tick apart on the SAME model. The frame remap multiplies the tick
+    // delta by (beastFrames / playerFrames), so at run speed the prior
+    // sample lands several beast frames behind the current one and the
+    // slerp blends two distant walk phases (root translation included):
+    // the form shimmers/twitches while moving. Player locomotion action
+    // churn (walk/run/strafe switches, each resetting the player frame)
+    // pops the cycle the same way. Fix, walk family only: the prior
+    // sample is the SAME beast walk action exactly one beast frame
+    // behind the current frame (wrapped) -- adjacent-sample interpolation,
+    // immune to player action switches. Idle/attack/hit/die keep the
+    // stock remap untouched.
+    if (fam == FamWalk) {
+        const int bf = ActionFrames(bm, mapped);
+        if (bf > 1) {
+            mappedPri = mapped;
+            float p = frame - 1.0f;
+            if (p < 0.0f) p += (float)bf;
+            prior = p;
+        }
+    }
 
     // Contexto del modelo bestia: espejo de PrepareContext + el prólogo de
     // Calc_RenderObject (BodyHeight/ContrastEnable), con la escala NATIVA
