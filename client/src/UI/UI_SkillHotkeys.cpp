@@ -123,7 +123,8 @@ void __cdecl RenderSkillIcon(int iIndex, float x, float y, float width, float he
                        cellU + 0.002f, cellV + 0.002f, 0.196f, 0.496f, 1, 1);
     } else if (skillId == 57 || skillId == 58 || skillId == 59 || skillId == 60 || skillId == 61 ||
                skillId == 72 || skillId == 73 || skillId == 74 || skillId == 75 || skillId == 76 ||
-               skillId == 77 || skillId == 78 || skillId == 79) {
+               skillId == 77 || skillId == 78 || skillId == 79 ||
+               skillId == 80 || skillId == 81 || skillId == 82 || skillId == 83) {  // + 80-83 clan skills (Train 108)
         // MEAMU 2026-11-18 (Train 3): 72 Biju Bond -> Jinchuriki
         // texture (it ignites that mode); 73 Chakra Cloak -> 0x0c8;
         // 74 Perfect Susanoo -> Biju texture (shared form bit; the
@@ -142,8 +143,8 @@ void __cdecl RenderSkillIcon(int iIndex, float x, float y, float width, float he
         // stock atlas at rows past the texture -- invisible on
         // the bar (G's report, 2026-11-21).
         const int dedicated = (skillId == 57) ? 0x0ca :
-                              (skillId == 58 || skillId == 79) ? 299 :
-                              (skillId == 59 || skillId == 78) ? 0x134 :
+                              (skillId == 58 || skillId == 79 || skillId == 80 || skillId == 83) ? 299 :
+                              (skillId == 59 || skillId == 78 || skillId == 81) ? 0x134 :
                               (skillId == 60 || skillId == 72 || skillId == 76) ? 0x135 :
                               (skillId == 73) ? 0x0c8 :
                               (skillId == 75) ? 0x0c9 : 0x106;
