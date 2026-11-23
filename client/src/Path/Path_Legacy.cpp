@@ -356,7 +356,50 @@ unsigned int __cdecl Path_FindRoute(int sx, int sy, int tx, int ty,
                 if ((aDst & 2) == 2) iWall2 = 2;
             }
         }
-        return PF_AStar(sx, sy, tx, ty, iWall2, false, path, radius) ? 1 : 0;
+        if (PF_AStar(sx, sy, tx, ty, iWall2, false, path, radius)) return 1;
+
+        // MEAMU Train 111 (2026-11-23): nearest-walkable rescue. When
+        // the exact target is inside a wall or unreachable (a click or
+        // an attack walk-in aimed at an enemy rendered in a wall face
+        // -- G's 2026-11-22 Stadium freeze: 30+ A* FAILs at one fence
+        // corner, hero stopped dead mid-fight), route to the nearest
+        // walkable tile beside the target instead of failing. Exact
+        // (radius == 0), multi-tile requests only: the Action direct
+        // drive's 1-tile calls keep their stop-at-the-wall behavior.
+        if (radius == 0.0f) {
+            const int adxT = (tx - sx) < 0 ? -(tx - sx) : (tx - sx);
+            const int adyT = (ty - sy) < 0 ? -(ty - sy) : (ty - sy);
+            if ((adxT > adyT ? adxT : adyT) > 1) {
+                const unsigned char* tw2 = (const unsigned char*)&DAT_0838bc70;
+                for (int ring = 1; ring <= 3; ++ring) {
+                    int bestX = -1, bestY = -1, bestD = 1 << 30;
+                    for (int oy = -ring; oy <= ring; ++oy) {
+                        for (int ox = -ring; ox <= ring; ++ox) {
+                            if (ox != -ring && ox != ring && oy != -ring && oy != ring) continue;
+                            const int nx = tx + ox, ny = ty + oy;
+                            if (nx < 0 || nx >= 256 || ny < 0 || ny >= 256) continue;
+                            unsigned int a = tw2[ny * 256 + nx];
+                            if ((a & 0x20) == 0x20) a -= 0x20;
+                            if (a >= 2) continue;
+                            const int ddx = nx - sx, ddy = ny - sy;
+                            const int dd = ddx * ddx + ddy * ddy;
+                            if (dd < bestD) { bestD = dd; bestX = nx; bestY = ny; }
+                        }
+                    }
+                    if (bestX >= 0 && PF_AStar(sx, sy, bestX, bestY, 2, false, path, radius)) {
+                        static int s_rescueLog = 0;
+                        if (s_rescueLog++ < 30) {
+                            char rb[160];
+                            Platform::TextFormat(rb, "A* RESCUE #%d: src=(%d,%d) dst=(%d,%d) -> (%d,%d)",
+                                                 s_rescueLog, sx, sy, tx, ty, bestX, bestY);
+                            DbgLogPublic(rb);
+                        }
+                        return 1;
+                    }
+                }
+            }
+        }
+        return 0;
     }
 
     // First attempt: strict walkable filter
