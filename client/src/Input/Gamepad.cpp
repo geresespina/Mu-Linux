@@ -1455,8 +1455,20 @@ void PadButtonsTick(unsigned now, float dt, bool actionPad)
     {   // Scheme toggle (Train 62 put it on Start; the map
         // decides now).
         static bool s_SchemePrev = false;
+        // MEAMU Train 111 (2026-11-23): HOLD to flip (500 ms). A tap
+        // in a brawl flipped G's scheme 6 times in one 5-minute
+        // session (2026-11-22 client log) -- each flip kills WASD
+        // steering until he flips back. The keyboard grave key in
+        // ActionMove stays an instant flip; only the pad is held.
+        static unsigned s_SchemePressT = 0;
+        static bool s_SchemeFired = false;
         const bool st = held(PA_SCHEME_TOGGLE);
-        if (st && !s_SchemePrev) PulseKey(0xC0, "scheme toggle");
+        const unsigned nowT = (unsigned)SDL_GetTicks();
+        if (st && !s_SchemePrev) { s_SchemePressT = nowT; s_SchemeFired = false; }
+        if (st && !s_SchemeFired && (nowT - s_SchemePressT) >= 500) {
+            PulseKey(0xC0, "scheme toggle");
+            s_SchemeFired = true;
+        }
         s_SchemePrev = st;
     }
 }
