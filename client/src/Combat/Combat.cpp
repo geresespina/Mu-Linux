@@ -1546,8 +1546,16 @@ static void Attack_Label1585_97k(char* entity, int iType, bool hasTarget)
             return;
             }
         extern unsigned char* TerrainWall;
-        const int heroGX = (int)(AsObject(entity)->Position[0] * 0.01f);
-        const int heroGY = (int)(AsObject(entity)->Position[1] * 0.01f);
+        // MEAMU Train 113 (2026-11-23): walk-in paths start from the
+        // GRID tile (the server-agreed position), never the render
+        // position. The render interpolates behind the grid and is
+        // rewound up to 8 tiles during a dash glide (Train 95), so
+        // render-derived starts disagreed with the server body by up
+        // to a full dash -- G's 2026-11-23 00:45-00:50 session logged
+        // 9 start-distance flags in 5 minutes, three exactly one dash
+        // long. Grid src = the tile the server will walk from.
+        const int heroGX = (int)AsCharacter(entity)->PositionX;
+        const int heroGY = (int)AsCharacter(entity)->PositionY;
         for (int attempt = 0; attempt <= 10; ++attempt) {       // IDA L9781-9795
             const int rx = rand() % 3;                          // IDA: v909
             const int ry = rand() % 3;                          // IDA: v910
