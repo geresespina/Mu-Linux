@@ -95,6 +95,15 @@ static int PF_AStar(int sx, int sy, int tx, int ty, int iWall, bool bErrorCheck,
         if (x < 0 || x >= 256 || y < 0 || y >= 256) return false;
         unsigned int a = attr[y * 256 + x];
         if ((a & 0x20) == 0x20) a -= 0x20;
+        // MEAMU Train 112 (2026-11-23): strip the OCCUPANCY bit (0x02).
+        // MoveCharactersClient stamps every character's tile with |2
+        // each frame; with iWall=2 that made every body a wall to
+        // pathing -- in war crowds the A* boxed itself in and failed
+        // at frame rate (G's 2026-11-22 fence-corner freeze: targets
+        // were open terrain under a standing enemy). The server's
+        // stepper never treats bodies as blockers; pathing now sees
+        // pure terrain, like the 0x20 strip above.
+        a &= ~0x02u;
         return (int)a < iWall;
     };
     // Métrica de cercanía al destino del original (para el mejor esfuerzo).
@@ -129,7 +138,10 @@ static int PF_AStar(int sx, int sy, int tx, int ty, int iWall, bool bErrorCheck,
     // binario, y ahí el attr va CRUDO (sin restarle 0x20).
     if (bErrorCheck && !bRadius) {
         unsigned int aDst = attr[ty * 256 + tx];
-        if ((int)aDst >= iWall && (aDst & 0x20) != 0x20) return 0;
+        // Train 112: an enemy STANDING on the target tile (occupancy
+        // bit 0x02) must not fail the strict check -- that is the
+        // normal attack walk-in case.
+        if ((int)(aDst & ~0x02u) >= iWall && (aDst & 0x20) != 0x20) return 0;
     }
 
     static unsigned char  s_cameDir[65536];
@@ -349,8 +361,10 @@ unsigned int __cdecl Path_FindRoute(int sx, int sy, int tx, int ty,
         int iWall2 = 2;
         if (sx >= 0 && sx < 256 && sy >= 0 && sy < 256 &&
             tx >= 0 && tx < 256 && ty >= 0 && ty < 256) {
-            unsigned char aSrc = tw[sy * 256 + sx];
-            unsigned char aDst = tw[ty * 256 + tx];
+            // Train 112: mask the occupancy bit (0x02) -- a body on
+            // the src/dst tile is not a terrain flag.
+            unsigned char aSrc = (unsigned char)(tw[sy * 256 + sx] & ~0x02u);
+            unsigned char aDst = (unsigned char)(tw[ty * 256 + tx] & ~0x02u);
             if ((aSrc & 1) == 1 || (aDst & 1) == 1) {
                 iWall2 = 4;
                 if ((aDst & 2) == 2) iWall2 = 2;
