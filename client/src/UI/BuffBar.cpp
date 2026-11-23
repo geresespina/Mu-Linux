@@ -342,7 +342,12 @@ bool CBuffBar::FormDamage(int& pct, int& skill) const
 {
     for (int i = 0; i < m_Count; i++) {
         const Buff& b = m_Buffs[i];
-        if (b.effect == 68 || b.effect == 71 || b.effect == 72) {
+        // MEAMU Train 114 (2026-11-23): effect 77 (Thousand Hands)
+        // joins the form list -- Train 106's headline fold never
+        // learned it, so in Thousand Hands the FORM headline showed
+        // no x4.0 and no gold factor chip (G's report from live
+        // play). The server already sends value[0]=300 for it.
+        if (b.effect == 68 || b.effect == 71 || b.effect == 72 || b.effect == 77) {
             pct = b.value[0];
             skill = b.skill;
             return pct > 0;
