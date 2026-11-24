@@ -1093,6 +1093,11 @@ bool __cdecl MoveMainCamera(void) {
     // MEAMU Train 14: Action Camera per-step update (lock state machine,
     // follow/facing easing). No-op unless the ACTION scheme engaged it.
     gActionCamera.Update();
+    // MEAMU Train 121 (2026-11-24, G's ruling): ACTION MODE = FURTHEST
+    // ZOOM OUT -- the Action camera sits at maximum distance, locked;
+    // Classic keeps the player's own wheel zoom, untouched.
+    if (gActionCamera.Engaged()) gCamera3D.PinDistanceZoomMax();
+    else gCamera3D.ClearDistanceZoomPin();
     gActionJump.Update();  // MEAMU Train 24 seam: Train 28 spring + (Train 35) Space = facing blink
     float in1[3];
     float out[3];

@@ -26,6 +26,12 @@ public:
     // offset héroe→cámara. true si la rueda se consumió para este zoom.
     bool DistanceWheel(int delta);
     float UpdateDistanceZoom();
+    // MEAMU Train 121 (2026-11-24, G's ruling): ACTION MODE = FURTHEST
+    // ZOOM OUT. While pinned, the distance zoom is locked at the range
+    // maximum and the wheel is ignored; the player's own target/current
+    // are left untouched, so Classic resumes exactly where it was.
+    void PinDistanceZoomMax() { m_ZoomPin = 2.00f; }
+    void ClearDistanceZoomPin() { m_ZoomPin = 0.0f; }
     float GetDistanceZoom() const { return m_ZoomCurrent; }
 
     float GetFov() const { return m_Fov; }
@@ -44,6 +50,7 @@ private:
     float m_Height   = 150.0f;  // binario: 0x0055297C
     float m_ZoomTarget  = 1.0f;   // MEAMU zoom: factor destino (0.40..2.00)
     float m_ZoomCurrent = 1.0f;   // MEAMU zoom: factor interpolado en curso
+    float m_ZoomPin     = 0.0f;   // MEAMU Train 121: >0 = zoom locked at this factor (Action Mode)
 };
 
 extern CCamera3D gCamera3D;
