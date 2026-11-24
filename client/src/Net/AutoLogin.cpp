@@ -28,7 +28,7 @@ struct AutoLoginConfig {
     char character[64] = {};
 };
 
-enum Stage { STAGE_OFF, STAGE_WAIT_SERVER_LIST, STAGE_WAIT_JOIN, STAGE_WAIT_CHAR_LIST, STAGE_DONE };
+enum Stage { STAGE_OFF, STAGE_WAIT_SERVER_LIST, STAGE_WAIT_JOIN, STAGE_WAIT_CHAR_LIST, STAGE_ENTERING, STAGE_DONE };
 
 Stage g_Stage = STAGE_OFF;
 bool  g_Loaded = false;
@@ -36,6 +36,8 @@ bool  g_LoginSent = false;
 bool  g_GroupSent = false;
 DWORD g_StartTick = 0;
 DWORD g_ListSeenTick = 0;
+DWORD g_EnterTick = 0;
+int   g_EnterRetries = 0;
 AutoLoginConfig g_Cfg;
 
 char* Trim(char* s)
@@ -102,12 +104,30 @@ void PickFirstServer()
     DbgLogPublic("AutoLogin: server picked, connecting");
 }
 
+bool NameMatches(const char* rosterName, const char* wanted)
+{
+    // TRAIN 122: roster names ride a fixed-width field -- tolerate
+    // trailing spaces and case drift; the booth roster (one character,
+    // exact case) never exercised either.
+    if (rosterName == 0 || wanted == 0) return false;
+    char a[64], b[64];
+    std::strncpy(a, rosterName, sizeof(a) - 1); a[sizeof(a) - 1] = 0;
+    std::strncpy(b, wanted, sizeof(b) - 1); b[sizeof(b) - 1] = 0;
+    for (int i = 0; a[i]; i++) if (a[i] == ' ') { a[i] = 0; break; }
+    for (int i = 0; b[i]; i++) if (b[i] == ' ') { b[i] = 0; break; }
+    if (a[0] == 0 || b[0] == 0) return false;
+    for (int i = 0; a[i] && b[i]; i++) {
+        if (std::tolower((unsigned char)a[i]) != std::tolower((unsigned char)b[i])) return false;
+    }
+    return std::strlen(a) == std::strlen(b);
+}
+
 bool FindCharacterSlot()
 {
     for (int slot = 0; slot < 5; slot++) {
         const void* entry = (const void*)(std::uintptr_t)(CharactersClient + slot * CHARACTER_STRIDE);
         const char* name = EntityName::Get(entry);
-        if (name && name[0] && std::strcmp(name, g_Cfg.character) == 0) {
+        if (name && name[0] && NameMatches(name, g_Cfg.character)) {
             SelectedHero = (DWORD)slot;
             return true;
         }
@@ -195,26 +215,56 @@ void AutoLogin_Tick()
         return;
     }
 
+    if (g_Stage == STAGE_ENTERING) {
+        if (SceneFlag != 4) {   // left char select: the entry completed
+            g_Stage = STAGE_DONE;
+            DbgLogPublic("AutoLogin: entered world");
+            return;
+        }
+        if (now - g_EnterTick > 6000) {
+            if (g_EnterRetries < 1 && FindCharacterSlot()) {
+                DAT_083a7c14 = 0x19;
+                g_EnterTick = now;
+                g_EnterRetries++;
+                DbgLogPublic("AutoLogin: entry state re-fired (retry 1)");
+            } else {
+                g_Stage = STAGE_OFF;
+                DbgLogPublic("AutoLogin: entry did not complete -- disarmed, pick manually");
+            }
+        }
+        return;
+    }
+
     if (g_Stage == STAGE_WAIT_CHAR_LIST) {
         if (DAT_083a7c14 == 4 && g_LoginSent) {
             g_Stage = STAGE_OFF;
             DbgLogPublic("AutoLogin: login failed -- disarmed, manual login");
             return;
         }
-        // Char-select scene up and the list received: booth-proven
-        // gate values (2026-11-23) are SceneFlag 4 with the protocol
-        // state at 0x33 -- the original pair; the stage only ever
-        // failed because the tick was hooked into a scene-2 function.
-        if (SceneFlag == 4 && DAT_05826cb0 >= 0x33) {
+        // Char-select scene up and the list received. TRAIN 122: the
+        // booth gate (protocol state >= 0x33) is kept, but a visibly
+        // listed roster is accepted as the same signal -- the byte is
+        // a proxy, the names are the fact. The not-found window grows
+        // from 3 s to 12 s: on a fast machine the roster entries (and
+        // their names, which land as each character's gear models
+        // resolve) can populate well after the scene flips.
+        if (SceneFlag == 4 && (DAT_05826cb0 >= 0x33 || AnyCharacterListed())) {
             if (FindCharacterSlot()) {
                 DAT_083a7c14 = 0x19;   // char-select entry state (stock case 0x19 completes it)
-                g_Stage = STAGE_DONE;
+                g_EnterTick = now;
+                g_EnterRetries = 0;
+                g_Stage = STAGE_ENTERING;
                 DbgLogPublic("AutoLogin: character selected, entering world");
                 return;
             }
             if (AnyCharacterListed()) {
-                if (g_ListSeenTick == 0) g_ListSeenTick = now;
-                if (now - g_ListSeenTick > 3000) {
+                if (g_ListSeenTick == 0) {
+                    g_ListSeenTick = now;
+                    char dbg[160];
+                    std::snprintf(dbg, sizeof(dbg), "AutoLogin: roster visible, still looking for '%s'", g_Cfg.character);
+                    DbgLogPublic(dbg);
+                }
+                if (now - g_ListSeenTick > 12000) {
                     g_Stage = STAGE_OFF;
                     DbgLogPublic("AutoLogin: configured character not in the list -- disarmed, pick manually");
                 }
