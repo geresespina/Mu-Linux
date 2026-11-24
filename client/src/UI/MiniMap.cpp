@@ -455,7 +455,7 @@ void CMiniMap::RenderLegend() const
         GL_BindTextureSlot(PointTexture);
         BufferedDraw::Color4f(r, g, b, 1.0f);
         PointRotate((float)(x0 + 5), (float)(y + 5), 9.0f, 9.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, nullptr);
-        RenderText(x0 + 16, y, label, (int)(120 * gWindow.GetWidth() / 640), 0, nullptr);
+        RenderText(x0 + 16, y, const_cast<char*>(label), (int)(120 * gWindow.GetWidth() / 640), 0, nullptr);  // RenderText takes char* (functions.h); labels are literals, never written
     }
     m_dwTextColor = color;
     m_dwBackColor = back;
