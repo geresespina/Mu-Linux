@@ -31,6 +31,7 @@ enum PadAction {
     PA_PICKUP,
     PA_FISHING,
     PA_SCHEME_TOGGLE,
+    PA_MINIMAP,   // Train 118: appended last -- every earlier action id is wire-stable
     PA_COUNT
 };
 

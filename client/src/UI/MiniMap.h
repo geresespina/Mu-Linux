@@ -27,6 +27,7 @@ private:
     void RenderBackground() const;
     void RenderMarkers() const;
     void RenderGates() const;
+    void RenderLegend() const;   // Train 118
     void RenderButton(bool left) const;
     void ChangeZoom();
     void ChangeAlpha();

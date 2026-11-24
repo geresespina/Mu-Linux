@@ -34,18 +34,18 @@ const char* kActionNames[PA_COUNT] = {
     "none", "dash", "teleport", "lock_toggle", "lock_pour",
     "skill1", "skill2", "skill3", "skill4", "skill5",
     "skill6", "skill7", "skill8", "skill9", "skill10",
-    "pickup", "fishing", "scheme_toggle"
+    "pickup", "fishing", "scheme_toggle", "minimap"
 };
 
 // Tonight's final layout -- the Default preset, identical to the
 // site's DEFAULT_BINDINGS (lib/controller-map.js).
 const PadAction kDefaultMap[PC_COUNT] = {
-    /* LT */ PA_TELEPORT,
+    /* LT */ PA_MINIMAP,   // Train 118 (G's order): LT is the whole-map overlay
     /* LB */ PA_LOCK_TOGGLE,
     /* L3 */ PA_SKILL8,
     /* DUP */ PA_SKILL9,
     /* DLEFT */ PA_FISHING,
-    /* DRIGHT */ PA_NONE,
+    /* DRIGHT */ PA_TELEPORT,   // Train 118: Teleport moves here -- LT's old tenant, still one press away
     /* DDOWN */ PA_SKILL10,
     /* BACK */ PA_SKILL7,
     /* START */ PA_SCHEME_TOGGLE,

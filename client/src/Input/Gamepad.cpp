@@ -80,6 +80,7 @@
 #include "Input/ActionMove.h"     // Train 48: ActionMove_PadDash
 #include "Input/Fishing.h"        // Train 56: fishing verb
 #include "Input/PadMap.h"         // Train 100: the account pad map drives the sheet
+#include "UI/MiniMap.h"           // Train 118: the mapped minimap verb toggles gMiniMap
 #include "Platform/IInput.h"     // Platform::InputEvent / InputEventType
 #include "Platform/NativeBridge.h" // Platform::NativeWindow/NativeInstance (DI coop level)
 #include "Core/Window.h"         // gWindow (real pixel size)
@@ -1417,6 +1418,15 @@ void PadButtonsTick(unsigned now, float dt, bool actionPad)
         const bool r3 = held(PA_PICKUP);
         if (r3 && !s_PickPrev) Meamu_PickUpNearestItem();
         s_PickPrev = r3;
+    }
+
+    {   // Minimap (Train 118: LT in the new Default; the map
+        // decides). One press toggles the whole-map overlay --
+        // the same gMiniMap the Tab key drives.
+        static bool s_MapPrev = false;
+        const bool mm = held(PA_MINIMAP);
+        if (mm && !s_MapPrev) { gMiniMap.Toggle(); PadLog("PAD: minimap toggle (mapped)"); }
+        s_MapPrev = mm;
     }
 
     {   // Lock on/off (Train 75 put it on LB; the map decides

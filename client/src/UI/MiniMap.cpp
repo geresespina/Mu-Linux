@@ -345,8 +345,8 @@ void CMiniMap::RenderMarkers() const
     // TODO el mapa, incluso fuera del viewport. Mismo transform que
     // las gates (mapa completo relativo al héroe). Lo ya dibujado
     // por el pase de viewport no se repite.
-    MapTrackEntry tracked[128];
-    const int trackedCount = MapTrack::Snapshot(gMapManager.GetCurrentMap(), tracked, 128);
+    MapTrackEntry tracked[255];
+    const int trackedCount = MapTrack::Snapshot(gMapManager.GetCurrentMap(), tracked, 255);   // Train 118: matches the feed cap
     for (int i = 0; i < trackedCount; ++i) {
         const MapTrackEntry& e = tracked[i];
         if ((float)e.X > v.charX + v.range || (float)e.X < v.charX - v.range ||
@@ -383,6 +383,64 @@ void CMiniMap::RenderMarkers() const
         PointRotate(tx, ty, v.scale * size, v.scale * size, 0.0f,
                     2.0f / 32.0f, 14.0f / 32.0f, 30.0f / 32.0f, 18.0f / 32.0f, tooltip);
     }
+
+    // TRAIN 118: the clan camps (Tarkan, map 8) -- fixed war
+    // landmarks, drawn with the gates' full-plate marker in the
+    // clan colours: Senju green west, Uchiha crimson east.
+    if (gMapManager.GetCurrentMap() == 8) {
+        static const struct { float x, y, r, g, b; const char* name; } kCamps[2] = {
+            { 34.0f, 128.0f, 0.47f, 0.86f, 0.24f, "SENJU CAMP" },
+            { 222.0f, 128.0f, 0.86f, 0.08f, 0.16f, "UCHIHA CAMP" }
+        };
+        for (int i = 0; i < 2; ++i) {
+            const float tx = (kCamps[i].x / 256.0f - v.offsetX) * (MaxSize * v.scale);
+            const float ty = ((256.0f - kCamps[i].y) / 256.0f - v.offsetY) * (MaxSize * v.scale);
+            EnableAlphaTest(true);
+            GL_BindTextureSlot(PointTexture);
+            BufferedDraw::Color4f(kCamps[i].r, kCamps[i].g, kCamps[i].b, m_Alpha * 0.1f);
+            PointRotate(tx, ty, v.scale * 14.0f, v.scale * 14.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, kCamps[i].name);
+        }
+    }
+}
+
+// TRAIN 118 (G's order): the legend -- every marker colour on
+// the map, named, bottom-left. Drawn with the buttons' text
+// idiom (bold font, RenderText); the swatch is the marker
+// plate itself in the marker's colour.
+void CMiniMap::RenderLegend() const
+{
+    static const struct { float r, g, b; const char* label; } kRows[7] = {
+        { 0.0f, 1.0f, 0.0f, "You" },
+        { 1.0f, 1.0f, 0.0f, "Player" },
+        { 0.45f, 0.45f, 0.45f, "Phantom" },
+        { 1.0f, 0.84f, 0.0f, "Biju" },
+        { 0.5f, 0.0f, 0.0f, "Monster" },
+        { 1.0f, 0.0f, 1.0f, "NPC" },
+        { 0.0f, 1.0f, 1.0f, "Gate" }
+    };
+    const bool camps = (gMapManager.GetCurrentMap() == 8);
+    const int rowCount = camps ? 9 : 7;
+    const int x0 = 10, y0 = 452 - rowCount * 16;
+    gFont.SelectFont(gFont.GetTextDC(), gFont.GetFont(FONT_BOLD));
+    const DWORD color = m_dwTextColor, back = m_dwBackColor;
+    m_dwBackColor = 0;
+    m_dwTextColor = 0xFFFFFFFFu;   // blanco (ABGR)
+    for (int i = 0; i < rowCount; ++i) {
+        float r, g, b; const char* label;
+        if (i < 7) { r = kRows[i].r; g = kRows[i].g; b = kRows[i].b; label = kRows[i].label; }
+        else if (i == 7) { r = 0.47f; g = 0.86f; b = 0.24f; label = "Senju camp"; }
+        else { r = 0.86f; g = 0.08f; b = 0.16f; label = "Uchiha camp"; }
+        const int y = y0 + i * 16;
+        EnableAlphaTest(true);
+        GL_BindTextureSlot(PointTexture);
+        BufferedDraw::Color4f(r, g, b, 1.0f);
+        PointRotate((float)(x0 + 5), (float)(y + 5), 9.0f, 9.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, nullptr);
+        RenderText(x0 + 16, y, label, (int)(120 * gWindow.GetWidth() / 640), 0, nullptr);
+    }
+    m_dwTextColor = color;
+    m_dwBackColor = back;
+    gFont.SelectFont(gFont.GetTextDC(), gFont.GetFont(FONT_NORMAL));
+    GL_ResetState();
 }
 
 void CMiniMap::RenderGates() const
@@ -455,6 +513,7 @@ void CMiniMap::Render()
     RenderBackground();
     RenderMarkers();
     RenderGates();
+    RenderLegend();   // Train 118
     GL_ResetState();
     BufferedDraw::Color4f(1.0f, 1.0f, 1.0f, 1.0f);
     RenderButton(true);

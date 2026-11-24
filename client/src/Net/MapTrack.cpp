@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr int kMaxEntries = 160;
+constexpr int kMaxEntries = 255;   // Train 118: the wire count is one byte -- Tarkan's full population fits now
 constexpr uint32_t kFreshMs = 3000;
 
 MapTrackEntry s_Entries[kMaxEntries];
