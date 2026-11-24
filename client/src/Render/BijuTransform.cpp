@@ -552,10 +552,34 @@ int JinchurikiSkinModel(const CHARACTER* character)
     // extendido del fork: 512 + sección*480 + (sub-32) = 512+3840+18.
     constexpr int kKyubiSkinType = 512 + 8 * 480 + (50 - 32);   // 4370
     const int model = gContentCatalog.GetItemModel(kKyubiSkinType);
-    if (model < 0) return -1;
-    const BMD* bm = AsModel((uintptr_t)DAT_05828d58) + model;
-    if (bm->NumActions <= 0 || bm->NumMeshs <= 0 || !bm->Actions || !bm->Bones)
-        return -1;   // modelo no cargado → render normal del jugador
+    if (model >= 0) {
+        const BMD* bm = AsModel((uintptr_t)DAT_05828d58) + model;
+        if (bm->NumActions > 0 && bm->NumMeshs > 0 && bm->Actions && bm->Bones)
+            return model;
+    }
+    // MEAMU TRAIN 123 (2026-11-24): on G's client the catalog route
+    // resolves but the BMD never lands (aura renders, body does not --
+    // the booth, same code + same server, renders). Stop depending on
+    // the catalog's pending machinery for this one asset: load the
+    // known file directly through the same loader, once, and log the
+    // outcome so the debug.log names the stage either way.
+    static int  s_DirectModel = -2;
+    static bool s_DirectLogged = false;
+    if (s_DirectModel == -2) {
+        s_DirectModel = gContentCatalog.LoadModel("Player/Custom/50", "SkinNarutoKyubi", -1);
+        if (!s_DirectLogged) {
+            s_DirectLogged = true;
+            char dbg[128];
+            std::snprintf(dbg, sizeof(dbg), "JinchurikiSkin: catalog model=%d, direct load=%d", model, s_DirectModel);
+            DbgLogPublic(dbg);
+        }
+    }
+    if (s_DirectModel >= 0) {
+        const BMD* bm = AsModel((uintptr_t)DAT_05828d58) + s_DirectModel;
+        if (bm->NumActions > 0 && bm->NumMeshs > 0 && bm->Actions && bm->Bones)
+            return s_DirectModel;
+    }
+    return -1;   // modelo no cargado: render normal del jugador
     return model;
 }
 
