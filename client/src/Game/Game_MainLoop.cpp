@@ -66,6 +66,7 @@ void ItemNames_TickInput();
 #include "Game/SimulationPreparation.h"
 #include "Game/RenderSnapshots.h"
 #include "Game/Game_SceneUpdate.h"
+#include "Net/AutoLogin.h"
 #include "Game/Game_EnterWorldTick.h"
 #include "Game/Game_CharSelectTick.h"
 #include "Scene/Scene_Login.h"
@@ -203,6 +204,7 @@ void __cdecl Game_MainLoop(HDC param_1)
         MaterialVisuals_TickWingPreviews();
 
         // Dispatch per-state game logic
+        AutoLogin_Tick();   // TRAIN 116: auto-login driver -- every frame, self-gating (the scene ticks below each run in one scene only)
         if (SceneFlag == 2) { Game_SceneUpdate();     CHK("ML/post_SceneUpdate"); }
         if (SceneFlag == 4) { Game_EnterWorldTick();  CHK("ML/post_EnterWorld"); }
         if (SceneFlag == 5) { Game_CharSelectTick();  CHK("ML/post_CharSelectTick"); }

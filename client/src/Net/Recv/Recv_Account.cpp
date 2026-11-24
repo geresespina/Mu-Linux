@@ -8,6 +8,7 @@
 #include "Platform/Text.h"
 #include "Platform/ITimer.h"
 #include "Net/Reconnect.h"
+#include "Net/AutoLogin.h" // TRAIN 116
 #include "UI/EventTimer.h"
 #include "UI/MoveList.h"
 #include "Net/Ping.h"
@@ -60,7 +61,8 @@ void Recv_JoinServer(const BYTE* Msg)
             Lang_Send(gUserSettings.GetLanguage());
         HWID_Send();
         gContentCatalog.SendCacheList();   // DESVIACION (Fase 5): caché del catálogo
-        gReconnect.OnJoinServer();   // DESVIACION: la reconexión reenvía el login
+        gReconnect.OnJoinServer();
+        AutoLogin_OnJoinServer();    // TRAIN 116: auto-login (autologin.ini)   // DESVIACION: la reconexión reenvía el login
     } else {
         NetLog("NET:    JoinServer FAIL code=%d → SetErrorMessage(113)", Msg[4]);
         SetErrorMessage(113);        // "Connecting error"

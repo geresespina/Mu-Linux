@@ -122,6 +122,7 @@ set(MU_SOURCES
     src/Net/MoveMarkers.cpp
     src/Net/Network.cpp
     src/Net/Reconnect.cpp
+    src/Net/AutoLogin.cpp
     src/Net/Ping.cpp
     src/Net/ServerCharacterStats.cpp
     src/Item/ChaosMixRates.cpp
