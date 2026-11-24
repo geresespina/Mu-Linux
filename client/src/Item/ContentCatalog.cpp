@@ -1125,6 +1125,30 @@ int CContentCatalog::RetryMonsterModel(int index)
     return this->EnsureMonsterModel(index);
 }
 
+int CContentCatalog::RetryItemModel(int type)
+{
+    if (type < 0 || type >= ITEM_MAX_EX) return -1;
+    ItemExtraData& extra = s_Items[type];
+    if (!extra.Present) return -1;
+    if (extra.Model >= 0 && DAT_05828d58) {
+        const BYTE* model = (const BYTE*)(uintptr_t)DAT_05828d58 + extra.Model * BMD_STRIDE;
+        if (*(const short*)(model + 0x24) > 0) return extra.Model;   // ya cargado
+    }
+    if (!extra.ModelPending) {
+        // Fracaso cacheado: reconstruir la clave de LoadModel (carpeta
+        // normalizada + nombre + "#" + slot fijo), soltarla y recargar.
+        char sub[96];
+        if (NormalizeFolder(extra.ModelFolder, sub, sizeof(sub))) {
+            const std::string key = std::string(sub) + extra.ModelName + "#" + std::to_string(extra.ModelFixedSlot);
+            s_LoadedModels.erase(key);
+        }
+        extra.Model = -2;
+        extra.ModelPending = true;
+    }
+    ResolvePendingModels(type);
+    return extra.Model;
+}
+
 int CContentCatalog::GetItemModel(int type)
 {
     if (type < 0 || type >= ITEM_MAX_EX) return type + ITEM_MODEL_BASE;

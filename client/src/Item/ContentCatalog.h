@@ -105,6 +105,10 @@ public:
     // first (deferred) attempt failed transiently. No-op when the
     // model is already loaded or the class is absent.
     int RetryMonsterModel(int index);
+    // Train 123: item-side twin of RetryMonsterModel -- a cached
+    // item-model failure (or a slot whose BMD never landed) is dropped
+    // and the load runs again through the normal pending path.
+    int RetryItemModel(int type);
     // true si el catálogo le da al item un modelo propio.
     bool HasOwnModel(int type) const;
 

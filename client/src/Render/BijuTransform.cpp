@@ -563,21 +563,21 @@ int JinchurikiSkinModel(const CHARACTER* character)
     // the catalog's pending machinery for this one asset: load the
     // known file directly through the same loader, once, and log the
     // outcome so the debug.log names the stage either way.
-    static int  s_DirectModel = -2;
-    static bool s_DirectLogged = false;
-    if (s_DirectModel == -2) {
-        s_DirectModel = gContentCatalog.LoadModel("Player/Custom/50", "SkinNarutoKyubi", -1);
-        if (!s_DirectLogged) {
-            s_DirectLogged = true;
+    static int  s_RetryModel = -2;
+    static bool s_RetryLogged = false;
+    if (s_RetryModel == -2) {
+        s_RetryModel = gContentCatalog.RetryItemModel(kKyubiSkinType);
+        if (!s_RetryLogged) {
+            s_RetryLogged = true;
             char dbg[128];
-            std::snprintf(dbg, sizeof(dbg), "JinchurikiSkin: catalog model=%d, direct load=%d", model, s_DirectModel);
+            std::snprintf(dbg, sizeof(dbg), "JinchurikiSkin: catalog model=%d, retry load=%d", model, s_RetryModel);
             DbgLogPublic(dbg);
         }
     }
-    if (s_DirectModel >= 0) {
-        const BMD* bm = AsModel((uintptr_t)DAT_05828d58) + s_DirectModel;
+    if (s_RetryModel >= 0) {
+        const BMD* bm = AsModel((uintptr_t)DAT_05828d58) + s_RetryModel;
         if (bm->NumActions > 0 && bm->NumMeshs > 0 && bm->Actions && bm->Bones)
-            return s_DirectModel;
+            return s_RetryModel;
     }
     return -1;   // modelo no cargado: render normal del jugador
     return model;
