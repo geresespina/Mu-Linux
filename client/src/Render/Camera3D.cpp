@@ -100,7 +100,6 @@ namespace {
 
 bool CCamera3D::DistanceWheel(int delta)
 {
-    if (m_ZoomPin > 0.0f) return false;   // MEAMU Train 121: locked in Action Mode
     if (m_Dragging || SceneFlag != 5 || delta == 0) return false;
     if (delta > 0) m_ZoomTarget /= kZoomStep;   // rueda hacia adelante: acerca
     if (delta < 0) m_ZoomTarget *= kZoomStep;   // rueda hacia atrás: aleja
@@ -115,8 +114,6 @@ bool CCamera3D::DistanceWheel(int delta)
 // además la posición entre pasos.
 float CCamera3D::UpdateDistanceZoom()
 {
-    // MEAMU Train 121: Action Mode pins the camera at maximum zoom-out.
-    if (m_ZoomPin > 0.0f) { m_ZoomCurrent = m_ZoomPin; return m_ZoomPin; }
     const float diff = m_ZoomTarget - m_ZoomCurrent;
     if (diff > -0.001f && diff < 0.001f) m_ZoomCurrent = m_ZoomTarget;
     else m_ZoomCurrent += diff * 0.25f;
