@@ -10,12 +10,13 @@
 // never had. Tab cycling in Classic is untouched: verb locks are
 // tracked by an engaged flag and only they get the break rules.
 //
-// Engage (Action only): lock the latch-legal enemy nearest the
-// aim (ReticlePick first); pressing again with the same target
-// under the aim — or no fresh pick — CYCLES to the next enemy by
-// distance; no candidates at all CLEARS. Breaks: target dead /
-// gone, target beyond 1.5x engage range (22 tiles), line of
-// sight lost for 2 s, hero dead, scheme leaves Action.
+// Engage (Train 97): every door acquires the CLOSEST
+// attackable target; a standing lock is never re-picked.
+// TRAIN 119 (G's lock law, 2026-11-23): THE LOCK NEVER
+// DROPS ON ITS OWN -- no range break, no line-of-sight
+// break. It ends only when the target dies / is gone,
+// the hero dies, the scheme leaves Action, or the
+// player toggles it off (LB / Q).
 // While locked: hero facing eases to the target (ActionCamera),
 // casts resolve to it (AcquireTarget), Space / pad-B blink lands
 // beside it (ActionMove_BlinkToTarget). Camera never rotates.

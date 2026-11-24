@@ -41,43 +41,17 @@ extern unsigned char* TerrainWall;
 namespace {
 
 constexpr int   kEngageRange   = 15;   // tiles, Chebyshev
-constexpr int   kBreakRange    = 22;   // 1.5x engage range
-constexpr unsigned kLosGraceMs = 2000; // line-of-sight lost -> break
 
 bool     gEngaged   = false;   // the current gLockIdx is a VERB lock
 int      gPrevLockIdx = -1;    // Train 76 kill watcher: last seen lock
 bool     gKillLatch   = false; // Train 76: set by a kill-break
-unsigned gLosLostT  = 0;       // tick when LoS was first lost (0 = seen)
 
 CHARACTER* HeroC() { return (CHARACTER*)(uintptr_t)Hero; }
-
-bool LosClear(int targetIdx)
-{
-    // Bresenham over tile centres; a tile blocks sight when its
-    // wall byte carries BLOCK (0x04) or HOLLOW (0x08).
-    int x0, y0, x1, y1;
-    KbPlay_TargetTile(-1, x0, y0);
-    KbPlay_TargetTile(targetIdx, x1, y1);
-    const int dx = std::abs(x1 - x0), dy = std::abs(y1 - y0);
-    const int sx = (x0 < x1) ? 1 : -1, sy = (y0 < y1) ? 1 : -1;
-    int err = dx - dy;
-    for (int guard = 0; guard < 64; ++guard) {
-        if (x0 == x1 && y0 == y1) return true;
-        const int e2 = 2 * err;
-        if (e2 > -dy) { err -= dy; x0 += sx; }
-        if (e2 <  dx) { err += dx; y0 += sy; }
-        if (x0 == x1 && y0 == y1) return true;
-        const BYTE wall = TerrainWall[((y0 & 0xFF) << 8) | (x0 & 0xFF)];
-        if (wall & 0x0C) return false;
-    }
-    return true;
-}
 
 void SetLock(int idx)
 {
     KbPlay_LockSet(idx);   // parks + names the target (Tab-cycle pattern)
     gEngaged = (idx >= 0);
-    gLosLostT = 0;
     gKillLatch = false;    // a lock standing makes the latch moot
 }
 
@@ -121,7 +95,6 @@ void TargetLock_Clear()
 {
     if (gEngaged) KbPlay_LockClear();
     gEngaged = false;
-    gLosLostT = 0;
 }
 
 // MEAMU Train 86 (G's rule, 2026-11-20): releasing RT unlocks the
@@ -269,19 +242,13 @@ void TargetLock_Tick()
     if (hero->Object.Live == 0 || hero->Dead != 0) { TargetLock_Clear(); return; }
     const int idx = KbPlay_LockIndex();
     if (idx < 0 || idx >= 400 || !KbPlay_LatchLegal(idx)) { TargetLock_Clear(); return; }
-    const unsigned now = (unsigned)SDL_GetTicks();
-    // Train 89 (pour continuity): while a teleport is in flight and
-    // for 300 ms after the landing, the hero's tile is in flux --
-    // range and LoS breaks are SUSPENDED so a held RT pour resumes
-    // from the landing tile on the same lock, no re-press. Death
-    // breaks (WatchLockKill above) still apply.
-    const bool tpGrace = Combat_TeleportInFlight()
-        || (Combat_LastTeleportLandMs() != 0 && now - Combat_LastTeleportLandMs() < 300);
-    if (!tpGrace && KbPlay_TargetDist(idx) > kBreakRange) { TargetLock_Clear(); return; }
-    if (!tpGrace && !LosClear(idx)) {
-        if (gLosLostT == 0) gLosLostT = now;
-        else if (now - gLosLostT > kLosGraceMs) { TargetLock_Clear(); return; }
-    } else {
-        gLosLostT = 0;
-    }
+    // TRAIN 119 (G's lock law, 2026-11-23): THE LOCK NEVER
+    // DROPS ON ITS OWN. Train 55's 22-tile range break and
+    // the 2 s line-of-sight break are REMOVED -- distance
+    // and walls no longer clear a standing lock, ever.
+    // What still ends a lock: the target dies or is gone
+    // (the latch check above + WatchLockKill), the hero
+    // dies, the scheme leaves Action, or the player
+    // toggles it off (LB / Q). The follow closes distance;
+    // casts land again when the target is back in range.
 }

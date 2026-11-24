@@ -1330,18 +1330,43 @@ void PadButtonsTick(unsigned now, float dt, bool actionPad)
     };
 
     const bool prevCastHeld = gActionPadCastHeld;
-    // Lock + pour (Train 72's triple verb: auto-target + camera
-    // follow + SKILL 2 CAST-HOLD, one combined hold -- the hold
-    // IS the action; release stops the cast, ends the follow and
-    // clears the lock, Train 86). Train 81 put it on RT; the map
-    // now decides where it lives.
-    static bool s_PourPrev = false;
+    // Lock + pour -- TRAIN 119 (G's spec, 2026-11-23): RT is a
+    // PRESS-ONCE verb, not a hold. One press starts the pour:
+    // the lock fills (the Train 88/97 fill), the camera follows
+    // and Skill 2 auto-casts on the locked target UNTIL THE
+    // TARGET DIES. The pour ends when the lock ends -- the
+    // target's death (the lock clears itself) or LB toggling
+    // the lock off -- or when RT is pressed again, which ends
+    // the engagement the way Train 86's release used to (pour
+    // off + lock cleared). Supersedes Train 72's hold-to-pour
+    // and Train 86's release semantics. The lock itself NEVER
+    // drops on its own (Train 119 lock law in TargetLock):
+    // the follow closes distance and the pour resumes in range.
+    static bool s_PourOn = false;      // the pour state (Train 119)
+    static bool s_RtPrev = false;      // physical RT edge memory
+    static bool s_PourMirror = false;  // ActMirror state for '2'
+    static int  s_PourLock = -1;       // the lock the pour rides
     {
-        const bool now_ = held(PA_LOCK_POUR);
-        const bool was = s_PourPrev;
-        ActMirror(0x32, now_, s_PourPrev);   // Skill 2 cast-hold mirror
-        TargetLock_LtHold(now_);             // lock + follow + pour, in-range only (Train 88)
-        if (was && !now_) TargetLock_ReleaseUnlock();   // Train 86
+        const bool rt = held(PA_LOCK_POUR);
+        if (rt && !s_RtPrev) {
+            if (s_PourOn) {
+                s_PourOn = false;
+                s_PourLock = -1;
+                TargetLock_ReleaseUnlock();   // Train 86's end, on the press
+            } else {
+                s_PourOn = true;
+            }
+        }
+        s_RtPrev = rt;
+        if (s_PourOn) {
+            TargetLock_LtHold(true);          // fill + follow (Train 88)
+            const int lk = KbPlay_LockIndex();
+            if (lk >= 0) s_PourLock = lk;                    // (re)arm on the standing lock
+            else if (s_PourLock >= 0) { s_PourOn = false; s_PourLock = -1; }  // the lock ended: the pour ends with it
+        } else {
+            TargetLock_LtHold(false);
+        }
+        ActMirror(0x32, s_PourOn, s_PourMirror);   // Skill 2 cast mirror rides the pour state
     }
     // Skills 1..10 as plain press mirrors (the Train 57/81 sheet
     // carried 3..10 on fixed buttons; the map now places any of
@@ -1350,7 +1375,7 @@ void PadButtonsTick(unsigned now, float dt, bool actionPad)
     static bool s_SkillPrev[10] = {};
     {
         static const int kVk[10] = { 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30 };
-        bool any = s_PourPrev;
+        bool any = s_PourMirror;   // Train 119: the pour state counts as cast-held
         for (int i = 0; i < 10; i++) {
             ActMirrorBuffered(kVk[i], held((PadAction)(PA_SKILL1 + i)), s_SkillPrev[i]);
             any = any || s_SkillPrev[i];
