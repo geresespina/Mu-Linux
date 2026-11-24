@@ -152,7 +152,15 @@ static int PF_AStar(int sx, int sy, int tx, int ty, int iWall, bool bErrorCheck,
     // Tope de iteraciones del binario. FindPath hace:
     //     iVar10 = (-(uint)(bErrorCheck != false) & 0x1c2) + 0x32;
     // o sea 0x1c2+0x32 = 500 con bErrorCheck, y 0x32 = 50 sin él.
-    const int MAX_NODES = bErrorCheck ? 500 : 50;
+    // MEAMU Train 117 (2026-11-23): the best-effort cap is raised
+    // to 500 as well. The binary could live with 50 because it
+    // re-pathed constantly; our callers often issue one walk and
+    // keep it, so a 50-node partial died a few tiles from the
+    // start and the click read as dead (G's near-wall stuck: the
+    // partial-path fallback existed but never reached anywhere).
+    // With 500 the best-node partial genuinely walks as far as
+    // the search reached toward the target.
+    const int MAX_NODES = 500;
 
     memset(s_cameDir, 0xFF, sizeof(s_cameDir));
     for (int i = 0; i < 65536; ++i) s_gScore[i] = 0xFFFF;
@@ -394,6 +402,14 @@ unsigned int __cdecl Path_FindRoute(int sx, int sy, int tx, int ty,
                             if (nx < 0 || nx >= 256 || ny < 0 || ny >= 256) continue;
                             unsigned int a = tw2[ny * 256 + nx];
                             if ((a & 0x20) == 0x20) a -= 0x20;
+                            // Train 117: mask the OCCUPANCY bit (0x02)
+                            // before judging -- a body standing beside
+                            // the target (the normal case: the enemy
+                            // itself, its neighbours in a crowd) made
+                            // every ring tile read "wall" here and the
+                            // rescue silently never fired. Train 112's
+                            // rule, applied to the rescue's own read.
+                            a &= ~0x02u;
                             if (a >= 2) continue;
                             const int ddx = nx - sx, ddy = ny - sy;
                             const int dd = ddx * ddx + ddy * ddy;
