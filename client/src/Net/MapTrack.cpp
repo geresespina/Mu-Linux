@@ -61,12 +61,13 @@ bool ParseAndStore(const uint8_t* msg, int size)
         e.Aux = msg[pos + 3];
         const int nameLen = msg[pos + 4];
         pos += 5;
-        if (e.Category > MapTrackBiju) return false;
+        if (e.Category > MapTrackJinchuriki) return false;   // Train 120: category 3 = marked Jinchuriki (Bounce 80 feed)
         if (nameLen > 10 || pos + nameLen > size) return false;
         std::memset(e.Name, 0, sizeof(e.Name));
         if (nameLen > 0) std::memcpy(e.Name, msg + pos, nameLen);
         pos += nameLen;
         if (e.Category == MapTrackBiju && (e.Aux < 155 || e.Aux > 164)) return false;
+        if (e.Category == MapTrackJinchuriki && (e.Aux < 155 || e.Aux > 164)) return false;   // Train 120
     }
     if (pos != size) return false;
 

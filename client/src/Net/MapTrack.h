@@ -21,13 +21,14 @@ enum MapTrackCategory : uint8_t {
     MapTrackHuman = 0,
     MapTrackPhantom = 1,
     MapTrackBiju = 2,
+    MapTrackJinchuriki = 3,   // Train 120 (Bounce 80): a marked sealed player; Aux = beast class 155..164
 };
 
 struct MapTrackEntry {
     uint8_t Category;   // MapTrackCategory
     uint8_t X;          // tile coords on the map
     uint8_t Y;
-    uint8_t Aux;        // Biju: monster class 155..164; else 0
+    uint8_t Aux;        // Biju + Jinchuriki: monster class 155..164; else 0
     char Name[11];      // empty for Biju (name resolves from Aux)
 };
 

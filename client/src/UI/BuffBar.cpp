@@ -286,6 +286,9 @@ bool ModeDetailText(int effect, const unsigned short* value, char* out, size_t s
         case 74: // Super Defense
             Platform::TextFormatSecure(out, size, "Damage taken -%d%%", (int)value[0]);
             return true;
+        case 76: // Jinchuriki Mark (Bounce 80): the bounty mark -- no stats, all target
+            Platform::TextFormatSecure(out, size, "MARKED - rivals hunt you for your sealed beast");
+            return true;
         case 75: // Amaterasu (Bounce 57): value[2] = burn % of MaxLife per second
             Platform::TextFormatSecure(out, size, "Burn %d%% MaxLife/s \xC2\xB7 Cannot be cleansed", (int)value[2]);
             return true;

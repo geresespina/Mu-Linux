@@ -347,13 +347,30 @@ void CMiniMap::RenderMarkers() const
     // por el pase de viewport no se repite.
     MapTrackEntry tracked[255];
     const int trackedCount = MapTrack::Snapshot(gMapManager.GetCurrentMap(), tracked, 255);   // Train 118: matches the feed cap
+    char jinNames[16][11];   // Train 120: marked players drawn in the
+    int jinCount = 0;        // jinchuriki pass skip their human dot
     for (int i = 0; i < trackedCount; ++i) {
         const MapTrackEntry& e = tracked[i];
         if ((float)e.X > v.charX + v.range || (float)e.X < v.charX - v.range ||
             (float)e.Y > v.charY + v.range || (float)e.Y < v.charY - v.range) continue;
         float r, g, b, size;
         const char* tooltip = nullptr;
-        if (e.Category == MapTrackBiju) {
+        if (e.Category == MapTrackJinchuriki) {
+            // Train 120 (Bounce 80): a marked Jinchuriki -- crimson,
+            // named, with the beast he carries. The server serializes
+            // these first, so the human pass below can dedup on them.
+            r = 0.86f; g = 0.08f; b = 0.16f; size = 10.0f;
+            if (jinCount < 16) {
+                int len = 0;
+                while (len < 10 && e.Name[len]) { jinNames[jinCount][len] = e.Name[len]; ++len; }
+                jinNames[jinCount][len] = 0;
+                ++jinCount;
+            }
+            static thread_local char jinTip[48];
+            const char* beast = MapTrack::BijuName(e.Aux);
+            Platform::TextFormatSecure(jinTip, "%s - JINCHURIKI (%s)", e.Name, beast ? beast : "?");
+            tooltip = jinTip;
+        } else if (e.Category == MapTrackBiju) {
             bool dup = false;
             for (int s = 0; s < seenBijuCount && !dup; ++s) {
                 int dx = seenBiju[s].x - (int)e.X; if (dx < 0) dx = -dx;
@@ -367,6 +384,8 @@ void CMiniMap::RenderMarkers() const
             bool dup = false;
             for (int s = 0; s < seenCount && !dup; ++s)
                 dup = TrackNameEq(seenNames[s], e.Name);
+            for (int s = 0; s < jinCount && !dup; ++s)
+                dup = TrackNameEq(jinNames[s], e.Name);   // Train 120: drawn as Jinchuriki
             if (dup) continue;
             if (e.Category == MapTrackPhantom) {
                 r = 0.45f; g = 0.45f; b = 0.45f; size = 5.0f;
@@ -409,17 +428,18 @@ void CMiniMap::RenderMarkers() const
 // plate itself in the marker's colour.
 void CMiniMap::RenderLegend() const
 {
-    static const struct { float r, g, b; const char* label; } kRows[7] = {
+    static const struct { float r, g, b; const char* label; } kRows[8] = {
         { 0.0f, 1.0f, 0.0f, "You" },
         { 1.0f, 1.0f, 0.0f, "Player" },
         { 0.45f, 0.45f, 0.45f, "Phantom" },
         { 1.0f, 0.84f, 0.0f, "Biju" },
         { 0.5f, 0.0f, 0.0f, "Monster" },
         { 1.0f, 0.0f, 1.0f, "NPC" },
-        { 0.0f, 1.0f, 1.0f, "Gate" }
+        { 0.0f, 1.0f, 1.0f, "Gate" },
+        { 0.86f, 0.08f, 0.16f, "Jinchuriki" }   // Train 120
     };
     const bool camps = (gMapManager.GetCurrentMap() == 8);
-    const int rowCount = camps ? 9 : 7;
+    const int rowCount = camps ? 10 : 8;
     const int x0 = 10, y0 = 452 - rowCount * 16;
     gFont.SelectFont(gFont.GetTextDC(), gFont.GetFont(FONT_BOLD));
     const DWORD color = m_dwTextColor, back = m_dwBackColor;
@@ -427,8 +447,8 @@ void CMiniMap::RenderLegend() const
     m_dwTextColor = 0xFFFFFFFFu;   // blanco (ABGR)
     for (int i = 0; i < rowCount; ++i) {
         float r, g, b; const char* label;
-        if (i < 7) { r = kRows[i].r; g = kRows[i].g; b = kRows[i].b; label = kRows[i].label; }
-        else if (i == 7) { r = 0.47f; g = 0.86f; b = 0.24f; label = "Senju camp"; }
+        if (i < 8) { r = kRows[i].r; g = kRows[i].g; b = kRows[i].b; label = kRows[i].label; }
+        else if (i == 8) { r = 0.47f; g = 0.86f; b = 0.24f; label = "Senju camp"; }
         else { r = 0.86f; g = 0.08f; b = 0.16f; label = "Uchiha camp"; }
         const int y = y0 + i * 16;
         EnableAlphaTest(true);
