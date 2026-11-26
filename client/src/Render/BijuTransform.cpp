@@ -557,6 +557,31 @@ int JinchurikiSkinModel(const CHARACTER* character)
         if (bm->NumActions > 0 && bm->NumMeshs > 0 && bm->Actions && bm->Bones)
             return model;
     }
+    // MEAMU TRAIN 123 (2026-11-24): on G's client the catalog route
+    // resolves but the BMD never lands (aura renders, body does not --
+    // the booth, same code + same server, renders). Stop depending on
+    // the catalog's pending machinery for this one asset: load the
+    // known file directly through the same loader, once, and log the
+    // outcome so the debug.log names the stage either way.
+    static int  s_RetryModel = -2;
+    static bool s_RetryLogged = false;
+    if (s_RetryModel == -2) {
+        s_RetryModel = gContentCatalog.RetryItemModel(kKyubiSkinType);
+        if (!s_RetryLogged) {
+            s_RetryLogged = true;
+            char dbg[128];
+            std::snprintf(dbg, sizeof(dbg), "JinchurikiSkin: catalog model=%d, retry load=%d", model, s_RetryModel);
+            DbgLogPublic(dbg);
+        }
+    }
+    if (s_RetryModel >= 0) {
+        const BMD* bm = AsModel((uintptr_t)DAT_05828d58) + s_RetryModel;
+        if (bm->NumActions > 0 && bm->NumMeshs > 0 && bm->Actions && bm->Bones)
+            return s_RetryModel;
+    }
+    return -1;   // modelo no cargado: render normal del jugador
+    return model;
+}
 
 
 void JinchurikiGlowBegin(const CHARACTER* character, float savedLight[3])
@@ -583,31 +608,6 @@ void JinchurikiGlowEnd(const CHARACTER* character, const float savedLight[3])
     o->Light[0] = savedLight[0];
     o->Light[1] = savedLight[1];
     o->Light[2] = savedLight[2];
-}
-    // MEAMU TRAIN 123 (2026-11-24): on G's client the catalog route
-    // resolves but the BMD never lands (aura renders, body does not --
-    // the booth, same code + same server, renders). Stop depending on
-    // the catalog's pending machinery for this one asset: load the
-    // known file directly through the same loader, once, and log the
-    // outcome so the debug.log names the stage either way.
-    static int  s_RetryModel = -2;
-    static bool s_RetryLogged = false;
-    if (s_RetryModel == -2) {
-        s_RetryModel = gContentCatalog.RetryItemModel(kKyubiSkinType);
-        if (!s_RetryLogged) {
-            s_RetryLogged = true;
-            char dbg[128];
-            std::snprintf(dbg, sizeof(dbg), "JinchurikiSkin: catalog model=%d, retry load=%d", model, s_RetryModel);
-            DbgLogPublic(dbg);
-        }
-    }
-    if (s_RetryModel >= 0) {
-        const BMD* bm = AsModel((uintptr_t)DAT_05828d58) + s_RetryModel;
-        if (bm->NumActions > 0 && bm->NumMeshs > 0 && bm->Actions && bm->Bones)
-            return s_RetryModel;
-    }
-    return -1;   // modelo no cargado: render normal del jugador
-    return model;
 }
 
 namespace
