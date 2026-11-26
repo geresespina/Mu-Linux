@@ -557,6 +557,33 @@ int JinchurikiSkinModel(const CHARACTER* character)
         if (bm->NumActions > 0 && bm->NumMeshs > 0 && bm->Actions && bm->Bones)
             return model;
     }
+
+
+void JinchurikiGlowBegin(const CHARACTER* character, float savedLight[3])
+{
+    if (!character || !savedLight) return;
+    OBJECT* o = AsObject((void*)character);
+    savedLight[0] = o->Light[0];
+    savedLight[1] = o->Light[1];
+    savedLight[2] = o->Light[2];
+    float tint[3] = { 0.961f, 0.522f, 0.122f };   // Kurama gold (fallback, as the aura)
+    JinchurikiTint(character, tint);
+    // Same 1200 ms pulse as the Train 4 aura, so body and aura breathe together.
+    const float jt = 0.5f - 0.5f * cosf(WorldTime * (2.0f * 3.14159265f / 1200.0f));
+    const float boost = 1.25f * (0.82f + 0.30f * jt);
+    o->Light[0] = tint[0] * boost;
+    o->Light[1] = tint[1] * boost;
+    o->Light[2] = tint[2] * boost;
+}
+
+void JinchurikiGlowEnd(const CHARACTER* character, const float savedLight[3])
+{
+    if (!character || !savedLight) return;
+    OBJECT* o = AsObject((void*)character);
+    o->Light[0] = savedLight[0];
+    o->Light[1] = savedLight[1];
+    o->Light[2] = savedLight[2];
+}
     // MEAMU TRAIN 123 (2026-11-24): on G's client the catalog route
     // resolves but the BMD never lands (aura renders, body does not --
     // the booth, same code + same server, renders). Stop depending on

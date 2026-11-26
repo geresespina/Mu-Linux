@@ -213,6 +213,16 @@ namespace BijuTransform
     // every hook falls back to the normal player render).
     int JinchurikiSkinModel(const CHARACTER* character);
 
+    // MEAMU Train 124 (2026-11-26): the glowing body. The Kyubi
+    // skin's atlas IS the gold chakra cloth -- under bare terrain
+    // light it reads dark (Tarkan night). Entity_GetLightScale adds
+    // OBJECT.Light into every part's BodyLight, so Begin raises the
+    // object light to the beast tint x pulse for the skin draw only
+    // and End restores it: the body renders full-bright in the
+    // beast's colour (Kurama gold) in any map light, head untouched.
+    void JinchurikiGlowBegin(const CHARACTER* character, float savedLight[3]);
+    void JinchurikiGlowEnd(const CHARACTER* character, const float savedLight[3]);
+
     // MEAMU TRAIN 8 (2026-11-17, G's live verdict on v20261117-2023): the
     // Kyubi skin BMD carries its OWN head geometry, so with Train 7 the
     // player's real head rendered INSIDE the skin's head ("my head is in
