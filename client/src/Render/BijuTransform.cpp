@@ -80,6 +80,7 @@ namespace
     constexpr int kThousandHandsClass = 232;  // MEAMU TRAIN 109: Thousand Hands (skill 82) -- the Oozaru Gold model as the Senju evolved form (server class 232)   // MEAMU TRAIN 99: Dragon Form (skill 77) -- the Kaido boss model (server class 193) as the Senju form   // MEAMU TRAIN 67: Eliger's Blue Megazord (skill 74)          // MEAMU TRAIN 7: Crimson Karane, forma personal de G (skill 74, nombres Gloccy/M4D4R4)             // MEAMU TRAIN 3: Perfect Susanoo form (skill 74)
 
     signed char s_beastBySlot[400];
+    bool        s_jinVisualBySlot[400];   // TRAIN 125: latch de la visual Jinchuriki (ver NoteJinchurikiVisual)
     // MEAMU SKIN BODY FIX (2026-11-18): skin de cuerpo entero puesta en el
     // slot de armadura, por slot del pool (1 = puesta). Tabla hermana de
     // la del pet: mismos feeds, mismo Clear.
@@ -337,6 +338,7 @@ void Clear(void* character)
         s_beastBySlot[slot] = -1;
         s_skinBySlot[slot] = 0;
         s_formSourceBySlot[slot] = 0;
+        s_jinVisualBySlot[slot] = false;   // TRAIN 125
     }
 }
 
@@ -540,13 +542,49 @@ int ModelForCharacter(const CHARACTER* character)
     return Resolve(character, &model, nullptr) ? model : -1;
 }
 
+// MEAMU TRAIN 125 (2026-11-26, G's live verdict on Train 124): the
+// glowing body rendered on cast, then vanished for good after a
+// teleport or dash. The wire is innocent: the server keeps the
+// effect on and every post-landing viewport self-row carries
+// ViewSkillState 0x1000 (trace-verified on G's own session). The
+// fragile link is the client state word at entity+120: the hero
+// self-sync in Recv_Viewport zeroes it and rebuilds it from the
+// packet on EVERY landing, and when that reconstruction misses,
+// nothing ever re-asserts the bit -- the C1:07 add that turned the
+// mode on is never repeated. So the visual gets a second source of
+// truth: a per-slot latch fed by ApplyPersistentSkillEffect97k,
+// the one function every add/remove of the effect passes through
+// (C1:07 live toggles AND viewport applies). An add latches it on,
+// an explicit remove latches it off, Clear() (fresh entity) resets
+// it -- and the +120 zeroing in between can no longer kill it.
+// Skin and aura both consult bit OR latch, so the form visual
+// re-asserts itself on every object re-init (teleport, dash, map
+// change, respawn) for exactly as long as the form is active.
+void NoteJinchurikiVisual(void* character, bool on)
+{
+    EnsureInit();
+    const int slot = SlotOf(character);
+    if (slot < 0) return;
+    if (s_jinVisualBySlot[slot] == on) return;
+    s_jinVisualBySlot[slot] = on;
+    char dbg[96];
+    std::snprintf(dbg, sizeof(dbg), "JinchurikiVisual: latch slot=%d on=%d", slot, on ? 1 : 0);
+    DbgLogPublic(dbg);
+}
+
+bool JinchurikiVisualOn(const CHARACTER* character)
+{
+    const int slot = SlotOf(character);
+    return slot >= 0 && s_jinVisualBySlot[slot];
+}
+
 int JinchurikiSkinModel(const CHARACTER* character)
 {
     if (!character) return -1;
     const OBJECT* o = AsObject(character);
     if (o->Type != 390 || o->Kind != 1) return -1;   // sólo jugadores
     const DWORD state = *(const DWORD*)((const BYTE*)character + 120);
-    if ((state & 0x1000) == 0) return -1;           // Jinchuriki Mode off
+    if ((state & 0x1000) == 0 && !JinchurikiVisualOn(character)) return -1;   // Jinchuriki Mode off (bit o latch TRAIN 125)
     if ((state & 0x2000) != 0) return -1;           // Biju Mode: transform wins
     // Naruto Kyubi Skin = item (8,50). El tipo crudo vive en el espacio
     // extendido del fork: 512 + sección*480 + (sub-32) = 512+3840+18.

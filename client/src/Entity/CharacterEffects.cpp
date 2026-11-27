@@ -433,7 +433,8 @@ void *CharacterEffects_TickLate(intptr_t entity, CharacterEffectScratch &scratch
         // brasas 0x4ab en anillo, tintadas como la bestia.
         if (bVar7 == 0xFF && AsCharacter(puVar13)->Dead == 0 &&
             !gUserSettings.GetAntilag(ANTILAG_GLOW) &&
-            (*(DWORD*)((BYTE*)puVar13 + 120) & 0x1000) != 0) {
+            ((*(DWORD*)((BYTE*)puVar13 + 120) & 0x1000) != 0 ||
+             BijuTransform::JinchurikiVisualOn((const CHARACTER*)puVar13))) {   // TRAIN 125: bit o latch
             float jkBase[3] = { 0.961f, 0.522f, 0.122f };  // Kurama
             BijuTransform::JinchurikiTint((const CHARACTER*)puVar13, jkBase);
             const float jt = 0.5f - 0.5f * cosf(WorldTime * (2.0f * 3.14159265f / 1200.0f));

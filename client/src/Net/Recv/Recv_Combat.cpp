@@ -17,6 +17,13 @@ void ApplyPersistentSkillEffect97k(BYTE* entity, WORD effect, BYTE state)
 {
     if (!entity || effect == 0) return;
     DWORD& physicalEffects = *(DWORD*)(entity + 120);
+    // MEAMU TRAIN 125: el latch de la visual Jinchuriki se alimenta
+    // de este canal, que es el dueno de la vida del efecto: un add
+    // (state 1) lo enciende y un remove explicito (state 0) lo
+    // apaga. Sobrevive al cero+rebuild de entity+120 en el resync
+    // de viewport del heroe, donde la visual se perdia al teletransportar.
+    if ((effect & 0x1000) != 0)
+        BijuTransform::NoteJinchurikiVisual(entity, state == 1);
 
     if (state == 1) {
         if ((effect & 0x10) != 0) {

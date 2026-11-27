@@ -220,6 +220,16 @@ namespace BijuTransform
     // object light to the beast tint x pulse for the skin draw only
     // and End restores it: the body renders full-bright in the
     // beast's colour (Kurama gold) in any map light, head untouched.
+    // MEAMU TRAIN 125 (2026-11-26): latch de la visual Jinchuriki.
+    // NoteJinchurikiVisual lo alimenta ApplyPersistentSkillEffect97k
+    // (el canal C1:07 + applies de viewport que posee la vida del
+    // efecto 0x1000); JinchurikiVisualOn lo consultan la skin y el
+    // aura como respaldo del bit en entity+120, cuyo resync de
+    // viewport del heroe (cero + rebuild en cada landing) podia
+    // perder la visual tras un teleport/dash sin forma de volver.
+    void NoteJinchurikiVisual(void* character, bool on);
+    bool JinchurikiVisualOn(const CHARACTER* character);
+
     void JinchurikiGlowBegin(const CHARACTER* character, float savedLight[3]);
     void JinchurikiGlowEnd(const CHARACTER* character, const float savedLight[3]);
 
