@@ -467,7 +467,18 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
         }
     }
 
-    if (!bTransformed && !bSubTypeNpcRendered && *(char *)&((CHARACTER*)(uintptr_t)(param_1))->Change == '\0') {
+    // MEAMU TRAIN 127 (2026-11-27): the Jinchuriki skin model is
+    // resolved BEFORE the part-block gate, on purpose. Every input to
+    // the skin is proven alive after a teleport/dash landing (wire
+    // state bit 0x1000, Train 125 latch log, catalog model loaded),
+    // yet the golden body stopped drawing: the block below was being
+    // skipped by its own entry conditions (the Change byte / the
+    // subtype-NPC branch), which have nothing to do with the form.
+    // An active form now forces the block open; with the form off,
+    // the gate behaves exactly as before.
+    const int  jinSkinModel = BijuTransform::JinchurikiSkinModel((const CHARACTER*)(uintptr_t)param_1);
+    const bool bJinSkin     = jinSkinModel >= 0;
+    if (!bTransformed && (bJinSkin || (!bSubTypeNpcRendered && *(char *)&((CHARACTER*)(uintptr_t)(param_1))->Change == '\0'))) {
         // MEAMU TRAIN 7 (2026-11-17): override de skin Jinchuriki -- con el
         // modo activo (bit 0x1000), la pieza de ARMADURA (BodyPart[2]) se
         // dibuja con el modelo de la skin Kyubi (8,50) y pantalones /
@@ -475,8 +486,6 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
         // skin es de cuerpo entero y los encierra (sin esto, las piezas
         // reales asoman a traves de la skin). El CASCO (BodyPart[1]) no se
         // toca nunca: casco real o cabeza pelada, como siempre.
-        const int  jinSkinModel = BijuTransform::JinchurikiSkinModel((const CHARACTER*)(uintptr_t)param_1);
-        const bool bJinSkin     = jinSkinModel >= 0;
         // MEAMU SKIN BODY FIX (2026-11-18): skin de cuerpo entero PUESTA
         // en el slot de armadura (seccion 8, sub >= 50, ver
         // BijuTransform::NoteArmorItem). La skin trae su propia cabeza y
@@ -503,8 +512,12 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
                 iVar9 = gContentCatalog.EntityDrawModel(param_1, iVar9);
                 // TRAIN 7: pieza cubierta por la skin (pantalon/guantes/botas)
                 // o la armadura misma, que pasa a dibujarse como la skin.
+                // TRAIN 127: with the form on, a worn full-body skin no
+                // longer covers the head slot -- the player's own head
+                // stays (design of record); parts 3-5 stay covered by
+                // the Jinchuriki term above.
                 const bool bCoveredBySkin = (bJinSkin && nPart >= 3 && nPart <= 5) ||
-                                            (bWornSkin && nPart >= 1 && nPart != 2);
+                                            (bWornSkin && !bJinSkin && nPart >= 1 && nPart != 2);
                 if (bJinSkin && nPart == 2) iVar9 = jinSkinModel;
                 BYTE bClassByte = *(BYTE *)&((CHARACTER*)(uintptr_t)(param_1))->Class;
                 *(BYTE *)(DAT_05828d58 + iVar9 * BMD_STRIDE + 0x98 + BMD_FIELD_SHIFT) =
