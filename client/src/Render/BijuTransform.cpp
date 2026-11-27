@@ -582,18 +582,38 @@ int JinchurikiSkinModel(const CHARACTER* character)
 {
     if (!character) return -1;
     const OBJECT* o = AsObject(character);
-    if (o->Type != 390 || o->Kind != 1) return -1;   // sólo jugadores
+    // LOCAL TRACE ONLY (never shipped): name the gate that kills the skin.
+    auto jtrace = [&](const char* why, int extra) {
+        static unsigned s_lastLog = 0; static char s_lastWhy[64] = "";
+        const unsigned now = (unsigned)WorldTime;
+        if (std::strcmp(s_lastWhy, why) != 0 || now - s_lastLog > 2000) {
+            std::snprintf(s_lastWhy, sizeof(s_lastWhy), "%s", why);
+            s_lastLog = now;
+            char dbg[224];
+            std::snprintf(dbg, sizeof(dbg), "JTRACE: %s extra=%d type=%d kind=%d state=%08X latch=%d",
+                          why, extra, (int)o->Type, (int)o->Kind,
+                          (unsigned)*(const DWORD*)((const BYTE*)character + 120),
+                          JinchurikiVisualOn(character) ? 1 : 0);
+            DbgLogPublic(dbg);
+        }
+    };
+    if (o->Type != 390 || o->Kind != 1) { jtrace("GATE type/kind", 0); return -1; }   // sólo jugadores
     const DWORD state = *(const DWORD*)((const BYTE*)character + 120);
-    if ((state & 0x1000) == 0 && !JinchurikiVisualOn(character)) return -1;   // Jinchuriki Mode off (bit o latch TRAIN 125)
-    if ((state & 0x2000) != 0) return -1;           // Biju Mode: transform wins
+    if ((state & 0x1000) == 0 && !JinchurikiVisualOn(character)) { jtrace("GATE state off", 0); return -1; }   // Jinchuriki Mode off (bit o latch TRAIN 125)
+    if ((state & 0x2000) != 0) { jtrace("GATE biju bit", 0); return -1; }           // Biju Mode: transform wins
     // Naruto Kyubi Skin = item (8,50). El tipo crudo vive en el espacio
     // extendido del fork: 512 + sección*480 + (sub-32) = 512+3840+18.
     constexpr int kKyubiSkinType = 512 + 8 * 480 + (50 - 32);   // 4370
     const int model = gContentCatalog.GetItemModel(kKyubiSkinType);
     if (model >= 0) {
         const BMD* bm = AsModel((uintptr_t)DAT_05828d58) + model;
-        if (bm->NumActions > 0 && bm->NumMeshs > 0 && bm->Actions && bm->Bones)
+        if (bm->NumActions > 0 && bm->NumMeshs > 0 && bm->Actions && bm->Bones) {
+            jtrace("OK primary model", model);
             return model;
+        }
+        jtrace("GATE primary BMD invalid", model);
+    } else {
+        jtrace("GATE primary model<0", model);
     }
     // MEAMU TRAIN 123 (2026-11-24): on G's client the catalog route
     // resolves but the BMD never lands (aura renders, body does not --
@@ -614,8 +634,13 @@ int JinchurikiSkinModel(const CHARACTER* character)
     }
     if (s_RetryModel >= 0) {
         const BMD* bm = AsModel((uintptr_t)DAT_05828d58) + s_RetryModel;
-        if (bm->NumActions > 0 && bm->NumMeshs > 0 && bm->Actions && bm->Bones)
+        if (bm->NumActions > 0 && bm->NumMeshs > 0 && bm->Actions && bm->Bones) {
+            jtrace("OK retry model", s_RetryModel);
             return s_RetryModel;
+        }
+        jtrace("GATE retry BMD invalid", s_RetryModel);
+    } else {
+        jtrace("GATE retry model<0", s_RetryModel);
     }
     return -1;   // modelo no cargado: render normal del jugador
     return model;

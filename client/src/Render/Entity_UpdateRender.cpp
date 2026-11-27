@@ -6,6 +6,7 @@
 #include "Game/MapManager.h"
 #include "Render/EquipmentVisuals.h"
 #include "Render/BijuTransform.h"
+extern "C" void DbgLogPublic(const char* msg);   // TRAIN 126 DIAG
 #include "Net/MoveMarkers.h"   // MEAMU Train 63: teleport vanish envelope
 #include "Entity/CharacterEffects.h"
 
@@ -488,6 +489,24 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
         // no se tocan. Sin skin puesta, bWornSkin = false y el loop queda
         // byte-identico al de Train 7.
         const bool bWornSkin    = BijuTransform::WearsFullBodySkin((const CHARACTER*)(uintptr_t)param_1);
+        // TRAIN 126 DIAG (tracing only, not a fix): while the form is
+        // on for this character, log the draw inputs once per second
+        // so the debug.log shows which input flips on teleport/dash.
+        if (jinSkinModel >= 0 || bWornSkin ||
+            (*(const DWORD*)((const BYTE*)(uintptr_t)param_1 + 120) & 0x1000) != 0) {
+            static DWORD s_lastRT = 0;
+            const DWORD nowRT = Platform::GetTimer().Ticks();
+            if (nowRT - s_lastRT > 1000) {
+                s_lastRT = nowRT;
+                char rtdbg[192];
+                std::snprintf(rtdbg, sizeof(rtdbg),
+                    "RTRACE: jinModel=%d wornSkin=%d part2Type=%d state=%08X",
+                    jinSkinModel, bWornSkin ? 1 : 0,
+                    (int)AsCharacter(param_1)->BodyPart[2].Type,
+                    (unsigned)*(const DWORD*)((const BYTE*)(uintptr_t)param_1 + 120));
+                DbgLogPublic(rtdbg);
+            }
+        }
         PART_t *piVar16 = AsCharacter(param_1)->BodyPart;   // int*-index: byte offset +0x1f4
         int nPart = 0;   // indice BodyPart de la iteracion: 1 casco, 2 armadura, 3 pantalon, 4 guantes, 5 botas
         for (int nSlot = 6; nSlot > 0; nSlot--) {
