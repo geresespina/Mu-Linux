@@ -39,21 +39,30 @@ const char* kActionNames[PA_COUNT] = {
 
 // Tonight's final layout -- the Default preset, identical to the
 // site's DEFAULT_BINDINGS (lib/controller-map.js).
+// Train 138 (G's order, 2026-11-28): "hold X = skill 7, hold
+// Y = skill 8, hold B = skill 9" -- the face buttons take the
+// three high slots as hold-casts (every PA_SKILLn already rides
+// the held digit mirror in PadButtonsTick, so holding the
+// button repeat-casts at the skill's own cycle; release stops).
+// Skills 3/4/5 move to the controls 7/8/9 vacated (BACK/L3/DUP)
+// so all ten skills stay on the pad, one action per control.
+// NOTE: the site's DEFAULT_BINDINGS must be updated to match
+// (shared-contract law in PadMap.h) -- flagged to GG.
 const PadAction kDefaultMap[PC_COUNT] = {
     /* LT */ PA_MINIMAP,   // Train 118 (G's order): LT is the whole-map overlay
     /* LB */ PA_LOCK_TOGGLE,
-    /* L3 */ PA_SKILL8,
-    /* DUP */ PA_SKILL9,
+    /* L3 */ PA_SKILL4,    // Train 138: Skill 8 moved to Y; Skill 4 (Y's old) lands here
+    /* DUP */ PA_SKILL5,   // Train 138: Skill 9 moved to B; Skill 5 (B's old) lands here
     /* DLEFT */ PA_FISHING,
     /* DRIGHT */ PA_TELEPORT,   // Train 118: Teleport moves here -- LT's old tenant, still one press away
     /* DDOWN */ PA_SKILL10,
-    /* BACK */ PA_SKILL7,
+    /* BACK */ PA_SKILL3,  // Train 138: Skill 7 moved to X; Skill 3 (X's old) lands here
     /* START */ PA_SCHEME_TOGGLE,
     /* RT */ PA_LOCK_POUR,
     /* RB */ PA_SKILL6,
-    /* Y */ PA_SKILL4,
-    /* X */ PA_SKILL3,
-    /* B */ PA_SKILL5,
+    /* Y */ PA_SKILL8,     // Train 138 (G's order): hold Y = Skill 8
+    /* X */ PA_SKILL7,     // Train 138 (G's order): hold X = Skill 7
+    /* B */ PA_SKILL9,     // Train 138 (G's order): hold B = Skill 9
     /* A */ PA_DASH,
     /* R3 */ PA_PICKUP
 };
