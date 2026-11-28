@@ -604,6 +604,16 @@ int JinchurikiSkinModel(const CHARACTER* character)
         static void*    s_TexBuffer = nullptr;
         static float    s_LastLoad = -100000.0f;
         static bool     s_Loading = false;
+        // MEAMU TRAIN 137 (2026-11-28): private cache of the loaded
+        // struct's load-static fields, its IndexTexture contents and
+        // its texture name -- the struct heals from this snapshot by
+        // field writes. See the TRAIN 137 note at the restore step.
+        static BMD      s_Cache;
+        static short    s_CacheIndexTex[8];
+        static char     s_CacheTexName[32];
+        static bool     s_CacheValid = false;
+        static int      s_RestoreCount = 0;
+        static float    s_LastRestoreLog = -100000.0f;
         const int ownSlot = 963 + 950;   // MODEL_MAX_VANILLA + 950
         // Train 136: the model table is paged on demand -- ensure
         // the private slot's page exists before ANY field of the
@@ -637,16 +647,108 @@ int JinchurikiSkinModel(const CHARACTER* character)
         // IndexTexture re-assert. The reload branch survives only as
         // a defensive path (cooldown kept) and reloads into the SAME
         // reserved slot -- it can never re-enter the march.
+        // MEAMU TRAIN 137 (2026-11-28): G's Mac verdict on Train 136 --
+        // the pinned texture slot HELD (texSlot=1471 / texNum=669
+        // identical across all 18 "pinned load" lines in his log) yet
+        // the load re-ran 18 times in one session and RM fired 11
+        // times total: the suit drew only in brief windows after each
+        // reload. The flapping party is the model STRUCT in the
+        // shared table, not the texture. Slot 1913 (963+950) sits
+        // directly in the ContentCatalog dynamic march (LoadModel:
+        // MODEL_MAX_VANILLA + m_NextDynamicModel++, unbounded and
+        // never reset, Item/ContentCatalog.cpp), ResetModels() can
+        // wipe the whole table at world load, and BMD__Open itself
+        // zeroes the struct's fields before writing a new parse --
+        // so in a live world the fields flap, T136's residency
+        // verdict (which READ those fields: Textures pointer for the
+        // name compare, plus the gate fields) declared eviction on
+        // its 1 s cooldown forever, and the draw gate saw an invalid
+        // struct between heals. BMD__Open never frees the old arrays
+        // (it leaks them), so the pointers captured at our one good
+        // load stay valid for the life of the process. New law: the
+        // struct heals FROM THE PRIVATE CACHE by field writes --
+        // zero file I/O -- and no struct field ever feeds a load
+        // verdict again. The only load triggers left are the very
+        // first load and the texture RECORD itself dying (checked on
+        // the record, by cached name). Runtime fields the engine
+        // legitimately rewrites per draw are NOT restored (booth-
+        // verified: the part render path writes BodyOrigin /
+        // BodyScale / LightEnable / Skin into the struct every draw,
+        // the glow/animation path BodyLight and the animation
+        // cursor -- those four-plus fields differed on EVERY sample
+        // of a healthy run while every load-static field held).
+        BMD* bm = const_cast<BMD*>(bmOwn);
+        if (s_CacheValid) {
+            const BMD& c = s_Cache;
+            const bool differs =
+                bm->NumBones != c.NumBones || bm->NumMeshs != c.NumMeshs
+                || bm->NumActions != c.NumActions
+                || bm->Meshs != c.Meshs || bm->Bones != c.Bones
+                || bm->Actions != c.Actions || bm->Textures != c.Textures
+                || bm->IndexTexture != c.IndexTexture
+                || bm->NumLightMaps != c.NumLightMaps
+                || bm->IndexLightMap != c.IndexLightMap
+                || bm->LightMaps != c.LightMaps
+                || bm->ContrastEnable != c.ContrastEnable
+                || bm->Version != c.Version
+                || bm->BoneHead != c.BoneHead
+                || bm->BodyHeight != c.BodyHeight
+                || bm->StreamMesh != c.StreamMesh
+                || bm->HideSkin != c.HideSkin
+                || bm->Velocity != c.Velocity
+                || std::memcmp(bm->Name, c.Name, 32) != 0
+                || std::memcmp(bm->BoneFoot, c.BoneFoot, sizeof(c.BoneFoot)) != 0
+                || std::memcmp(bm->BodyAngle, c.BodyAngle, sizeof(c.BodyAngle)) != 0
+                || std::memcmp(bm->ShadowAngle, c.ShadowAngle, sizeof(c.ShadowAngle)) != 0
+                || std::memcmp(bm->Sounds, c.Sounds, sizeof(c.Sounds)) != 0;
+            if (differs) {
+                const float liveLight[3] = { bm->BodyLight[0], bm->BodyLight[1], bm->BodyLight[2] };
+                const float liveOrigin[3] = { bm->BodyOrigin[0], bm->BodyOrigin[1], bm->BodyOrigin[2] };
+                const float liveScale = bm->BodyScale;
+                const std::uint8_t liveLightEn = bm->LightEnable, liveSkin = bm->Skin;
+                const std::uint8_t liveCur = bm->CurrentAction, livePrior = bm->PriorAction;
+                const float liveAnim = bm->CurrentAnimation;
+                const short liveAnimFrame = bm->CurrentAnimationFrame;
+                *bm = c;
+                bm->BodyLight[0] = liveLight[0];
+                bm->BodyLight[1] = liveLight[1];
+                bm->BodyLight[2] = liveLight[2];
+                bm->BodyOrigin[0] = liveOrigin[0];
+                bm->BodyOrigin[1] = liveOrigin[1];
+                bm->BodyOrigin[2] = liveOrigin[2];
+                bm->BodyScale = liveScale;
+                bm->LightEnable = liveLightEn;
+                bm->Skin = liveSkin;
+                bm->CurrentAction = liveCur;
+                bm->PriorAction = livePrior;
+                bm->CurrentAnimation = liveAnim;
+                bm->CurrentAnimationFrame = liveAnimFrame;
+                if (bm->IndexTexture) {
+                    const int n = bm->NumMeshs < 8 ? (int)bm->NumMeshs : 8;
+                    for (int i = 0; i < n; ++i)
+                        bm->IndexTexture[i] = s_CacheIndexTex[i];
+                }
+                ++s_RestoreCount;
+                if (WorldTime - s_LastRestoreLog >= 1000.0f) {
+                    s_LastRestoreLog = WorldTime;
+                    char dbg[96];
+                    std::snprintf(dbg, sizeof(dbg), "JinchurikiSkin: struct restored total=%d", s_RestoreCount);
+                    DbgLogPublic(dbg);
+                }
+            }
+        }
         const bool geoOk = bmOwn->NumMeshs > 0 && bmOwn->Meshs && bmOwn->Bones;
-        bool resident = false;
-        if (s_OwnModel >= 0 && s_TexSlot >= 0 && g_BitmapsRaw && bmOwn->Textures) {
+        // TRAIN 137: the texture verdict reads ONLY the bitmap record
+        // (cached name + live pixels + live handle) -- never the
+        // model struct, whose fields are exactly what flaps.
+        bool texAlive = false;
+        if (s_CacheValid && s_TexSlot >= 0 && g_BitmapsRaw) {
             const BITMAP_t* bmp = reinterpret_cast<const BITMAP_t*>(
                 g_BitmapsRaw + (size_t)s_TexSlot * sizeof(BITMAP_t));
-            resident = bmp->Buffer != nullptr && bmp->Buffer == s_TexBuffer
-                && s_TexHandle != 0 && bmp->TextureNumber == s_TexHandle
-                && std::strncmp(bmp->FileName, (const char*)bmOwn->Textures, 32) == 0;
+            texAlive = bmp->Buffer != nullptr && bmp->TextureNumber != 0
+                && std::strncmp(bmp->FileName, s_CacheTexName, 32) == 0;
         }
-        if ((!geoOk || !resident) && !s_Loading && WorldTime - s_LastLoad >= 1000.0f) {
+        if ((!s_CacheValid || !texAlive) && !s_Loading && WorldTime - s_LastLoad >= 1000.0f) {
             s_Loading = true;
             s_LastLoad = WorldTime;
             if (s_OwnModel == -2) s_OwnModel = -1;
@@ -696,8 +798,29 @@ int JinchurikiSkinModel(const CHARACTER* character)
                 // actions of its own -- the renderer poses it with
                 // the hero's skeleton. Gate on mesh + bones + a live
                 // pinned texture.
-                if (bmp->Buffer && bmp->TextureNumber != 0)
+                if (bmp->Buffer && bmp->TextureNumber != 0) {
                     s_OwnModel = ownSlot;
+                    // MEAMU TRAIN 137: snapshot the freshly loaded
+                    // struct (load-static fields), its IndexTexture
+                    // contents (with [0] already resolved to the
+                    // pinned slot) and the texture name into the
+                    // private cache. From here on the struct heals
+                    // from this snapshot -- see the restore step
+                    // above. A later texture-only reload does NOT
+                    // re-snapshot: the geometry cache already holds
+                    // the one good parse.
+                    if (!s_CacheValid) {
+                        if (bmOwn->IndexTexture && bmOwn->NumMeshs >= 1)
+                            const_cast<short*>(bmOwn->IndexTexture)[0] = (short)s_TexSlot;
+                        s_Cache = *bmOwn;
+                        const int n = bmOwn->NumMeshs < 8 ? (int)bmOwn->NumMeshs : 8;
+                        for (int i = 0; i < 8; ++i)
+                            s_CacheIndexTex[i] = (bmOwn->IndexTexture && i < n)
+                                ? bmOwn->IndexTexture[i] : 0;
+                        std::memcpy(s_CacheTexName, texName, 32);
+                        s_CacheValid = true;
+                    }
+                }
             }
             s_Loading = false;
         }
