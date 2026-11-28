@@ -998,6 +998,18 @@ int CContentCatalog::LoadModel(const char* folder, const char* name, int fixedSl
     return slot;
 }
 
+// Train 136: reserva permanente de un slot de la región del catálogo.
+// Mismo contador monotónico que LoadModel/LoadTexture: el slot queda
+// por encima de su marcha para siempre y ninguna marcha de escena
+// (SetMaxTextures + OpenTexture) alcanza la región >= BITMAP_MAX_VANILLA.
+int CContentCatalog::ReserveTextureSlot()
+{
+    if (m_NextTexture == 0) m_NextTexture = BITMAP_MAX_VANILLA;
+    const int slot = m_NextTexture++;
+    ResourceTables::EnsureTextures(std::size_t(slot)+1);
+    return slot;
+}
+
 // Textura suelta de un efecto, en la región del catálogo.  Una vez por ruta.
 int CContentCatalog::LoadTexture(const char* path)
 {

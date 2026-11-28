@@ -109,6 +109,12 @@ public:
     // item-model failure (or a slot whose BMD never landed) is dropped
     // and the load runs again through the normal pending path.
     int RetryItemModel(int type);
+    // Train 136: reserva un slot de textura PERMANENTE de la región del
+    // catálogo (>= BITMAP_MAX_VANILLA). El contador es monotónico y las
+    // marchas de escena nunca llegan a la región, así que un slot
+    // reservado no se recicla jamás: quien lo reserva es dueño del
+    // registro para siempre y carga su textura directamente en él.
+    int ReserveTextureSlot();
     // true si el catálogo le da al item un modelo propio.
     bool HasOwnModel(int type) const;
 

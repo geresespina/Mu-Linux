@@ -47,6 +47,7 @@
 #include "Entity/EntityTypes.h"
 #include "Entity/EntityName.h"   // MEAMU TRAIN 7: nombre visible (FormClassForNamed)
 #include "Item/ContentCatalog.h"
+#include "Render/ResourceTables.h"   // Train 136: EnsureModels antes de tocar el slot privado
 #include "globals.h"
 #include "functions.h"
 #include <cmath>
@@ -600,96 +601,114 @@ int JinchurikiSkinModel(const CHARACTER* character)
         static int      s_OwnModel = -2;
         static int      s_TexSlot = -1;
         static unsigned s_TexHandle = 0;
+        static void*    s_TexBuffer = nullptr;
         static float    s_LastLoad = -100000.0f;
         static bool     s_Loading = false;
         const int ownSlot = 963 + 950;   // MODEL_MAX_VANILLA + 950
+        // Train 136: the model table is paged on demand -- ensure
+        // the private slot's page exists before ANY field of the
+        // struct is read. Train 135 only ever read it after
+        // AccessModel (which ensures internally); the flow below
+        // reads NumMeshs up front for the residency verdict and
+        // faulted at the login scene, where the table is still
+        // short. Grow-only: after this call the page stays.
+        ResourceTables::EnsureModels((size_t)ownSlot + 1);
         const BMD* bmOwn = AsModel((uintptr_t)DAT_05828d58) + ownSlot;
-        // MEAMU TRAIN 135 (2026-11-28): the one-time load was not
-        // enough. Scene changes rewind TextureCurrent, so the bitmap
-        // slot the skin texture landed in gets recycled while this
-        // module still trusts it: in-world the binder read a foreign
-        // handle for the slot (booth-verified: texture loaded as
-        // handle 566 at char-select; in-world the same slot resolved
-        // to handle 604, not a live GPU texture -- the WebGPU backend
-        // fell back to its white texture and the suit vanished; the
-        // model geometry survives because its slot is private). Only
-        // the texture dies. Re-validate residency on every call --
-        // slot, GPU handle, pixel buffer and texture name must all
-        // still be the ones this load produced -- and reload when the
-        // texture was evicted. The cooldown keeps a pathological
-        // reload from running per frame.
-        // Residency is judged on the bitmap RECORD this load produced,
-        // not on the model's IndexTexture pointer: the model struct's
-        // array can be re-pointed at a stale parse by other systems
-        // (booth-observed oscillation between the first parse's array
-        // and fresh ones), so the struct is re-asserted below instead.
+        // MEAMU TRAIN 136 (2026-11-28): Train 135's heal loop was the
+        // disease, not the cure. Its texture lived in a march slot
+        // (1404): every scene rewind and every in-world streaming
+        // march overwrote the record, the residency check failed, and
+        // the heal re-parsed the 1.6 MB BMD and re-uploaded the
+        // texture on its 1 s cooldown -- forever. G's Mac verdict on
+        // 135: the suit draws but flickers in and out and lags, "like
+        // its loading the set every second". The booth HEAL diag
+        // confirmed two distinct evictions inside a single login:
+        // the record overwritten by a foreign texture (handle/name
+        // replaced), then a later record freed in place (buffer
+        // gone, handle stale). A reload can never win against the
+        // allocator march, so the texture no longer lives in march
+        // territory at all: it is PINNED in the ContentCatalog
+        // texture region (>= BITMAP_MAX_VANILLA) through
+        // ReserveTextureSlot() -- the catalog's monotonic counter
+        // owns the slot for the life of the process, no
+        // SetMaxTextures rewind or OpenTexture march reaches the
+        // region, and no scene unload sweeps it. The texture loads
+        // ONCE; per call the work is a few field reads plus the
+        // IndexTexture re-assert. The reload branch survives only as
+        // a defensive path (cooldown kept) and reloads into the SAME
+        // reserved slot -- it can never re-enter the march.
+        const bool geoOk = bmOwn->NumMeshs > 0 && bmOwn->Meshs && bmOwn->Bones;
         bool resident = false;
         if (s_OwnModel >= 0 && s_TexSlot >= 0 && g_BitmapsRaw && bmOwn->Textures) {
             const BITMAP_t* bmp = reinterpret_cast<const BITMAP_t*>(
                 g_BitmapsRaw + (size_t)s_TexSlot * sizeof(BITMAP_t));
-            resident = bmp->Buffer != nullptr && s_TexHandle != 0
-                && bmp->TextureNumber == s_TexHandle
+            resident = bmp->Buffer != nullptr && bmp->Buffer == s_TexBuffer
+                && s_TexHandle != 0 && bmp->TextureNumber == s_TexHandle
                 && std::strncmp(bmp->FileName, (const char*)bmOwn->Textures, 32) == 0;
         }
-        if (!resident && !s_Loading && WorldTime - s_LastLoad >= 1000.0f) {
+        if ((!geoOk || !resident) && !s_Loading && WorldTime - s_LastLoad >= 1000.0f) {
             s_Loading = true;
             s_LastLoad = WorldTime;
             if (s_OwnModel == -2) s_OwnModel = -1;
-            // If the previous texture slot still carries the skin's
-            // texture name but its pixels are gone, OpenTexture would
-            // "reuse" the dead record by name and never reload the
-            // file. Clear the name so the lookup misses and the file
-            // loads fresh into a live slot.
-            if (s_OwnModel >= 0 && bmOwn->Textures && g_BitmapsRaw && bmOwn->Meshs) {
-                const int oldSlot = (int)bmOwn->IndexTexture[0];
-                if (oldSlot >= 0) {
-                    BITMAP_t* old = reinterpret_cast<BITMAP_t*>(
-                        g_BitmapsRaw + (size_t)oldSlot * sizeof(BITMAP_t));
-                    if (!old->Buffer && std::strncmp(old->FileName, (const char*)bmOwn->Textures, 32) == 0)
-                        std::memset(old->FileName, 0, sizeof(old->FileName));
-                }
-            }
-            AccessModel(ownSlot, "Data\\Player\\Custom\\50\\", "SkinNarutoKyubi", -1);
-            OpenTexture(ownSlot, "Player\\Custom\\50\\", 0x2600, '\x01');
-            // TRAIN 130: full load report. Booth-proven (Linux, this
-            // exact code): the skin RENDERS with nMesh=1 nBone=60
-            // tris=18688 verts=10160 and a real texture bitmap
-            // (texW/texH > 0, texNum != 0) -- and it renders with
-            // NumActions forced to 0 too, so the Mac's nAct=0 reading
-            // is NOT the failure. Whatever reads different on the Mac
-            // in THIS line is the failure: tris/verts expose a wrong
-            // file, texW/texH/texNum expose a failed texture load.
+            if (!geoOk)
+                AccessModel(ownSlot, "Data\\Player\\Custom\\50\\", "SkinNarutoKyubi", -1);
+            // Pinned texture load: the path is the BMD's own texture
+            // name under the model's folder -- the same file
+            // OpenTexture resolved -- loaded with OpenTexture's own
+            // parameters (filter 0x2600, wrap 0x2901) so the proven
+            // look is unchanged; only the SLOT changed. The slot is
+            // reserved once and kept for the life of the process.
             const ClothModelMesh* m0 = bmOwn->Meshs
                 ? reinterpret_cast<const ClothModelMesh*>(bmOwn->Meshs) : nullptr;
-            const int tex0 = bmOwn->Meshs ? (int)bmOwn->IndexTexture[0] : -999;
-            const BITMAP_t* bmp = (tex0 >= 0 && g_BitmapsRaw)
-                ? reinterpret_cast<const BITMAP_t*>(g_BitmapsRaw + (size_t)tex0 * sizeof(BITMAP_t))
-                : nullptr;
-            char dbg[320];
-            std::snprintf(dbg, sizeof(dbg), "JinchurikiSkin: own load slot=%d nMesh=%d nBone=%d nAct=%d act=%p bone=%p mesh=%p tris=%d verts=%d tex0=%d texW=%d texH=%d texNum=%u",
-                          ownSlot, (int)bmOwn->NumMeshs, (int)bmOwn->NumBones, (int)bmOwn->NumActions,
-                          (const void*)bmOwn->Actions, (const void*)bmOwn->Bones,
-                          (const void*)bmOwn->Meshs,
-                          m0 ? (int)m0->TriangleCount : -1, m0 ? (int)m0->VertexCount : -1,
-                          tex0, bmp ? (int)bmp->Width : -1, bmp ? (int)bmp->Height : -1,
-                          bmp ? bmp->TextureNumber : 0u);
-            DbgLogPublic(dbg);
-            // TRAIN 129: a body-skin/part BMD needs NO actions of its
-            // own -- the renderer poses it with the hero's skeleton,
-            // exactly like every armor piece. Gate on mesh + bones.
-            if (bmOwn->NumMeshs > 0 && bmOwn->Meshs && bmOwn->Bones) {
-                s_OwnModel = ownSlot;
-                s_TexSlot = tex0;
-                s_TexHandle = bmp ? bmp->TextureNumber : 0;
+            if (bmOwn->NumMeshs > 0 && bmOwn->Meshs && bmOwn->Bones && bmOwn->Textures) {
+                if (s_TexSlot < 0)
+                    s_TexSlot = gContentCatalog.ReserveTextureSlot();
+                char texName[33];
+                std::memcpy(texName, (const char*)bmOwn->Textures, 32);
+                texName[32] = '\0';
+                char texPath[96];
+                std::snprintf(texPath, sizeof(texPath), "Player\\Custom\\50\\%s", texName);
+                OpenJPG(texPath, s_TexSlot, 0x2600, 0x2901, 0, '\x01');
+                // OpenJPG does not write the record's FileName (that
+                // was OpenTexture's bookkeeping) -- write it exactly
+                // like OpenTexture did, so the record stays
+                // self-describing and the residency check above can
+                // verify name + buffer + handle.
+                BITMAP_t* bmp = reinterpret_cast<BITMAP_t*>(
+                    g_BitmapsRaw + (size_t)s_TexSlot * sizeof(BITMAP_t));
+                const size_t fnLen = std::strlen(texName);
+                std::memcpy(bmp->FileName, texName, fnLen);
+                if (fnLen < 32) std::memset(bmp->FileName + fnLen, 0, 32 - fnLen);
+                s_TexHandle = bmp->TextureNumber;
+                s_TexBuffer = bmp->Buffer;
+                // TRAIN 130 load report, kept: geometry fields plus
+                // the pinned texture slot/handle. In steady state
+                // this line prints ONCE per process (plus at most
+                // once per scene change if the model struct was
+                // wiped) -- a repeating print IS the bug report.
+                char dbg[320];
+                std::snprintf(dbg, sizeof(dbg), "JinchurikiSkin: pinned load slot=%d nMesh=%d nBone=%d nAct=%d tris=%d verts=%d texSlot=%d texW=%d texH=%d texNum=%u",
+                              ownSlot, (int)bmOwn->NumMeshs, (int)bmOwn->NumBones, (int)bmOwn->NumActions,
+                              m0 ? (int)m0->TriangleCount : -1, m0 ? (int)m0->VertexCount : -1,
+                              s_TexSlot, (int)bmp->Width, (int)bmp->Height, bmp->TextureNumber);
+                DbgLogPublic(dbg);
+                // TRAIN 129 gate, kept: a body-skin/part BMD needs NO
+                // actions of its own -- the renderer poses it with
+                // the hero's skeleton. Gate on mesh + bones + a live
+                // pinned texture.
+                if (bmp->Buffer && bmp->TextureNumber != 0)
+                    s_OwnModel = ownSlot;
             }
             s_Loading = false;
         }
         // Re-assert the model's texture index every call: whatever
         // array the model struct currently points at must resolve the
-        // skin mesh to the live bitmap slot this module loaded. This
-        // runs before the drawsite's RenderPartObject in the same
-        // frame, so the draw reads the corrected index.
-        if (s_OwnModel >= 0 && resident && bmOwn->NumMeshs == 1 && bmOwn->IndexTexture
+        // skin mesh to the pinned bitmap slot. This runs before the
+        // drawsite's RenderPartObject in the same frame, so the draw
+        // reads the corrected index. Unconditional now -- Train 135
+        // gated it on the residency verdict, so a flapping check
+        // also stopped re-asserting and compounded the flicker.
+        if (s_OwnModel >= 0 && s_TexSlot >= 0 && bmOwn->NumMeshs == 1 && bmOwn->IndexTexture
             && bmOwn->IndexTexture[0] != s_TexSlot) {
             const_cast<short*>(bmOwn->IndexTexture)[0] = (short)s_TexSlot;
         }
