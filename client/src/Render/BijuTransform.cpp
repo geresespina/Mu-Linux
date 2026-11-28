@@ -781,6 +781,17 @@ void SkinHeadlessBegin(int modelIdx)
         s_skinHeadTried = true;
         BuildSkinHeadFilter(modelIdx);   // deja s_skinHeadTris listo o null
     }
+    // MEAMU TRAIN 132: one-shot headless verdict.
+    {
+        static bool s_hlLogged = false;
+        if (!s_hlLogged) {
+            s_hlLogged = true;
+            char hbuf[128];
+            std::snprintf(hbuf, sizeof(hbuf), "JinDraw: headless tris=%p wantModel=%d gotModel=%d triCount=%d",
+                          (const void*)s_skinHeadTris, s_skinHeadModel, modelIdx, s_skinHeadTriCount);
+            DbgLogPublic(hbuf);
+        }
+    }
     if (!s_skinHeadTris || modelIdx != s_skinHeadModel) return;
     BMD* bm = AsModel((uintptr_t)DAT_05828d58) + modelIdx;
     if (bm->NumMeshs != 1 || !bm->Meshs) return;

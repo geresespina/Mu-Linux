@@ -399,7 +399,7 @@ RenderPartObject(intptr_t param_1,int param_2,const PART_t* param_3,float *param
   // MEAMU TRAIN 131: draw-probe stage 2 -- the scale cull, skin model only.
   if (param_2 == 1913) {
     static int s_rpoProbe = 0;
-    if ((++s_rpoProbe % 600) == 1) {
+    if ((++s_rpoProbe) <= 3 || (s_rpoProbe % 600) == 0) {
       char jbuf[128];
       std::snprintf(jbuf, sizeof(jbuf), "JinDraw: RPO scale=%.3f cull=%.3f pass=%d",
                     (double)param_5, (double)_DAT_005524f8, (_DAT_005524f8 < param_5) ? 1 : 0);

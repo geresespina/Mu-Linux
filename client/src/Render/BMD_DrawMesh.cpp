@@ -197,7 +197,7 @@ void __cdecl BMD__RenderMesh(void *bmd_obj, float meshIdx, int flags,
     // MEAMU TRAIN 131: draw-probe stage 3 -- mesh state + first transformed vertex.
     if (model == 1913) {
         static int s_rmProbe = 0;
-        if ((++s_rmProbe % 600) == 1) {
+        if ((++s_rmProbe) <= 3 || (s_rmProbe % 600) == 0) {
             const float* v0 = reinterpret_cast<const float*>(&DAT_0584621c) + (size_t)meshIndex * 15000 * 3;
             char jbuf[224];
             std::snprintf(jbuf, sizeof(jbuf), "JinDraw: RM tris=%d tex=%u v0=%.1f,%.1f,%.1f org=%.1f,%.1f,%.1f",

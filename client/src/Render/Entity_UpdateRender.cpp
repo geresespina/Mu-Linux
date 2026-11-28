@@ -566,6 +566,15 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
                     const bool bSkinDraw = bJinSkin && nPart == 2;
                     float jinSavedLight[3] = { 0.0f, 0.0f, 0.0f };
                     if (bSkinDraw) {
+                        // MEAMU TRAIN 132: draw-probe stage 1b -- the swap site fired.
+                        static DWORD s_drawProbeLast = 0;
+                        const DWORD drawNow = Platform::GetTimer().Ticks();
+                        if (drawNow - s_drawProbeLast >= 1000) {
+                            s_drawProbeLast = drawNow;
+                            char dbuf[96];
+                            std::snprintf(dbuf, sizeof(dbuf), "JinDraw: drawsite model=%d", jinSkinModel);
+                            DbgLogPublic(dbuf);
+                        }
                         BijuTransform::SkinHeadlessBegin(jinSkinModel);
                         BijuTransform::JinchurikiGlowBegin((const CHARACTER*)(uintptr_t)param_1, jinSavedLight);
                     }
