@@ -495,6 +495,17 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
         }
     }
     if (!bTransformed && (bJinSkin || (!bSubTypeNpcRendered && *(char *)&((CHARACTER*)(uintptr_t)(param_1))->Change == '\0'))) {
+        //         // MEAMU TRAIN 133: loop-probe -- block entry.
+        if (bJinSkin) {
+            static DWORD s_blkProbeLast = 0;
+            const DWORD blkNow = Platform::GetTimer().Ticks();
+            if (blkNow - s_blkProbeLast >= 1000) {
+                s_blkProbeLast = blkNow;
+                char bbuf[96];
+                std::snprintf(bbuf, sizeof(bbuf), "JinDraw: block worn=%d", BijuTransform::WearsFullBodySkin((const CHARACTER*)(uintptr_t)param_1) ? 1 : 0);
+                DbgLogPublic(bbuf);
+            }
+        }
         // MEAMU TRAIN 7 (2026-11-17): override de skin Jinchuriki -- con el
         // modo activo (bit 0x1000), la pieza de ARMADURA (BodyPart[2]) se
         // dibuja con el modelo de la skin Kyubi (8,50) y pantalones /
@@ -517,6 +528,17 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
         int nPart = 0;   // indice BodyPart de la iteracion: 1 casco, 2 armadura, 3 pantalon, 4 guantes, 5 botas
         for (int nSlot = 6; nSlot > 0; nSlot--) {
             short sSlot = piVar16->Type;   // slot model_idx at -20 bytes
+            // MEAMU TRAIN 133: loop-probe -- empty slots too (shared 1/sec timer via static).
+            if (bJinSkin && sSlot == (short)-1) {
+                static DWORD s_empProbeLast = 0;
+                const DWORD empNow = Platform::GetTimer().Ticks();
+                if (empNow - s_empProbeLast >= 1000) {
+                    s_empProbeLast = empNow;
+                    char ebuf[64];
+                    std::snprintf(ebuf, sizeof(ebuf), "JinDraw: iter n=%d slot=-1", nPart);
+                    DbgLogPublic(ebuf);
+                }
+            }
             if (sSlot != (short)-1) {
                 int iVar9 = (int)sSlot;
                 // Class byte @ entity+0x1BC (IDA sub_456770: *(BYTE*)(c + 444))
@@ -535,6 +557,17 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
                 const bool bCoveredBySkin = (bJinSkin && nPart >= 3 && nPart <= 5) ||
                                             (bWornSkin && !bJinSkin && nPart >= 1 && nPart != 2);
                 if (bJinSkin && nPart == 2) iVar9 = jinSkinModel;
+                // MEAMU TRAIN 133: loop-probe -- every visited part, 1 line/sec total.
+                if (bJinSkin) {
+                    static DWORD s_itrProbeLast = 0;
+                    const DWORD itrNow = Platform::GetTimer().Ticks();
+                    if (itrNow - s_itrProbeLast >= 1000) {
+                        s_itrProbeLast = itrNow;
+                        char ibuf[128];
+                        std::snprintf(ibuf, sizeof(ibuf), "JinDraw: iter n=%d slot=%d model=%d cov=%d", nPart, (int)sSlot, iVar9, bCoveredBySkin ? 1 : 0);
+                        DbgLogPublic(ibuf);
+                    }
+                }
                 BYTE bClassByte = *(BYTE *)&((CHARACTER*)(uintptr_t)(param_1))->Class;
                 *(BYTE *)(DAT_05828d58 + iVar9 * BMD_STRIDE + 0x98 + BMD_FIELD_SHIFT) =
                     (BYTE)(((bClassByte & 7) << 1) | (bClassByte >> 3));
@@ -613,7 +646,16 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
             *(BYTE *)(DAT_05828d58 + jinSkinModel * BMD_STRIDE + 0x98 + BMD_FIELD_SHIFT) =
                 (BYTE)(((bClassByte & 7) << 1) | (bClassByte >> 3));
             float jinSavedLight2[3] = { 0.0f, 0.0f, 0.0f };
-            BijuTransform::SkinHeadlessBegin(jinSkinModel);   // TRAIN 8: sin cabeza propia
+            // MEAMU TRAIN 133: loop-probe -- the empty-armor fallback fired.
+            {
+                static DWORD s_fbProbeLast = 0;
+                const DWORD fbNow = Platform::GetTimer().Ticks();
+                if (fbNow - s_fbProbeLast >= 1000) {
+                    s_fbProbeLast = fbNow;
+                    DbgLogPublic("JinDraw: fallback");
+                }
+            }
+                        BijuTransform::SkinHeadlessBegin(jinSkinModel);   // TRAIN 8: sin cabeza propia
             BijuTransform::JinchurikiGlowBegin((const CHARACTER*)(uintptr_t)param_1, jinSavedLight2);   // TRAIN 124
             RenderPartObject((intptr_t)param_1,
                          jinSkinModel,
