@@ -609,7 +609,12 @@ int JinchurikiSkinModel(const CHARACTER* character)
                           ownSlot, (int)bmOwn->NumMeshs, (int)bmOwn->NumBones, (int)bmOwn->NumActions,
                           (const void*)bmOwn->Actions, (const void*)bmOwn->Bones);
             DbgLogPublic(dbg);
-            if (bmOwn->NumActions > 0 && bmOwn->NumMeshs > 0 && bmOwn->Actions && bmOwn->Bones)
+            // TRAIN 129: a body-skin/part BMD needs NO actions of its
+            // own -- the renderer poses it with the hero's skeleton,
+            // exactly like every armor piece (that is why this file
+            // legitimately reports NumActions=0 in the slot while its
+            // mesh + bones are fully parsed). Gate on mesh + bones.
+            if (bmOwn->NumMeshs > 0 && bmOwn->Meshs && bmOwn->Bones)
                 s_OwnModel = ownSlot;
         }
         if (s_OwnModel >= 0) return s_OwnModel;
@@ -620,7 +625,7 @@ int JinchurikiSkinModel(const CHARACTER* character)
     const int model = gContentCatalog.GetItemModel(kKyubiSkinType);
     if (model >= 0) {
         const BMD* bm = AsModel((uintptr_t)DAT_05828d58) + model;
-        if (bm->NumActions > 0 && bm->NumMeshs > 0 && bm->Actions && bm->Bones)
+        if (bm->NumMeshs > 0 && bm->Meshs && bm->Bones)
             return model;
     }
     // MEAMU TRAIN 123 (2026-11-24): on G's client the catalog route
@@ -642,7 +647,7 @@ int JinchurikiSkinModel(const CHARACTER* character)
     }
     if (s_RetryModel >= 0) {
         const BMD* bm = AsModel((uintptr_t)DAT_05828d58) + s_RetryModel;
-        if (bm->NumActions > 0 && bm->NumMeshs > 0 && bm->Actions && bm->Bones)
+        if (bm->NumMeshs > 0 && bm->Meshs && bm->Bones)
             return s_RetryModel;
     }
     return -1;   // modelo no cargado: render normal del jugador
