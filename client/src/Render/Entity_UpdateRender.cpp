@@ -8,6 +8,8 @@
 #include "Render/BijuTransform.h"
 #include "Net/MoveMarkers.h"   // MEAMU Train 63: teleport vanish envelope
 #include "Entity/CharacterEffects.h"
+#include <cstdio>
+extern "C" void DbgLogPublic(const char*);   // MEAMU TRAIN 131 draw-probe
 
 extern "C" const char* Guild_GetMarkName(int row);
 void ClanEmblems_Render(intptr_t entity);   // MEAMU: clan emblems (Render/ClanEmblems.cpp)
@@ -478,6 +480,20 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
     // the gate behaves exactly as before.
     const int  jinSkinModel = BijuTransform::JinchurikiSkinModel((const CHARACTER*)(uintptr_t)param_1);
     const bool bJinSkin     = jinSkinModel >= 0;
+    // MEAMU TRAIN 131: draw-probe stage 1 -- gate inputs while the form is on.
+    if (bJinSkin) {
+        static DWORD s_jinProbeLast = 0;
+        const DWORD jinNow = Platform::GetTimer().Ticks();
+        if (jinNow - s_jinProbeLast >= 1000) {
+            s_jinProbeLast = jinNow;
+            char jbuf[192];
+            std::snprintf(jbuf, sizeof(jbuf), "JinDraw: gate model=%d trans=%d part2Type=%d beast=%d",
+                          jinSkinModel, bTransformed ? 1 : 0,
+                          (int)AsCharacter(param_1)->BodyPart[2].Type,
+                          BijuTransform::BeastFor((const CHARACTER*)(uintptr_t)param_1));
+            DbgLogPublic(jbuf);
+        }
+    }
     if (!bTransformed && (bJinSkin || (!bSubTypeNpcRendered && *(char *)&((CHARACTER*)(uintptr_t)(param_1))->Change == '\0'))) {
         // MEAMU TRAIN 7 (2026-11-17): override de skin Jinchuriki -- con el
         // modo activo (bit 0x1000), la pieza de ARMADURA (BodyPart[2]) se

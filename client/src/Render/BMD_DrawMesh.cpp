@@ -81,6 +81,8 @@
 #include "Game/MapManager.h"
 #include "../globals.h"
 #include "../functions.h"
+#include <cstdio>
+extern "C" void DbgLogPublic(const char*);   // MEAMU TRAIN 131 draw-probe
 
 // Additional globals used by this function
 // DAT_060db65c defined via macro in globals.h (backed by g_BoneLightBuf).
@@ -191,6 +193,19 @@ void __cdecl BMD__RenderMesh(void *bmd_obj, float meshIdx, int flags,
 
     if (local_10 == 300) {  // BITMAP_HIDE
         return;
+    }
+    // MEAMU TRAIN 131: draw-probe stage 3 -- mesh state + first transformed vertex.
+    if (model == 1913) {
+        static int s_rmProbe = 0;
+        if ((++s_rmProbe % 600) == 1) {
+            const float* v0 = reinterpret_cast<const float*>(&DAT_0584621c) + (size_t)meshIndex * 15000 * 3;
+            char jbuf[224];
+            std::snprintf(jbuf, sizeof(jbuf), "JinDraw: RM tris=%d tex=%u v0=%.1f,%.1f,%.1f org=%.1f,%.1f,%.1f",
+                          (int)mesh->TriangleCount, local_10,
+                          (double)v0[0], (double)v0[1], (double)v0[2],
+                          (double)bmd->BodyOrigin[0], (double)bmd->BodyOrigin[1], (double)bmd->BodyOrigin[2]);
+            DbgLogPublic(jbuf);
+        }
     }
     if (local_10 == 0x12d) {  // BITMAP_SKIN
         if (bmd->HideSkin != '\0') {  // HideSkin

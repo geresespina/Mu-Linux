@@ -156,6 +156,8 @@
 #include "Render/Entity_Render.h"
 #include "Render/BijuTransform.h"
 #include <math.h>
+#include <cstdio>
+extern "C" void DbgLogPublic(const char*);   // MEAMU TRAIN 131 draw-probe
 
 
 // Entity_Render (0x005038E0) vive en src/Render/Render_WorldHelpers.cpp.
@@ -394,6 +396,16 @@ RenderPartObject(intptr_t param_1,int param_2,const PART_t* param_3,float *param
   uint uVar1;
   undefined *puVar2;
 
+  // MEAMU TRAIN 131: draw-probe stage 2 -- the scale cull, skin model only.
+  if (param_2 == 1913) {
+    static int s_rpoProbe = 0;
+    if ((++s_rpoProbe % 600) == 1) {
+      char jbuf[128];
+      std::snprintf(jbuf, sizeof(jbuf), "JinDraw: RPO scale=%.3f cull=%.3f pass=%d",
+                    (double)param_5, (double)_DAT_005524f8, (_DAT_005524f8 < param_5) ? 1 : 0);
+      DbgLogPublic(jbuf);
+    }
+  }
   if (_DAT_005524f8 < param_5) {
     if (param_2 == 0x35c) {
       uVar1 = (int)param_6 >> 3 & 0xf;
