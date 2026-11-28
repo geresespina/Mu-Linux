@@ -598,6 +598,24 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
                     // de la skin — la cabeza real del jugador queda libre.
                     const bool bSkinDraw = bJinSkin && nPart == 2;
                     float jinSavedLight[3] = { 0.0f, 0.0f, 0.0f };
+                    // MEAMU TRAIN 134: the skin's vertices are never transformed --
+                    // Skeleton_Transform only ever runs for the hero's OWN model in
+                    // the animation phase, so RenderPartObject(1913) reads the shared
+                    // vertex stream the hero model left behind and the cloak never
+                    // rasterizes. Transform the skin BMD with the hero's pose right
+                    // here (Calc_RenderObject mirror, Entity_AnimationLegacy.cpp),
+                    // draw, then restore the hero model's transform after the draw
+                    // so everything drawn later is unaffected.
+                    float* t134Bones = nullptr;
+                    if (bSkinDraw) {
+                        OBJECT* heroObj = AsObject(param_1);
+                        t134Bones = heroObj->EnableBoneMatrix == 0
+                                        ? (float*)&DAT_06970a9c
+                                        : reinterpret_cast<float*>(heroObj->BoneMatrices);
+                        Skeleton_Transform((void*)(DAT_05828d58 + jinSkinModel * BMD_STRIDE),
+                                           t134Bones, heroObj->BoundingBoxMin,
+                                           heroObj->BoundingBoxMax, heroObj->OBB, 1);
+                    }
                     if (bSkinDraw) {
                         // MEAMU TRAIN 132: draw-probe stage 1b -- the swap site fired.
                         static DWORD s_drawProbeLast = 0;
@@ -623,6 +641,12 @@ void* __cdecl RenderCharacter(void *param_1_, void *param_2_, void *param_3)
                     if (bSkinDraw) {
                         BijuTransform::JinchurikiGlowEnd((const CHARACTER*)(uintptr_t)param_1, jinSavedLight);
                         BijuTransform::SkinHeadlessEnd(jinSkinModel);
+                        // MEAMU TRAIN 134: restore the hero model's transform
+                        // (shared stream + captured pose) for everything drawn after.
+                        OBJECT* heroObj = AsObject(param_1);
+                        Skeleton_Transform((void*)(DAT_05828d58 + heroObj->Type * BMD_STRIDE),
+                                           t134Bones, heroObj->BoundingBoxMin,
+                                           heroObj->BoundingBoxMax, heroObj->OBB, 1);
                     }
                 }
                 // IDA RenderCharacter (0x456770 L1070-1104): la tela de los
