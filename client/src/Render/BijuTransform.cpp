@@ -597,13 +597,60 @@ int JinchurikiSkinModel(const CHARACTER* character)
     // OpenTexture pair the catalog uses. Catalog route stays as
     // fallback. The one-time log prints every validated field.
     {
-        static int s_OwnModel = -2;
-        if (s_OwnModel == -2) {
-            s_OwnModel = -1;
-            const int ownSlot = 963 + 950;   // MODEL_MAX_VANILLA + 950
+        static int      s_OwnModel = -2;
+        static int      s_TexSlot = -1;
+        static unsigned s_TexHandle = 0;
+        static float    s_LastLoad = -100000.0f;
+        static bool     s_Loading = false;
+        const int ownSlot = 963 + 950;   // MODEL_MAX_VANILLA + 950
+        const BMD* bmOwn = AsModel((uintptr_t)DAT_05828d58) + ownSlot;
+        // MEAMU TRAIN 135 (2026-11-28): the one-time load was not
+        // enough. Scene changes rewind TextureCurrent, so the bitmap
+        // slot the skin texture landed in gets recycled while this
+        // module still trusts it: in-world the binder read a foreign
+        // handle for the slot (booth-verified: texture loaded as
+        // handle 566 at char-select; in-world the same slot resolved
+        // to handle 604, not a live GPU texture -- the WebGPU backend
+        // fell back to its white texture and the suit vanished; the
+        // model geometry survives because its slot is private). Only
+        // the texture dies. Re-validate residency on every call --
+        // slot, GPU handle, pixel buffer and texture name must all
+        // still be the ones this load produced -- and reload when the
+        // texture was evicted. The cooldown keeps a pathological
+        // reload from running per frame.
+        // Residency is judged on the bitmap RECORD this load produced,
+        // not on the model's IndexTexture pointer: the model struct's
+        // array can be re-pointed at a stale parse by other systems
+        // (booth-observed oscillation between the first parse's array
+        // and fresh ones), so the struct is re-asserted below instead.
+        bool resident = false;
+        if (s_OwnModel >= 0 && s_TexSlot >= 0 && g_BitmapsRaw && bmOwn->Textures) {
+            const BITMAP_t* bmp = reinterpret_cast<const BITMAP_t*>(
+                g_BitmapsRaw + (size_t)s_TexSlot * sizeof(BITMAP_t));
+            resident = bmp->Buffer != nullptr && s_TexHandle != 0
+                && bmp->TextureNumber == s_TexHandle
+                && std::strncmp(bmp->FileName, (const char*)bmOwn->Textures, 32) == 0;
+        }
+        if (!resident && !s_Loading && WorldTime - s_LastLoad >= 1000.0f) {
+            s_Loading = true;
+            s_LastLoad = WorldTime;
+            if (s_OwnModel == -2) s_OwnModel = -1;
+            // If the previous texture slot still carries the skin's
+            // texture name but its pixels are gone, OpenTexture would
+            // "reuse" the dead record by name and never reload the
+            // file. Clear the name so the lookup misses and the file
+            // loads fresh into a live slot.
+            if (s_OwnModel >= 0 && bmOwn->Textures && g_BitmapsRaw && bmOwn->Meshs) {
+                const int oldSlot = (int)bmOwn->IndexTexture[0];
+                if (oldSlot >= 0) {
+                    BITMAP_t* old = reinterpret_cast<BITMAP_t*>(
+                        g_BitmapsRaw + (size_t)oldSlot * sizeof(BITMAP_t));
+                    if (!old->Buffer && std::strncmp(old->FileName, (const char*)bmOwn->Textures, 32) == 0)
+                        std::memset(old->FileName, 0, sizeof(old->FileName));
+                }
+            }
             AccessModel(ownSlot, "Data\\Player\\Custom\\50\\", "SkinNarutoKyubi", -1);
             OpenTexture(ownSlot, "Player\\Custom\\50\\", 0x2600, '\x01');
-            const BMD* bmOwn = AsModel((uintptr_t)DAT_05828d58) + ownSlot;
             // TRAIN 130: full load report. Booth-proven (Linux, this
             // exact code): the skin RENDERS with nMesh=1 nBone=60
             // tris=18688 verts=10160 and a real texture bitmap
@@ -630,8 +677,21 @@ int JinchurikiSkinModel(const CHARACTER* character)
             // TRAIN 129: a body-skin/part BMD needs NO actions of its
             // own -- the renderer poses it with the hero's skeleton,
             // exactly like every armor piece. Gate on mesh + bones.
-            if (bmOwn->NumMeshs > 0 && bmOwn->Meshs && bmOwn->Bones)
+            if (bmOwn->NumMeshs > 0 && bmOwn->Meshs && bmOwn->Bones) {
                 s_OwnModel = ownSlot;
+                s_TexSlot = tex0;
+                s_TexHandle = bmp ? bmp->TextureNumber : 0;
+            }
+            s_Loading = false;
+        }
+        // Re-assert the model's texture index every call: whatever
+        // array the model struct currently points at must resolve the
+        // skin mesh to the live bitmap slot this module loaded. This
+        // runs before the drawsite's RenderPartObject in the same
+        // frame, so the draw reads the corrected index.
+        if (s_OwnModel >= 0 && resident && bmOwn->NumMeshs == 1 && bmOwn->IndexTexture
+            && bmOwn->IndexTexture[0] != s_TexSlot) {
+            const_cast<short*>(bmOwn->IndexTexture)[0] = (short)s_TexSlot;
         }
         if (s_OwnModel >= 0) return s_OwnModel;
     }
