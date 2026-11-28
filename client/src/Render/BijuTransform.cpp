@@ -604,16 +604,32 @@ int JinchurikiSkinModel(const CHARACTER* character)
             AccessModel(ownSlot, "Data\\Player\\Custom\\50\\", "SkinNarutoKyubi", -1);
             OpenTexture(ownSlot, "Player\\Custom\\50\\", 0x2600, '\x01');
             const BMD* bmOwn = AsModel((uintptr_t)DAT_05828d58) + ownSlot;
-            char dbg[192];
-            std::snprintf(dbg, sizeof(dbg), "JinchurikiSkin: own load slot=%d nMesh=%d nBone=%d nAct=%d act=%p bone=%p",
+            // TRAIN 130: full load report. Booth-proven (Linux, this
+            // exact code): the skin RENDERS with nMesh=1 nBone=60
+            // tris=18688 verts=10160 and a real texture bitmap
+            // (texW/texH > 0, texNum != 0) -- and it renders with
+            // NumActions forced to 0 too, so the Mac's nAct=0 reading
+            // is NOT the failure. Whatever reads different on the Mac
+            // in THIS line is the failure: tris/verts expose a wrong
+            // file, texW/texH/texNum expose a failed texture load.
+            const ClothModelMesh* m0 = bmOwn->Meshs
+                ? reinterpret_cast<const ClothModelMesh*>(bmOwn->Meshs) : nullptr;
+            const int tex0 = bmOwn->Meshs ? (int)bmOwn->IndexTexture[0] : -999;
+            const BITMAP_t* bmp = (tex0 >= 0 && g_BitmapsRaw)
+                ? reinterpret_cast<const BITMAP_t*>(g_BitmapsRaw + (size_t)tex0 * sizeof(BITMAP_t))
+                : nullptr;
+            char dbg[320];
+            std::snprintf(dbg, sizeof(dbg), "JinchurikiSkin: own load slot=%d nMesh=%d nBone=%d nAct=%d act=%p bone=%p mesh=%p tris=%d verts=%d tex0=%d texW=%d texH=%d texNum=%u",
                           ownSlot, (int)bmOwn->NumMeshs, (int)bmOwn->NumBones, (int)bmOwn->NumActions,
-                          (const void*)bmOwn->Actions, (const void*)bmOwn->Bones);
+                          (const void*)bmOwn->Actions, (const void*)bmOwn->Bones,
+                          (const void*)bmOwn->Meshs,
+                          m0 ? (int)m0->TriangleCount : -1, m0 ? (int)m0->VertexCount : -1,
+                          tex0, bmp ? (int)bmp->Width : -1, bmp ? (int)bmp->Height : -1,
+                          bmp ? bmp->TextureNumber : 0u);
             DbgLogPublic(dbg);
             // TRAIN 129: a body-skin/part BMD needs NO actions of its
             // own -- the renderer poses it with the hero's skeleton,
-            // exactly like every armor piece (that is why this file
-            // legitimately reports NumActions=0 in the slot while its
-            // mesh + bones are fully parsed). Gate on mesh + bones.
+            // exactly like every armor piece. Gate on mesh + bones.
             if (bmOwn->NumMeshs > 0 && bmOwn->Meshs && bmOwn->Bones)
                 s_OwnModel = ownSlot;
         }
