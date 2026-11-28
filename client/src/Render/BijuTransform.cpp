@@ -586,6 +586,34 @@ int JinchurikiSkinModel(const CHARACTER* character)
     const DWORD state = *(const DWORD*)((const BYTE*)character + 120);
     if ((state & 0x1000) == 0 && !JinchurikiVisualOn(character)) return -1;   // Jinchuriki Mode off (bit o latch TRAIN 125)
     if ((state & 0x2000) != 0) return -1;           // Biju Mode: transform wins
+    // MEAMU TRAIN 128 (2026-11-27): the catalog's shared dynamic slot
+    // for this item reads back INVALID on G's client (diag-verified:
+    // slot 981) even though the file itself decrypts perfectly
+    // (1 mesh / 60 bones / 1 action, verified byte-by-byte) and the
+    // catalog path is correct. Stop trusting the shared pool for this
+    // one hero-critical asset: load it into a PRIVATE slot owned by
+    // this module -- far above the dynamic counter's reach (the whole
+    // catalog is ~670 models) -- through the same AccessModel +
+    // OpenTexture pair the catalog uses. Catalog route stays as
+    // fallback. The one-time log prints every validated field.
+    {
+        static int s_OwnModel = -2;
+        if (s_OwnModel == -2) {
+            s_OwnModel = -1;
+            const int ownSlot = 963 + 950;   // MODEL_MAX_VANILLA + 950
+            AccessModel(ownSlot, "Data\\Player\\Custom\\50\\", "SkinNarutoKyubi", -1);
+            OpenTexture(ownSlot, "Player\\Custom\\50\\", 0x2600, '\x01');
+            const BMD* bmOwn = AsModel((uintptr_t)DAT_05828d58) + ownSlot;
+            char dbg[192];
+            std::snprintf(dbg, sizeof(dbg), "JinchurikiSkin: own load slot=%d nMesh=%d nBone=%d nAct=%d act=%p bone=%p",
+                          ownSlot, (int)bmOwn->NumMeshs, (int)bmOwn->NumBones, (int)bmOwn->NumActions,
+                          (const void*)bmOwn->Actions, (const void*)bmOwn->Bones);
+            DbgLogPublic(dbg);
+            if (bmOwn->NumActions > 0 && bmOwn->NumMeshs > 0 && bmOwn->Actions && bmOwn->Bones)
+                s_OwnModel = ownSlot;
+        }
+        if (s_OwnModel >= 0) return s_OwnModel;
+    }
     // Naruto Kyubi Skin = item (8,50). El tipo crudo vive en el espacio
     // extendido del fork: 512 + sección*480 + (sub-32) = 512+3840+18.
     constexpr int kKyubiSkinType = 512 + 8 * 480 + (50 - 32);   // 4370
